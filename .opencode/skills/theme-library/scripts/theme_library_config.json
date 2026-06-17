@@ -1,0 +1,21 @@
+{
+  "pure_limit": 50,
+  "leader_limit": 20,
+  "candidate_limit": 30,
+  "pure_threshold": 30,
+  "leader_threshold": 50,
+  "candidate_threshold": 60,
+  "default_min_coverage": 15,
+  "default_min_concepts": 2,
+  "scoring": {
+    "purity_coverage_weight": 0.60,
+    "purity_rank_weight": 0.40,
+    "leader_purity_weight": 0.40,
+    "leader_liquidity_weight": 0.35,
+    "leader_market_cap_weight": 0.25,
+    "candidate_purity_weight": 0.30,
+    "candidate_liquidity_weight": 0.30,
+    "candidate_market_cap_weight": 0.20,
+    "candidate_momentum_weight": 0.20
+  }
+}
