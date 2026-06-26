@@ -637,6 +637,27 @@ python fetch_stock.py sh600519 --intraday --days 3 --json  # Last 3 days K-line 
 python fetch_stock.py sh600519 --intraday --csv        # Intraday K-line as CSV
 ```
 
+**Real-time Quote Fields** (JSON/CSV):
+| Field | Type | Description |
+|-------|------|-------------|
+| `code` | str | Stock code with market prefix |
+| `name` | str | Stock name |
+| `price` | str | Current price |
+| `open` | str | Opening price |
+| `yestclose` | str | Previous close |
+| `high` | str | Day high |
+| `low` | str | Day low |
+| `volume` | str | Trading volume (lots) |
+| `amount` | str | Trading amount (CNY) |
+| `amount_10000` | str | Trading amount divided by 10000 (e.g., CNY/10000 for A stocks). Only present when `amount` is available. |
+| `float_shares` | int/null | Float shares (流通股本, 股). A stocks only; `null` for HK/US/futures |
+| `updown` | str | Price change (signed) |
+| `percent` | str | Change percent (signed, with `%`) |
+| `time` | str | Update time |
+| `market` | str | Market identifier (`A`, `US`, `Future`, `OverseaFuture`) |
+
+Note: `float_shares` is fetched from Sina StockService API (流通股本变更历史), independent of the quote API. May return `null` if the upstream API is unavailable.
+
 **Intraday K-line Parameters**:
 | Parameter | Description | Default |
 |-----------|-------------|---------|

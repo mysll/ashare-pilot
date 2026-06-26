@@ -174,7 +174,9 @@ Returns capital flow data with: main net inflow (主力净流入), super large (
 
 ## Output Fields
 
-**Real-time**: `code`, `name`, `price`, `open`, `yestclose`, `high`, `low`, `volume`, `updown`, `percent`, `time`, `market`
+**Real-time**: `code`, `name`, `price`, `open`, `yestclose`, `high`, `low`, `volume`, `amount`, `float_shares`, `updown`, `percent`, `time`, `market`
+
+Note: `float_shares` (流通股本, 股) only available for A stocks (sh/sz/bj); `null` for HK/US/futures.
 
 **Intraday K-line**: `time`, `open`, `high`, `low`, `close`, `volume`, `amount`, `ma_price5`, `ma_volume5`
 

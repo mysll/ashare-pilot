@@ -37,6 +37,7 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets.
 | theme_stocks.md row missing `source_themes` column | Re-add. Downstream needs WHY a stock is in pool. |
 | mapper.md contains buy/stop/target recommendations | Remove strategy clauses. Strategy is Step 3 territory. |
 | Composite score or tech_score filled without showing calculation trace | Recompute with weights shown. |
+| Auto-removed a stock solely because of RSI>75 / RSI<30 / MA双熊 / 炸板 | Restore to pool. These are risk flags, not hard filters. |
 
 **Violating these is violating the spirit of the rules.**
 
@@ -285,12 +286,12 @@ Extract these auction metrics from the JSON output:
 | Auction Metric | JSON Field | Formula / Note |
 |---------------|-----------|----------------|
 | **Auction Change%** (竞价涨幅) | `percent` | Computed by API: `(price - yestclose) / yestclose × 100` |
-| **Auction Amount** (竞价金额) | `amount` | Cumulative auction turnover (CNY), directly usable |
-| **Auction Turnover Rate** (竞价换手) | `volume` / float_shares | `auction_volume / float_shares`. Float shares derived from `fetch_all_astocks.py` post-market cache: `float_mv / price` |
+| **Auction Amount** (竞价金额) | `amount_10000` | Cumulative auction turnover, divided by 10000. Unit: **万** (e.g., CNY/10000 for A stocks). Use directly without further conversion. |
+| **Auction Turnover Rate** (竞价换手) | `volume` / float_shares | `auction_volume / float_shares`. `float_shares` from `fetch_stock.py --json` output field (流通股本, 股). Returns `null` if unavailable. |
 
 Usage in pipeline:
 - Auction Change%: flag stocks with `abs(percent) > 3%` as auction anomaly → passed to Step 3 for opening gap strategy
-- Auction Amount: `amount > 5000万` = auction with volume (conviction signal); `< 1000万` = auction without volume (weak signal)
+- Auction Amount: `amount_10000 > 5000万` = auction with volume (conviction signal); `< 1000万` = auction without volume (weak signal)
 - Auction Turnover Rate (optional): `> 0.3%` = active auction participation, strengthens the above signals
 
 Enrich `theme_stocks.md` with these columns: `Auction%` (竞价涨幅), `AuctionAmt` (竞价金额/万), `AuctionTO` (竞价换手%, optional).
@@ -329,7 +330,7 @@ Field reference:
 | `code` | ID | Stock code |
 | **Raw indicators (15)** | Data | |
 | `price`, `close` | K-line | Current price (last close), yesterday's close |
-| `turnover`, `change_pct`, `amount` | K-line | 换手率, 涨跌幅, 成交额 (all float, no `%` suffix) |
+| `turnover`, `change_pct`, `amount` | K-line | 换手率, 涨跌幅, 成交额/万元 (all float, no `%` suffix). `amount` unit: **万元** |
 | `rsi` | Indicator | RSI(14) — momentum / overbought |
 | `macd`, `macdh` | Indicator | MACD line & histogram — momentum |
 | `ma20` | Indicator | Bollinger middle = 20-SMA — medium-term trend |
@@ -347,7 +348,7 @@ Field reference:
 | `traditional` | 7-factor weighted sub-score (0-100) | Tech score input |
 | `sentiment` | 3-factor weighted sub-score (0-100) | Tech score input |
 | `tech_score` | `traditional × 0.70 + sentiment × 0.30` (0-100) | Composite input |
-| `risk_flags` | `["RSI>75","RSI<30","ATR>8%"]` — triggers hard/soft filters | Risk column |
+| `risk_flags` | `["RSI>75","RSI<30","ATR>8%","MA双熊","流动性<3亿","炸板"]` — risk markers for Step 3 | Risk column |
 
 **Skill layer uses these directly** — no need to re-derive %B, ATR%, board streak, seal quality, or tech_score from raw K-line data. Skill's job: composite, direction, hard/soft filter decisions, table population.
 
@@ -368,7 +369,7 @@ tech_score = Traditional × 0.70 + Sentiment × 0.30
 | 1 | **MA Trend** | 22% | Price > ma20 > ma50 = 100; Price > ma20, ma20 < ma50 = 60; Price < ma20, ma20 < ma50 = 0 |
 | 2 | **MACD Mom** | 19% | macdh > 0 AND accelerating = 100; macdh > 0 = 75; crossing 0 = 50; macdh < 0 = 25; deepening = 0 |
 | 3 | **RSI** | 13% | 45-60 = 100; 60-70 = 80; 30-45 = 70; 70-75 = 40; >75 or <30 = 0 |
-| 4 | **Liquidity** | 22% | Turnover >= 5亿 (500M CNY) = 100; 3-5亿 = 70; 1-3亿 = 40; <1亿 = 0 |
+| 4 | **Liquidity** | 22% | `amount / 10000` → 亿: ≥5亿 = 100; 3-5亿 = 70; 1-3亿 = 40; <1亿 = 0. Note: `amount` unit is 万元 |
 | 5 | **BB Position** | 16% | Use pre-computed `percent_b`. 0.4-0.6 = 100; 0.6-0.8 = 80; 0.2-0.4 = 70; >0.8 = 60; <0.2 = 20 |
 | 6 | **ATR Risk** | 9% | Use pre-computed `atr_pct`. 1.5-3% = 100; 3-5% = 70; <1.5% = 60; >5% = 30 |
 
@@ -379,8 +380,8 @@ Scored from pre-computed `board_streak` (int) and `seal_quality` (str) fields in
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
 | 8a | **Board Streak** (连板强度) | 50% | `board_streak >= 3` = 100; `board_streak = 2` = 85; `board_streak = 1` = 65; `board_streak = 0` = 0 |
-| 8b | **Limit-up Frequency** (涨停频率) | 25% | Use pre-computed `limit_up_freq`: ≥3=100; 2=80; 1=60; 0=20 |
-| 8c | **Seal Quality** (封板质量) | 25% | `seal_quality = "封死"` = 100; `seal_quality = "未封板"` = 60; `seal_quality = "炸板"` = 15; `seal_quality = "—"` = 50 |
+| 8b | **Limit-up Frequency** (涨停频率) | 25% | Use pre-computed `limit_up_freq`: ≥3=100; 2=80; 1=60; 0=0 |
+| 8c | **Seal Quality** (封板质量) | 25% | `seal_quality = "封死"` = 100; `seal_quality = "未封板"` = 60; `seal_quality = "炸板"` = 15; `seal_quality = "—"` = 0 |
 
 Note: "Price" = auction price from Phase 1. A-share limit-up boards: Main Board 10%, STAR/ChiNext 20%, BSE 30%. Both `board_streak` and `seal_quality` are pre-computed by `fetch_pool_indicators.py` — no need to re-derive from K-line history.
 
@@ -392,34 +393,45 @@ Remove stocks that fail ANY hard filter (based on yesterday's data):
 
 | Filter | Reject Condition | Data Source |
 |--------|-----------------|-------------|
-| MA Trend | Price < ma20 AND ma20 < ma50 (double bearish) | fetch_pool_indicators |
-| RSI | RSI > 75 (overbought) OR RSI < 30 without bullish momentum | fetch_pool_indicators |
-| Liquidity | Turnover (amount) < 3亿 (300M CNY) | fetch_pool_indicators (`amount` field) |
+| Liquidity | `amount` < 30000 (万元) = 3亿 (300M CNY). Note: `amount` field unit is 万元 | fetch_pool_indicators (`amount` field) |
 | Extreme Volatility | atr_pct > 8% (abnormal volatility) | fetch_pool_indicators (`atr_pct` field) |
-| Broken Board Review | seal_quality = "炸板" → flag for manual review, do NOT auto-reject | fetch_pool_indicators (seal_quality field) |
 
-Exception: anchor stocks bypass hard filters (they are theme representative / industry bellwether stocks and may temporarily violate technicals).
+### Technical Risk Flags
+
+The following conditions are **risk markers only**, not auto-reject triggers. They are written to the `Risk?` column and passed to Step 3, where `memory/RULES.md` decides whether to trade, override, or downgrade:
+
+| Flag | Condition | Relevant RULES.md Reference |
+|------|-----------|----------------------------|
+| MA双熊 | Price < ma20 AND ma20 < ma50 | R73 / R74 (weak-market MA20 buffer) |
+| RSI>75 | RSI > 75 | R37 (strong-market RSI overbought exemption) |
+| RSI<30 | RSI < 30 | R61 (deep-oversold tiered handling) |
+| 炸板 | seal_quality = "炸板" | R39-v3 / R35-v3 (limit-up broken-board review) |
+
+Do **not** remove these stocks in Step 2. Anchor stocks and theme core stocks (theme_heat >= 80) keep their pool status and carry the flag.
 
 ### Soft Filter
 
-Keep stocks with `tech_score >= 50`. Stocks with `tech_score 50-59` are flagged as `tech_risk: true` in output.
+- Keep stocks with `tech_score >= 50`.
+- Stocks with `tech_score 50-59` are flagged as `tech_risk: true` in output.
+- Stocks carrying `MA双熊`, `RSI>75`, `RSI<30`, or `炸板` flags are **not removed** for those reasons alone. They remain in the pool but their `Direction` in `mapper.md` must not be higher than `neutral-bull`, and the `Risk` column must show all flags.
 
 ### Enrich theme_stocks.md
 
-Add technical columns to the stock table. Remove rows that failed hard filters.
+Add technical columns to the stock table. Only remove rows that failed **hard filters** (liquidity < 3亿 or atr_pct > 8%). Stocks with technical risk flags (`MA双熊`, `RSI>75`, `RSI<30`, `炸板`) remain in the table with their flags shown in the `Risk?` column.
 
 ```markdown
 ## Stock Pool (After Technical Enrichment)
 
-| # | Code | Name | Best Score | Source Themes | Anch | Auc% | AucAmt | 情绪 | 连板 | 封板 | Tech | RSI | %B | MA50-200 | 换手% | Risk? |
+| # | Code | Name | Best Score | Source Themes | Anch | Auc% | AucAmt | 情绪 | 连板 | 封板 | Tech | RSI | %B | MA50 | 换手% | Risk? |
 |---|------|------|-----------|---------------|------|------|--------|------|------|------|------|-----|----|----------|-------|-------|
 | 1 | sz000977 | 浪潮信息 | 94.2 | AI算力 | Yes | +1.2 | 3200万 | 75 | 1板 | 封死 | 78.5 | 55.3 | 0.62 | >ma50 | 6.8% | No |
 | 2 | sh600522 | 中天科技 | 88.5 | AI算力 | — | -0.5 | 800万 | 30 | 0 | — | 68.0 | 48.2 | 0.45 | >ma50 | 2.1% | No |
-| 3 | sh603986 | 兆易创新 | 92.0 | 半导体 | — | +3.5 | 8500万 | 85 | 2连板 | 封死 | 65.0 | 72.0 | 0.85 | >ma50 | 15.2% | RSI |
+| 3 | sh603986 | 兆易创新 | 92.0 | 半导体 | — | +3.5 | 8500万 | 85 | 2连板 | 封死 | 65.0 | 72.0 | 0.85 | >ma50 | 15.2% | RSI>75 |
+| 4 | sh600XXX | 某股 | 70.0 | AI算力 | — | +0.2 | 35000万 | 30 | 0 | — | 55.0 | 42.0 | 0.30 | <ma20 | 1.5% | MA双熊 |
 | ... |
 
-Removed stocks (failed hard filters): list them with reason.
-Columns: 情绪=Sentiment sub-score, 连板=consecutive boards, 封板=seal quality, 换手%=yesterday turnover rate.
+Removed stocks (failed hard filters): list them with reason (liquidity or ATR>8% only).
+Columns: MA50=Price vs MA50, 情绪=Sentiment sub-score, 连板=consecutive boards, 封板=seal quality, 换手%=yesterday turnover rate.
 ```
 
 ---
@@ -470,7 +482,7 @@ auction_score = Auction Change% × 0.40 + Auction Amount × 0.35 + Auction Turno
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
 | 1 | **Auction Change%** | 40% | `abs(percent)`. ±2~5% = 100; ±1~2% = 85; ±0.5~1% = 70; ±0~0.5% = 50; >±5% = 40 (auction anomaly, watch for manipulation). Direction: positive = full score, negative = halved |
-| 2 | **Auction Amount** | 35% | `amount`. ≥5000万 = 100; 2000-5000万 = 75; 500-2000万 = 50; <500万 = 20 |
+| 2 | **Auction Amount** | 35% | `amount_10000` from `fetch_stock.py` (unit: 万). ≥5000万 = 100; 2000-5000万 = 75; 500-2000万 = 50; <500万 = 20. |
 | 3 | **Auction Turnover Rate** (optional) | 25% | `auction_volume / float_shares`. ≥0.3% = 100; 0.1-0.3% = 70; <0.1% = 40. Skip if float shares unavailable (weight merges into Auction Amount) |
 
 Note: Auction data is only meaningful for pre-market runs. For intraday runs, set auction_score = 50 (neutral).

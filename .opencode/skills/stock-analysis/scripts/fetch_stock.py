@@ -32,6 +32,7 @@ _tencent = TencentDataSource()
 def fetch_stocks(codes: list) -> list:
     sina_codes = []
     hk_codes = []
+    a_codes = []
     for code in codes:
         code = code.strip()
         if not code:
@@ -43,11 +44,18 @@ def fetch_stocks(codes: list) -> list:
             hk_codes.append(code)
         else:
             sina_codes.append(code)
+            if re.match(r"^(sh|sz|bj)", code):
+                a_codes.append(code)
     results = []
     if sina_codes:
         results.extend(_sina.fetch_quotes(sina_codes))
     if hk_codes:
         results.extend(_tencent.fetch_hk_quotes(hk_codes))
+    for r in results:
+        code = r.get("code", "")
+        r["float_shares"] = (
+            _sina.get_float_shares(code) if code in a_codes else None
+        )
     return results
 
 
@@ -91,6 +99,8 @@ def to_csv_output(results: list) -> str:
         "low",
         "volume",
         "amount",
+        "amount_10000",
+        "float_shares",
         "updown",
         "percent",
         "time",

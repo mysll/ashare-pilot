@@ -65,6 +65,7 @@ class SinaDataSource(BaseDataSource):
         precision = calc_price_precision(open_p, yestclose, price, high, low)
         updown = float(price) - float(yestclose)
         percent = (updown / float(yestclose) * 100) if float(yestclose) != 0 else 0
+        amount_10000 = (float(amount) / 10000.0) if amount else 0.0
         return {
             "code": code,
             "name": name,
@@ -75,6 +76,7 @@ class SinaDataSource(BaseDataSource):
             "low": format_price(low, precision),
             "volume": format_price(volume, 0),
             "amount": format_price(amount, 0),
+            "amount_10000": format_price(amount_10000, 2),
             "updown": f"{updown:+.{precision}f}",
             "percent": f"{percent:+.2f}%",
             "time": f"{date} {time_str}",
@@ -277,6 +279,26 @@ class SinaDataSource(BaseDataSource):
             return None
         except Exception:
             return None
+
+    def get_float_shares(self, code: str) -> int | None:
+        """Get latest float shares (流通股本, 股) for a single A-stock.
+
+        Uses StockService.getAmountBySymbol to fetch float-share change history.
+
+        Args:
+            code: Stock code with prefix (e.g., 'sh600519')
+
+        Returns:
+            Float shares in 股 (not 万股), or None if unavailable.
+        """
+        data = self._fetch_rs_amount(code)
+        if not data:
+            return None
+        latest = data[-1]
+        raw = float(latest.get("amount", 0))
+        if raw <= 0:
+            return None
+        return int(raw * 10000)
 
     def _enrich_records(
         self, records: list, rs_amount: list | None

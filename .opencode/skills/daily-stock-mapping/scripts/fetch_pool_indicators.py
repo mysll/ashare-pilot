@@ -51,8 +51,10 @@ def _to_float(val):
 
 def _get_board_limit(code: str) -> float:
     """Return limit-up threshold for a stock board."""
-    if code.startswith("sz30"):
+    if code.startswith("sz30") or code.startswith("sh688"):
         return 20.0
+    if code.startswith("bj"):
+        return 30.0
     return 10.0
 
 
@@ -230,12 +232,12 @@ def main():
             if lf >= 3:   freq_s = 100
             elif lf == 2:  freq_s = 80
             elif lf == 1:  freq_s = 60
-            else:          freq_s = 20
+            else:          freq_s = 0
 
             if sq == "封死":   seal_s = 100
             elif sq == "未封板": seal_s = 60
             elif sq == "炸板":   seal_s = 15
-            else:               seal_s = 50
+            else:               seal_s = 0
 
             sentiment = streak_s * 0.50 + freq_s * 0.25 + seal_s * 0.25
             row["sentiment"] = round(sentiment, 1)
@@ -248,6 +250,13 @@ def main():
             if rs is not None and rs > 75: flags.append("RSI>75")
             if rs is not None and rs < 30: flags.append("RSI<30")
             if ap is not None and ap > 8: flags.append("ATR>8%")
+            if m20 is not None and m50 is not None and p is not None:
+                if p < m20 and m20 < m50:
+                    flags.append("MA双熊")
+            if amt is not None and amt < 30000:
+                flags.append("流动性<3亿")
+            if sq == "炸板":
+                flags.append("炸板")
             row["risk_flags"] = flags
 
             results.append(row)
