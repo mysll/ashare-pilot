@@ -57,6 +57,9 @@ def _get_board_limit(code: str) -> float:
 
 
 def main():
+    import time
+    _t0 = time.time()
+
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
@@ -66,6 +69,10 @@ def main():
     parser.add_argument("codes", help="Comma-separated stock codes")
     parser.add_argument("--json", action="store_true", help="Output as flat JSON array")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
+    parser.add_argument(
+        "--source", choices=["sohu", "sina"], default="sina",
+        help="Data source (default: sina)"
+    )
 
     args = parser.parse_args()
     codes = [c.strip() for c in args.codes.split(",") if c.strip()]
@@ -73,7 +80,7 @@ def main():
     results = []
     for code in codes:
         try:
-            records = fetch_history(code, range_str="3m")
+            records = fetch_history(code, range_str="3m", source=args.source)
             if not records:
                 print(f"[SKIP] {code}: no data", file=sys.stderr)
                 continue
@@ -250,6 +257,8 @@ def main():
             continue
 
     # ── Output ─────────────────────────────────────────────
+    _elapsed = time.time() - _t0
+    print(f"[DONE] {len(results)}/{len(codes)} stocks in {_elapsed:.1f}s", file=sys.stderr)
     if args.json:
         output_str = json.dumps(results, ensure_ascii=False, indent=2)
     else:

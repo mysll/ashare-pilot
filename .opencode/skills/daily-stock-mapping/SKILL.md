@@ -24,7 +24,7 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets.
 
 **Format Rule:** All intermediate files are markdown. Write them directly — do NOT write scripts to generate JSON. The LLM is the author, not a code generator.
 
-**Layer Boundary:** Script outputs data + features + formula-based scores (26 fields from `fetch_pool_indicators.py`). Skill layer reads these directly — composite weighting, direction, hard/soft filter decisions, and table population are LLM territory. Do NOT write ad-hoc scoring scripts.
+**Layer Boundary:** Script outputs data + features + formula-based scores (25 fields from `fetch_pool_indicators.py`). Skill layer reads these directly — composite weighting, direction, hard/soft filter decisions, and table population are LLM territory. Do NOT write ad-hoc scoring scripts.
 
 ## Red Flags — STOP and Restart the Stage
 
@@ -297,11 +297,13 @@ Enrich `theme_stocks.md` with these columns: `Auction%` (竞价涨幅), `Auction
 
 **Phase 2: Technical Indicators, Features & Scoring (single batch call)**
 
+> **Timeout:** This command fetches history + computes indicators for every stock in the pool. With Sina source (~30s for 80 stocks), set bash timeout to **5 minutes** (`timeout: 300000`).
+
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <code_1>,<code_2>,...,<code_N> --json
+python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <code_1>,<code_2>,...,<code_N> --json -o <output_file>
 ```
 
-Output is a flat JSON array — same structure as Phase 1 `fetch_stock.py`. Each element is a single record per stock with 26 fields covering 3 layers. All numeric values are float/int (no `"14.38%"` string formatting). One tool call covers the entire pool.
+Output is a flat JSON array — same structure as Phase 1 `fetch_stock.py`. Each element is a single record per stock with 25 fields covering 3 layers. All numeric values are float/int (no `"14.38%"` string formatting). One tool call covers the entire pool.
 
 Example output (one element per stock):
 

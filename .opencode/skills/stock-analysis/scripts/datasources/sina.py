@@ -8,6 +8,7 @@ from typing import Any
 import requests
 
 from .base import BaseDataSource, RateLimitConfig
+from .kline_cache import load_cache, save_cache, merge_dedup, _fmt_to_date
 from .utils import calc_price_precision, format_price, format_amount
 
 
@@ -250,6 +251,203 @@ class SinaDataSource(BaseDataSource):
                         "ma_volume5": item.get("ma_volume5"),
                     }
                 )
+        return results
+
+    def _fetch_rs_amount(self, code: str) -> list | None:
+        """Fetch float-share change history (流通股本, 万股) from StockService."""
+        url = (
+            "http://stock.finance.sina.com.cn/stock/api/jsonp.php"
+            f"/stockapi/StockService.getAmountBySymbol?_=26&symbol={code}"
+        )
+        headers = {
+            "User-Agent": self._get_random_ua(),
+            "Referer": "https://finance.sina.com.cn/",
+        }
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                return None
+            text = resp.text
+            if "(" not in text or ")" not in text.rstrip(";"):
+                return None
+            json_str = text[text.find("(") + 1:text.rfind(")")]
+            data = json.loads(json_str)
+            if isinstance(data, list) and data:
+                return data
+            return None
+        except Exception:
+            return None
+
+    def _enrich_records(
+        self, records: list, rs_amount: list | None
+    ) -> list:
+        """Compute change/change_pct, amount(元→万元), turnover from rsAmount."""
+        prev_close = None
+        for r in records:
+            close_val = float(r.get("close", 0))
+            open_val = float(r.get("open", 0))
+            high_val = float(r.get("high", 0))
+            low_val = float(r.get("low", 0))
+            volume_val = float(r.get("volume", 0))
+            raw_amount = float(r.get("amount", 0))
+
+            if prev_close is not None and prev_close != 0:
+                change_val = round(close_val - prev_close, 2)
+                change_pct_val = round(change_val / prev_close * 100, 2)
+            else:
+                change_val = 0
+                change_pct_val = 0
+
+            # amount: 元 → 万元 (matching Sohu format)
+            amt_str = str(round(raw_amount / 10000, 2)) if raw_amount else ""
+
+            # turnover: volume(股) / floatShares(股) × 100
+            turnover_str = ""
+            if rs_amount and volume_val:
+                share_amt = None
+                for sa in rs_amount:
+                    if r.get("date", "") >= sa.get("date", ""):
+                        share_amt = float(sa.get("amount", 0))
+                if share_amt and share_amt > 0:
+                    turnover_val = volume_val / (share_amt * 10000) * 100
+                    turnover_str = str(round(turnover_val, 2))
+
+            r.update({
+                "open": str(open_val),
+                "close": str(close_val),
+                "high": str(high_val),
+                "low": str(low_val),
+                "volume": str(int(volume_val)) if volume_val else "0",
+                "change": str(change_val),
+                "change_pct": str(change_pct_val),
+                "amount": amt_str,
+                "turnover": turnover_str,
+            })
+            prev_close = close_val
+        return records
+
+    def _fetch_daily_php(self, code: str, start_date: str) -> list | None:
+        """Fetch daily K-line from DAYK_URL_PHP (cn market)."""
+        url = (
+            "https://quotes.sina.cn/hq/api/openapi.php/"
+            f"MarketCenterService.getDailyK?market=cn&symbol={code}"
+            f"&start={start_date}&asc=1"
+        )
+        headers = {
+            "User-Agent": self._get_random_ua(),
+            "Referer": "https://finance.sina.com.cn/",
+        }
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            if resp.status_code != 200:
+                return None
+            text = resp.text.strip()
+            if text.startswith("/*"):
+                text = text[text.find("(") + 1:text.rfind(")")]
+            data = json.loads(text)
+            records = data.get("result", {}).get("data", [])
+            if isinstance(records, list) and records:
+                # Map day → date
+                for r in records:
+                    r["date"] = r.pop("day", "")
+                return records
+            return None
+        except Exception:
+            return None
+
+    def _fetch_daily_scale240(self, code: str, datalen: int) -> list | None:
+        """Fallback: fetch daily K-line via scale=240 on CN_MarketDataService."""
+        url = f"{SINA_KLINE_URL}?symbol={code}&scale=240&datalen={datalen}"
+        headers = {
+            "User-Agent": self._get_random_ua(),
+            "Referer": "https://quotes.sina.cn/",
+        }
+        try:
+            resp = requests.get(url, headers=headers, timeout=10)
+            data = resp.json()
+        except Exception:
+            return None
+        if not data or not isinstance(data, list):
+            return None
+        results = []
+        for item in data:
+            day = item.get("day", "")
+            if not day:
+                continue
+            results.append({
+                "date": day,
+                "open": str(item.get("open", 0)),
+                "close": str(item.get("close", 0)),
+                "high": str(item.get("high", 0)),
+                "low": str(item.get("low", 0)),
+                "volume": str(item.get("volume", 0)),
+                "amount": "",
+            })
+        return results if results else None
+
+    def fetch_daily_history(
+        self, code: str, range_str: str = "3m", use_cache: bool = True
+    ) -> list | None:
+        """Fetch daily K-line history in Sohu-compatible format.
+
+        Primary:  DAYK_URL_PHP + StockService.getAmountBySymbol (has amount + turnover)
+        Fallback: scale=240 on CN_MarketDataService (OHLCV only)
+
+        Returns list of dicts with keys: date, open, close, high, low,
+        change, change_pct, volume, amount, turnover.
+        Returns None on failure.
+        """
+        if not re.match(r"^(sh|sz|bj)", code):
+            return None
+
+        now = datetime.now()
+        range_days = {"1y": 365, "6m": 182, "3m": 90, "1m": 30, "1w": 7}
+        days = range_days.get(range_str, 90)
+        cutoff_date = (now - timedelta(days=days)).strftime("%Y-%m-%d")
+        start_date = (now - timedelta(days=days + 10)).strftime("%Y-%m-%d")
+
+        # ── Cache check ──────────────────────────────────────
+        if use_cache:
+            cache_data = load_cache(code)
+            if cache_data:
+                cached = cache_data["records"]
+                cov_to = cache_data.get("coverage_to", cached[-1]["date"])
+                end_dashed = now.strftime("%Y-%m-%d")
+                if cov_to >= end_dashed:
+                    return [r for r in cached if r["date"] >= cutoff_date]
+
+        results = None
+
+        # ── Primary: DAYK_URL_PHP ─────────────────────────────
+        raw = self._fetch_daily_php(code, start_date)
+        if raw:
+            rs = self._fetch_rs_amount(code)
+            results = self._enrich_records(raw, rs)
+            # Filter to cutoff
+            results = [r for r in results if r["date"] >= cutoff_date]
+
+        # ── Fallback: scale=240 ────────────────────────────────
+        if not results:
+            datalen = days + 20
+            raw = self._fetch_daily_scale240(code, datalen)
+            if raw:
+                results = self._enrich_records(raw, None)
+                results = [r for r in results if r["date"] >= cutoff_date]
+
+        if not results:
+            return None
+
+        # ── Update cache ──────────────────────────────────────
+        if use_cache:
+            if cache_data:
+                merged = merge_dedup(cache_data["records"], results)
+            else:
+                merged = results
+            now_str = now.strftime("%Y-%m-%d")
+            save_cache(code, merged,
+                       coverage_from=merged[0]["date"],
+                       coverage_to=now_str)
+
         return results
 
     def fetch_all_stocks(self, page_size: int = 80) -> list:

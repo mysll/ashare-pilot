@@ -1,5 +1,6 @@
 # Cookie storage (contains sensitive data)
 .cookie
+.cache
 
 # Python
 __pycache__/

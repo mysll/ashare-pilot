@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Fetch historical stock daily K-line data (前复权) from Sohu Finance API.
+"""Fetch historical stock daily K-line data (前复权).
 
 Supports: A stocks (sh/sz only).
-Data source: Sohu Finance (搜狐财经).
+Data sources: Sohu Finance (搜狐财经) / Sina Finance (新浪财经).
 
 Usage:
     python fetch_history.py sh600519                    # Last 3 months (default)
     python fetch_history.py sz000001 --range 1m         # Last 1 month
     python fetch_history.py sh600519 --range 1y --json  # Last 1 year, JSON output
     python fetch_history.py sh600519 --start 20260101 --end 20260331
+    python fetch_history.py sh600519 --source sina      # Use Sina as data source
 """
 
 import argparse
@@ -17,16 +18,20 @@ import json
 import sys
 from typing import Any
 
-from datasources import SohuDataSource
+from datasources import SohuDataSource, SinaDataSource
 
 
 _sohu = SohuDataSource()
+_sina = SinaDataSource()
 
 
 def fetch_history(
-    stock_code: str, start: str = None, end: str = None, range_str: str = "3m"
+    stock_code: str, start: str = None, end: str = None, range_str: str = "3m",
+    use_cache: bool = True, source: str = "sohu",
 ) -> list:
-    return _sohu.fetch_history(stock_code, start, end, range_str)
+    if source == "sina":
+        return _sina.fetch_daily_history(stock_code, range_str, use_cache=use_cache) or []
+    return _sohu.fetch_history(stock_code, start, end, range_str, use_cache=use_cache)
 
 
 def print_table(records: list, stock_code: str) -> None:
@@ -60,7 +65,7 @@ def main():
         sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(
-        description="Fetch historical stock daily K-line data (前复权) from Sohu Finance"
+        description="Fetch historical stock daily K-line data (前复权)"
     )
     parser.add_argument("code", help="Stock code (sh/sz only, e.g., sh600519)")
     parser.add_argument(
@@ -74,10 +79,16 @@ def main():
     parser.add_argument("--json", action="store_true", help="Output as JSON array")
     parser.add_argument("--csv", action="store_true", help="Output as CSV")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
+    parser.add_argument("--no-cache", action="store_true", help="Skip cache, fetch directly from API")
+    parser.add_argument(
+        "--source", choices=["sohu", "sina"], default="sohu",
+        help="Data source (default: sohu)"
+    )
 
     args = parser.parse_args()
 
-    records = fetch_history(args.code, args.start, args.end, args.range)
+    records = fetch_history(args.code, args.start, args.end, args.range,
+                            use_cache=not args.no_cache, source=args.source)
 
     if args.json:
         output_str = json.dumps(records, ensure_ascii=False, indent=2)
