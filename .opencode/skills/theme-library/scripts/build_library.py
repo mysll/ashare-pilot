@@ -15,9 +15,9 @@ Generates:
   - metadata/concept_list.json
   - metadata/update_log.json
 
-Theme Leader Ranking v4:
+Theme Industry Ranking v5:
   purity_score = coverage_pct * purity_coverage_weight + rank_score * purity_rank_weight
-  leader_score = purity * leader_purity_weight + liquidity * leader_liquidity_weight + market_cap * leader_market_cap_weight
+  industry_score = purity * industry_purity_weight + liquidity * industry_liquidity_weight + market_cap * industry_market_cap_weight
   candidate_score = purity * candidate_purity_weight + liquidity * candidate_liquidity_weight
                    + market_cap * candidate_market_cap_weight + momentum * candidate_momentum_weight (momentum=0)
   Eligibility: coverage_pct >= min_coverage OR matched_concepts >= min_concepts
@@ -331,9 +331,9 @@ def build_concepts(all_data, concepts_map):
 
 
 def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_stocks, concept_info):
-    """Compute V4 multi-dimensional ranking: purity, leader, candidate scores.
+    """Compute V5 multi-dimensional ranking: purity, industry, candidate scores.
 
-    Returns (pure_list, leader_list, candidate_list, concept_weights, qualified_count).
+    Returns (pure_list, industry_list, candidate_list, concept_weights, qualified_count).
     """
     all_stock_counts = [
         concept_info.get(cn, {}).get("stock_count", 50)
@@ -421,7 +421,7 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
             coverage_pct * scoring["purity_coverage_weight"]
             + rank_score * scoring["purity_rank_weight"], 1
         )
-        leader_score = round(
+        industry_score = round(
             purity_score * scoring["leader_purity_weight"]
             + liquidity_score * scoring["leader_liquidity_weight"]
             + market_cap_score * scoring["leader_market_cap_weight"], 1
@@ -437,7 +437,7 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
             "code": code,
             "name": sd["name"],
             "purity_score": purity_score,
-            "leader_score": leader_score,
+            "industry_score": industry_score,
             "candidate_score": candidate_score,
             "liquidity_score": round(liquidity_score, 1),
             "market_cap_score": round(market_cap_score, 1),
@@ -453,18 +453,18 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
     pure_list = sorted(eligible_stocks, key=lambda x: x["purity_score"], reverse=True)[:pure_limit]
     pure_list = [{"code": s["code"], "name": s["name"], "purity_score": s["purity_score"]} for s in pure_list]
 
-    leader_list = sorted(eligible_stocks, key=lambda x: x["leader_score"], reverse=True)[:leader_limit]
-    leader_list = [
+    industry_list = sorted(eligible_stocks, key=lambda x: x["industry_score"], reverse=True)[:leader_limit]
+    industry_list = [
         {
             "code": s["code"],
             "name": s["name"],
-            "leader_score": s["leader_score"],
+            "industry_score": s["industry_score"],
             "purity_score": s["purity_score"],
             "liquidity_score": s["liquidity_score"],
             "market_cap_score": s["market_cap_score"],
             "anchor": s["anchor"],
         }
-        for s in leader_list
+        for s in industry_list
     ]
 
     candidate_list = sorted(eligible_stocks, key=lambda x: x["candidate_score"], reverse=True)[:candidate_limit]
@@ -480,7 +480,7 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
         for s in candidate_list
     ]
 
-    return pure_list, leader_list, candidate_list, concept_weights, qualified_count
+    return pure_list, industry_list, candidate_list, concept_weights, qualified_count
 
 
 def build_themes(all_data, concept_info):
@@ -514,7 +514,7 @@ def build_themes(all_data, concept_info):
                         seen_codes.add(s["code"])
                         merged_stocks.append(s)
 
-        pure_stocks, leader_stocks, candidate_stocks, concept_weights, qualified_count = _compute_theme_scores(
+        pure_stocks, industry_stocks, candidate_stocks, concept_weights, qualified_count = _compute_theme_scores(
             theme_name, theme_cfg, child_concepts, all_concept_stocks, concept_info
         )
 
@@ -540,7 +540,7 @@ def build_themes(all_data, concept_info):
             "stock_count": len(stock_codes),
             "qualified_stock_count": qualified_count,
             "pure_stocks": pure_stocks,
-            "leader_stocks": leader_stocks,
+            "industry_leaders": industry_stocks,
             "candidate_stocks": candidate_stocks,
             "stocks": stock_codes,
             "last_update": time.strftime('%Y-%m-%d'),
@@ -559,7 +559,7 @@ def build_themes(all_data, concept_info):
             "qualified_stock_count": qualified_count,
             "stocks": stock_codes,
             "pure_stocks": pure_stocks,
-            "leader_stocks": leader_stocks,
+            "industry_leaders": industry_stocks,
             "candidate_stocks": candidate_stocks,
             "anchors": anchor_codes,
             "file": f"{safe_name}.json",
@@ -614,14 +614,14 @@ def build_stocks(all_data, theme_info):
             theme_scores[code].setdefault(theme_name, {})
             theme_scores[code][theme_name]["purity_score"] = stock["purity_score"]
 
-        for stock in info.get("leader_stocks", []):
+        for stock in info.get("industry_leaders", []):
             code = stock["code"]
             if code not in theme_scores:
                 theme_scores[code] = {}
             theme_scores[code].setdefault(theme_name, {})
             theme_scores[code][theme_name].update({
                 "purity_score": stock["purity_score"],
-                "leader_score": stock["leader_score"],
+                "industry_score": stock["industry_score"],
                 "liquidity_score": stock["liquidity_score"],
                 "market_cap_score": stock["market_cap_score"],
                 "anchor": stock["anchor"],
@@ -669,8 +669,8 @@ def build_stocks(all_data, theme_info):
             if scores:
                 if "purity_score" in scores:
                     entry["purity_score"] = scores["purity_score"]
-                if "leader_score" in scores:
-                    entry["leader_score"] = scores["leader_score"]
+                if "industry_score" in scores:
+                    entry["industry_score"] = scores["industry_score"]
                 if "candidate_score" in scores:
                     entry["candidate_score"] = scores["candidate_score"]
                 entry["anchor"] = scores.get("anchor", False)
@@ -760,7 +760,7 @@ def build_update_log(theme_info, concept_info, stock_files):
 
     log_data = {
         "last_build": time.strftime('%Y-%m-%d %H:%M:%S'),
-        "leader_ranking_version": "v4",
+        "industry_ranking_version": "v5",
         "theme_count": len(theme_info),
         "concept_count": len(concept_info),
         "themed_concepts": len(themed_concepts & set(concept_info.keys())),
@@ -777,9 +777,7 @@ def build_update_log(theme_info, concept_info, stock_files):
 
 def main():
     if sys.platform == "win32":
-        sys.stdout = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace"
-        )
+        sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="Build theme library from cached data")
     parser.add_argument("--clean", action="store_true", help="Clean existing files before build")
@@ -810,7 +808,7 @@ def main():
         concept_info = build_concepts(all_data, concepts_map)
         print(f"Built {len(concept_info)} concept files.")
 
-        print("Building theme files (with leader ranking v4)...")
+        print("Building theme files (with industry ranking v5)...")
         theme_info = build_themes(all_data, concept_info)
         print(f"Built {len(theme_info)} theme files.")
 

@@ -5,7 +5,8 @@ description: >
   Hierarchical structure: Theme → Concept → Stock (1:N:N).
   ~60 investment themes group ~330 East Money concept boards, with ~166 non-investment
   concepts (index/style/trading-state) excluded from themes but still queryable.
-  V4 multi-dimensional ranking: purity/leader/candidate scores with eligibility filtering.
+  V5 multi-dimensional ranking: purity/industry/candidate scores with eligibility filtering.
+  Market observation view for dynamic rankings.
   Triggers on "概念板块", "主题库", "theme", "concept board", "主题查询",
   "新闻映射主题", "哪些股票属于XX概念".
 ---
@@ -34,14 +35,14 @@ Theme: AI算力
 
 Stock theme weight = max(concept_weight * rank_weight) across all member concepts.
 
-## Theme Ranking (v4)
+## Theme Ranking (v5)
 
 Three-dimensional ranking system with eligibility filtering:
 
 | Score | Formula | Purpose |
 |-------|---------|---------|
 | `purity_score` | `coverage * 0.60 + rank * 0.40` | Theme belonging strength |
-| `leader_score` | `purity * 0.40 + liquidity * 0.35 + market_cap * 0.25` | Market leaders |
+| `industry_score` | `purity * 0.40 + liquidity * 0.35 + market_cap * 0.25` | Theme representative (产业代表) |
 | `candidate_score` | `purity * 0.30 + liquidity * 0.30 + market_cap * 0.20 + momentum * 0.20` | Analysis watchlist (momentum=0 for now) |
 
 **Eligibility Filter:** Before ranking, stocks must pass `coverage >= min_coverage OR matched_concepts >= min_concepts`. Exceptions: anchor stocks, or rank #1 in core concept (weight >= 0.8).
@@ -49,14 +50,14 @@ Three-dimensional ranking system with eligibility filtering:
 | Output | Meaning |
 |--------|---------|
 | `purity_score` | How strongly a stock belongs to this theme (0-100) |
-| `leader_score` | Market-recognized leaders (0-100) |
+| `industry_score` | Industry representative strength (0-100) |
 | `candidate_score` | Worth further analysis (0-100) |
 | `anchor` | Boolean label: market consensus leader |
 | `qualified_stock_count` | Stocks passing eligibility filter / total |
 
 **Thresholds** (configured in `theme_library_config.json`):
 - pure_stocks: purity >= 30, max 50
-- leader_stocks: leader >= 50, max 20
+- industry_leaders: industry >= 50, max 20
 - candidate_stocks: candidate >= 60, max 30
 
 ## Quick Start
@@ -77,7 +78,7 @@ python scripts/build_library.py
 ### Query
 
 ```bash
-# Query theme (shows concepts + weights + v4 leaders)
+# Query theme (shows concepts + weights + industry leaders)
 python scripts/query_theme.py theme AI算力
 
 # Query concept (shows stocks + parent theme)
@@ -89,10 +90,14 @@ python scripts/query_theme.py stock sz000977
 # Map keyword to theme
 python scripts/query_theme.py keyword GPU
 
-# V4 ranking commands
-python scripts/query_theme.py leaders AI算力      # Top leader stocks by leader_score
+# Ranking commands
+python scripts/query_theme.py leaders AI算力      # Top industry leaders by industry_score
 python scripts/query_theme.py pure AI算力         # Top pure stocks by purity_score
 python scripts/query_theme.py candidates AI算力    # Top candidate stocks by candidate_score
+
+# Market observation view (dynamic, from concept cache)
+python scripts/query_theme.py market AI算力        # Full market view (7 sections)
+python scripts/query_theme.py market AI算力 --top 20
 
 # List all themes
 python scripts/query_theme.py list
@@ -107,24 +112,84 @@ python scripts/query_theme.py stats
 |--------|---------|
 | `fetch_concepts.py` | Fetch concept board list from East Money |
 | `fetch_concept_stocks.py` | Fetch stocks for each concept board (supports resume) |
-| `build_library.py` | Build concepts/themes/stocks JSON files and indexes (v4 ranking) |
+| `build_library.py` | Build concepts/themes/stocks JSON files and indexes (v5 ranking) |
 | `query_theme.py` | Query interface for themes, concepts, stocks, keywords |
 
 ## Query Commands
 
 | Command | Input | Output |
 |---------|-------|--------|
-| `theme <name>` | Theme name or alias | Theme details with concepts + weights + leaders |
+| `theme <name>` | Theme name or alias | Theme details with concepts + weights + industry leaders |
 | `concept <name>` | Concept name | Concept details + parent theme |
 | `stock <code>` | Stock code (e.g., sz000977) | Themes and concepts with weights |
 | `keyword <word>` | Keyword | Mapped theme or concept |
-| `leaders <name>` | Theme name | Top leader stocks by leader_score |
+| `leaders <name>` | Theme name | Top industry leaders by industry_score |
 | `pure <name>` | Theme name | Top pure stocks by purity_score |
 | `candidates <name>` | Theme name | Top candidate stocks by candidate_score |
+| `market <name>` | Theme name | 7-section market observation: cross-rank, reps, gainers, turnover, volume, attention |
 | `list` | --top N | Top N themes by stock count |
 | `stats` | - | Library statistics |
 
 All query commands support `--json` for structured output.
+
+## Market View (`market` command)
+
+Computed at query time from concept cache snapshots. No dynamic data is persisted to JSON files. ST stocks (ST/*ST prefix) are excluded from all sections.
+
+7 output sections, in display order:
+
+| # | Section | Source | Filter |
+|---|---------|--------|--------|
+| 1 | **热点交集** (Cross-Rank Highlights) | Stocks appearing in ≥2 top-N lists | Hit count descending |
+| 2 | **主题代表股** (Theme Representatives) | `industry_leaders` from theme JSON | Top 20 by industry_score |
+| 3 | **今日强势股** (Today's Strongest) | Cache `change_pct` | All theme stocks, descending |
+| 4 | **成交额龙头** (Turnover Leaders) | Cache `amount` | Descending |
+| 5 | **换手龙头** (Turnover Rate Leaders) | Cache `turnover` | Descending |
+| 6 | **放量观察** (Volume Expansion) | Cache `volume_ratio` | Descending |
+| 7 | **市场关注股** (Market Attention) | Composite score | Descending |
+
+### 1. 热点交集 (Cross-Rank Highlights)
+
+Simultaneously in ≥2 top-N lists. Columns: `涨幅`, `Atn` (attention_score), `Ind` (industry_score), `Hits`, `Tags`.
+
+Stocks fall into three categories based on Atn + Ind:
+
+| Category | Atn | Ind | Signal |
+|----------|:---:|:---:|--------|
+| **边缘扩散** | High | `--` or low | Capital-driven, no representative status |
+| **中军启动** | High | Has value (≥50) | Established player receiving fresh capital |
+| **主题主线** | Present | High | Core representative with active attention |
+
+### 2. 主题代表股 (Theme Representatives)
+
+Top `industry_leaders` by `industry_score`. Static ranking — these are the long-term theme representative stocks (老龙头).
+
+### 3. 今日强势股 (Today's Strongest)
+
+ALL theme stocks sorted by `change_pct` (no qualified filter). Includes `Ind` column so users can cross-reference representative score with price action.
+
+### 4-6. 成交额/换手/量比
+
+Single-dimension rankings. 放量观察 has a disclaimer: `量比仅作观察指标`.
+
+### 7. 市场关注股 (Market Attention)
+
+Composite ranking. Columns: `Atn`, `Ind`, `AmtRk`, `TrnRk`, `VRRk`.
+
+Formula:
+```
+attention_score = 0.60 * amount_pctile + 0.25 * turnover_pctile + 0.15 * volume_ratio_pctile
+```
+All inputs are percentile ranks (排名百分位), not raw values.
+
+`Ind` column: actual `industry_score` when computable (from `industry_leaders` or `candidate_stocks` component scores). `--` when the stock is not in any ranked pool.
+
+### Design Notes
+
+- **Static vs Dynamic**: `industry_score` lives in JSON, `attention_score` computed at query time
+- **Data freshness**: Depends on `fetch_concept_stocks.py` last run time — shown as `Data Time` in output
+- **No auto-refresh**: `market` command reads cache only, never triggers API calls
+- **ST exclusion**: Applied at cache snapshot load time
 
 ## Directory Structure
 
@@ -155,7 +220,7 @@ Themes are defined in `scripts/theme_config.json`:
 - **`themes`**: Theme name → {concepts, aliases, concept_weights_override, anchors} mapping (~60 themes)
 - **`concept_aliases`**: Concept-level aliases (for keyword matching)
 - **`concept_weights_override`**: Manual concept weight overrides (auto-generated if not specified)
-- **`anchors`**: Known theme leader stock codes (used as eligibility exceptions and anchor labels)
+- **`anchors`**: Known theme representative stock codes (used as eligibility exceptions and anchor labels)
 - Concepts not mapped to any theme remain queryable via `concept` command
 
 ## Integration
@@ -187,3 +252,6 @@ Stock theme weight = max(concept_weight × rank_weight) across all member concep
 - Theme definitions are in `scripts/theme_config.json`
 - ~166 non-investment concepts (index/style/trading-state) are excluded from themes but still queryable via `concept` command
 - All data files use JSON format
+- **V5 Design Principle**: Static data (theme membership, purity, industry_score) lives in JSON files. Dynamic data (price action, turnover, volume ratio) lives in cache and is read at query time via `market` command. The two are never mixed.
+- **industry_score** is stored in `industry_leaders` (top 20). For stocks in `candidate_stocks`, it is computed on-the-fly from purity/liquidity/market_cap components. For others, shown as `--`.
+- **ST filter**: Stocks with names starting with `ST` or `*ST` are excluded from market view (filtered at cache load time)

@@ -1,0 +1,36 @@
+# Cookie storage (contains sensitive data)
+.cookie
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+predict
+memory
+docs
+
+# Theme Library generated data
+.opencode/skills/theme-library/cache/
+.opencode/skills/theme-library/concepts/
+.opencode/skills/theme-library/themes/
+.opencode/skills/theme-library/stocks/
+.opencode/skills/theme-library/aliases/
+.opencode/skills/theme-library/index/
+.opencode/skills/theme-library/metadata/

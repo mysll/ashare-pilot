@@ -1,0 +1,27 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "agent": {
+    "build": {
+      "permission": {
+        "skill": {
+          "*": "allow",
+          "stock-analysis": "allow",
+          "daily-news-brief": "allow",
+          "daily-market-analysis": "allow",
+          "tail-stock-selection": "allow",
+          "theme-library": "allow"
+        }
+      }
+    },
+    "plan": {
+      "permission": {
+        "skill": {
+          "*": "allow"
+        }
+      }
+    }
+  },
+  "instructions": [
+    "AGENTS.md"
+  ]
+}

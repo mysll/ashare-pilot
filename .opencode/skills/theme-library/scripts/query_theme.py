@@ -11,6 +11,7 @@ Usage:
     python query_theme.py leaders AI算力 [--top N]
     python query_theme.py pure AI算力 [--top N]
     python query_theme.py candidates AI算力 [--top N]
+    python query_theme.py market AI算力 [--top N]
 """
 
 import argparse
@@ -22,6 +23,8 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 SKILL_DIR = SCRIPT_DIR.parent
+CACHE_DIR = SKILL_DIR / "cache"
+STOCKS_CACHE_DIR = CACHE_DIR / "stocks"
 THEMES_DIR = SKILL_DIR / "themes"
 CONCEPTS_DIR = SKILL_DIR / "concepts"
 STOCKS_DIR = SKILL_DIR / "stocks"
@@ -204,6 +207,276 @@ def show_stats():
     }
 
 
+def _load_concept_cache_snapshot():
+    """遍历 cache/stocks/*.json，构建 {code: {name, change_pct, amount, turnover, volume_ratio}} 快照"""
+    snapshot = {}
+    if not STOCKS_CACHE_DIR.exists():
+        return snapshot
+
+    for f in STOCKS_CACHE_DIR.glob("*.json"):
+        data = load_json(f)
+        if not data:
+            continue
+        fetch_time = data.get("fetch_time", "")
+        for s in data.get("stocks", []):
+            code = s.get("code", "")
+            if not code:
+                continue
+            name = s.get("name", "")
+            if name.startswith("ST") or name.startswith("*ST"):
+                continue
+            change_pct = s.get("change_pct")
+            try:
+                change_pct = float(change_pct) if change_pct is not None else 0.0
+            except (ValueError, TypeError):
+                change_pct = 0.0
+            try:
+                amount = float(s.get("amount", 0) or 0)
+            except (ValueError, TypeError):
+                amount = 0.0
+            try:
+                turnover = float(s.get("turnover", 0) or 0)
+            except (ValueError, TypeError):
+                turnover = 0.0
+            try:
+                volume_ratio = float(s.get("volume_ratio", 0) or 0)
+            except (ValueError, TypeError):
+                volume_ratio = 0.0
+            snapshot[code] = {
+                "name": name,
+                "change_pct": change_pct,
+                "amount": amount,
+                "turnover": turnover,
+                "volume_ratio": volume_ratio,
+                "fetch_time": fetch_time,
+            }
+    return snapshot
+
+
+def _compute_market_view(theme_data, top=10):
+    """从 theme_data 的 stocks 列表匹配缓存快照，计算 market 视图"""
+    stocks = theme_data.get("stocks", []) or []
+    snapshot = _load_concept_cache_snapshot()
+
+    # 构建 industry_score 映射（来自 industry_leaders + candidate_stocks）
+    industry_scores = {}
+    for il in (theme_data.get("industry_leaders") or []):
+        code = il.get("code", "")
+        if code:
+            industry_scores[code] = il.get("industry_score", 0)
+    for cs in (theme_data.get("candidate_stocks") or []):
+        code = cs.get("code", "")
+        if code and code not in industry_scores:
+            ind = round(
+                cs.get("purity_score", 0) * 0.40 +
+                cs.get("liquidity_score", 0) * 0.35 +
+                cs.get("market_cap_score", 0) * 0.25, 1
+            )
+            industry_scores[code] = ind
+
+    matched = []
+    fetch_times = set()
+    for code in stocks:
+        snap = snapshot.get(code)
+        if snap:
+            matched.append({
+                "code": code,
+                "name": snap["name"],
+                "change_pct": snap["change_pct"],
+                "amount": snap["amount"],
+                "turnover": snap["turnover"],
+                "volume_ratio": snap["volume_ratio"],
+                "industry_score": industry_scores.get(code),
+            })
+            if snap["fetch_time"]:
+                fetch_times.add(snap["fetch_time"])
+
+    if not matched:
+        return {"data_time": "", "top_gainers": [], "top_amount": [],
+                "top_turnover": [], "top_vr": [], "market_attention": [],
+                "cross_rank_highlights": []}
+
+    N = len(matched)
+
+    top_gainers = sorted(matched, key=lambda x: x["change_pct"], reverse=True)[:top]
+    top_amount = sorted(matched, key=lambda x: x["amount"], reverse=True)[:top]
+    top_turnover = sorted(matched, key=lambda x: x["turnover"], reverse=True)[:top]
+    top_vr = sorted(matched, key=lambda x: x["volume_ratio"], reverse=True)[:top]
+
+    # 综合排名：market_attention_score = 0.6 * amount_rank + 0.25 * turnover_rank + 0.15 * volume_ratio_rank
+    by_amount = sorted(matched, key=lambda x: x["amount"], reverse=True)
+    by_turnover = sorted(matched, key=lambda x: x["turnover"], reverse=True)
+    by_vr = sorted(matched, key=lambda x: x["volume_ratio"], reverse=True)
+
+    rank_amount = {}
+    rank_turnover = {}
+    rank_vr = {}
+    for i, s in enumerate(by_amount):
+        rank_amount[s["code"]] = i + 1
+    for i, s in enumerate(by_turnover):
+        rank_turnover[s["code"]] = i + 1
+    for i, s in enumerate(by_vr):
+        rank_vr[s["code"]] = i + 1
+
+    for s in matched:
+        amount_pctile = 100 * (N - rank_amount[s["code"]] + 1) / N
+        turnover_pctile = 100 * (N - rank_turnover[s["code"]] + 1) / N
+        vr_pctile = 100 * (N - rank_vr[s["code"]] + 1) / N
+        s["attention_score"] = round(0.6 * amount_pctile + 0.25 * turnover_pctile + 0.15 * vr_pctile, 1)
+        s["amount_rank"] = rank_amount[s["code"]]
+        s["turnover_rank"] = rank_turnover[s["code"]]
+        s["vr_rank"] = rank_vr[s["code"]]
+
+    market_attention = sorted(matched, key=lambda x: x["attention_score"], reverse=True)[:top]
+
+    # 热点交集：同时出现在多个 top-N 列表中的股票
+    by_gainers = sorted(matched, key=lambda x: x["change_pct"], reverse=True)
+    gainer_set = {s["code"] for s in top_gainers}
+    amount_set = {s["code"] for s in top_amount}
+    turnover_set = {s["code"] for s in top_turnover}
+    vr_set = {s["code"] for s in top_vr}
+    attention_set = {s["code"] for s in market_attention}
+
+    cross_rank_highlights = []
+    for s in matched:
+        hits = 0
+        if s["code"] in gainer_set:
+            hits += 1
+        if s["code"] in amount_set:
+            hits += 1
+        if s["code"] in turnover_set:
+            hits += 1
+        if s["code"] in vr_set:
+            hits += 1
+        if s["code"] in attention_set:
+            hits += 1
+        if hits >= 2:
+            gainer_rank = next((i+1 for i, x in enumerate(by_gainers) if x["code"] == s["code"]), N)
+            cross_rank_highlights.append({
+                "code": s["code"],
+                "name": s["name"],
+                "change_pct": s["change_pct"],
+                "attention_score": s.get("attention_score", 0),
+                "industry_score": s.get("industry_score"),
+                "hits": hits,
+                "gainer_rank": gainer_rank,
+                "amount_rank": rank_amount.get(s["code"], N),
+                "turnover_rank": rank_turnover.get(s["code"], N),
+                "vr_rank": rank_vr.get(s["code"], N),
+                "attention_rank": next((i+1 for i, x in enumerate(market_attention) if x["code"] == s["code"]), len(market_attention)+1),
+            })
+    cross_rank_highlights.sort(key=lambda x: (-x["hits"], x["attention_rank"]))
+    cross_rank_highlights = cross_rank_highlights[:top]
+
+    # 最新数据时间
+    data_time = max(fetch_times) if fetch_times else "unknown"
+
+    return {
+        "data_time": data_time,
+        "top_gainers": top_gainers,
+        "top_amount": top_amount,
+        "top_turnover": top_turnover,
+        "top_vr": top_vr,
+        "market_attention": market_attention,
+        "cross_rank_highlights": cross_rank_highlights,
+    }
+
+
+def _print_market(data, top=10):
+    """打印 market 视图"""
+    theme_name = data.get("name", "-")
+    industry_leaders = data.get("industry_leaders", []) or []
+    qualified = data.get("qualified_stock_count", "?")
+    total = data.get("stock_count", "?")
+
+    view = _compute_market_view(data, top)
+
+    print(f"Theme: {theme_name}")
+    print(f"Stocks: {qualified}/{total} qualified  |  Data Time: {view['data_time']}")
+    print()
+
+    # 热点交集（最重要，放最前面）
+    if view["cross_rank_highlights"]:
+        print(f"--- 热点交集 (Cross-Rank Highlights, Top {len(view['cross_rank_highlights'])}) ---")
+        print(f"  同时出现在多个 Top {top} 榜单的股票  |  Atn=关注度  Ind=代表分")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<10} {'涨幅':>8} {'Atn':>6} {'Ind':>5} {'Hits':>4}  Tags")
+        print(f"  {'--':>2}  {'----':<10} {'----':<10} {'--------':>8} {'---':>6} {'---':>5} {'----':>4}  ----")
+        for i, s in enumerate(view["cross_rank_highlights"], 1):
+            gr = s["gainer_rank"]
+            ar = s["amount_rank"]
+            tr = s["turnover_rank"]
+            vr = s["vr_rank"]
+            atr = s["attention_rank"]
+            ranks = []
+            if gr <= top: ranks.append(f"涨{gr}")
+            if ar <= top: ranks.append(f"额{ar}")
+            if tr <= top: ranks.append(f"换{tr}")
+            if vr <= top: ranks.append(f"量{vr}")
+            if atr <= top: ranks.append(f"关{atr}")
+            atn_str = f"{s['attention_score']:>6.1f}"
+            ind_str = f"{s['industry_score']:>5.0f}" if s.get('industry_score') is not None else "   --"
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<10} {s['change_pct']:>+7.2f}% {atn_str} {ind_str} {s['hits']:>4}  {'+'.join(ranks)}")
+        print()
+
+    # 主题代表股
+    if industry_leaders:
+        print(f"--- 主题代表股 (Theme Representatives, Top {min(len(industry_leaders), top)}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Industry':>8}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'--------':>8}")
+        for i, il in enumerate(industry_leaders[:top], 1):
+            print(f"  {i:>2}  {il.get('code',''):<10} {il.get('name',''):<12} {il.get('industry_score',0):>8.1f}")
+        print()
+
+    # 今日强势股（全市场，不限 qualified）
+    if view["top_gainers"]:
+        print(f"--- 今日强势股 (Today's Strongest, Top {len(view['top_gainers'])}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'涨幅':>8} {'Ind':>5}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'--------':>8} {'---':>5}")
+        for i, s in enumerate(view["top_gainers"], 1):
+            ind_str = f"{s['industry_score']:>5.0f}" if s.get('industry_score') is not None else "   --"
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<12} {s['change_pct']:>+7.2f}% {ind_str}")
+        print()
+
+    # 成交额龙头
+    if view["top_amount"]:
+        print(f"--- 成交额龙头 (Turnover Leaders, Top {len(view['top_amount'])}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'成交额(亿)':>10}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'----------':>10}")
+        for i, s in enumerate(view["top_amount"], 1):
+            amount_yi = s["amount"] / 1e8
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<12} {amount_yi:>10.2f}")
+        print()
+
+    # 换手龙头
+    if view["top_turnover"]:
+        print(f"--- 换手龙头 (Turnover Rate Leaders, Top {len(view['top_turnover'])}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'换手率':>8}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'--------':>8}")
+        for i, s in enumerate(view["top_turnover"], 1):
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<12} {s['turnover']:>8.2f}%")
+        print()
+
+    # 放量观察
+    if view["top_vr"]:
+        print(f"--- 放量观察 (Volume Expansion, Top {len(view['top_vr'])}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'量比':>6}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'------':>6}")
+        for i, s in enumerate(view["top_vr"], 1):
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<12} {s['volume_ratio']:>6.2f}")
+        print(f"  (量比仅作观察指标，不直接等同于资金龙头)")
+        print()
+
+    # 市场关注股（综合排名）
+    if view["market_attention"]:
+        print(f"--- 市场关注股 (Market Attention, Top {len(view['market_attention'])}) ---")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Atn':>7} {'Ind':>5} {'AmtRk':>5} {'TrnRk':>5} {'VRRk':>5}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'---':>7} {'---':>5} {'-----':>5} {'-----':>5} {'-----':>5}")
+        for i, s in enumerate(view["market_attention"], 1):
+            ind_str = f"{s['industry_score']:>5.0f}" if s.get('industry_score') is not None else "   --"
+            print(f"  {i:>2}  {s['code']:<10} {s['name']:<12} {s['attention_score']:>7.1f} {ind_str} {s['amount_rank']:>5} {s['turnover_rank']:>5} {s['vr_rank']:>5}")
+        print()
+
+
 def _print_theme(data):
     print(f"Theme: {data.get('name', '-')}")
     concepts = data.get('concepts', [])
@@ -240,16 +513,16 @@ def _print_theme(data):
         for i, p in enumerate(show_pure, 1):
             print(f"  {i:>2}  {p.get('code',''):<10} {p.get('name',''):<12} {p.get('purity_score',0):>7.1f}")
 
-    leader_stocks = data.get('leader_stocks', []) or []
-    if leader_stocks:
-        has_anchor = any(l.get('anchor') for l in leader_stocks)
+    industry_leaders = data.get('industry_leaders', []) or []
+    if industry_leaders:
+        has_anchor = any(l.get('anchor') for l in industry_leaders)
         anchor_hdr = " Anc" if has_anchor else ""
-        print(f"\nLeader Stocks (Top {len(leader_stocks)}):")
-        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Leader':>7} {'Purity':>7} {'Liq':>5} {'MCap':>5}{anchor_hdr}")
-        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'------':>7} {'-------':>7} {'---':>5} {'----':>5}{'-' * len(anchor_hdr)}")
-        for i, l in enumerate(leader_stocks, 1):
+        print(f"\nIndustry Leaders (Top {len(industry_leaders)}):")
+        print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Industry':>8} {'Purity':>7} {'Liq':>5} {'MCap':>5}{anchor_hdr}")
+        print(f"  {'--':>2}  {'----':<10} {'----':<12} {'--------':>8} {'-------':>7} {'---':>5} {'----':>5}{'-' * len(anchor_hdr)}")
+        for i, l in enumerate(industry_leaders, 1):
             anchor_mark = " *" if l.get('anchor') else ""
-            print(f"  {i:>2}  {l.get('code',''):<10} {l.get('name',''):<12} {l.get('leader_score',0):>7.1f} {l.get('purity_score',0):>7.1f} {l.get('liquidity_score',0):>5.1f} {l.get('market_cap_score',0):>5.1f}{anchor_mark}")
+            print(f"  {i:>2}  {l.get('code',''):<10} {l.get('name',''):<12} {l.get('industry_score',0):>8.1f} {l.get('purity_score',0):>7.1f} {l.get('liquidity_score',0):>5.1f} {l.get('market_cap_score',0):>5.1f}{anchor_mark}")
 
     candidate_stocks = data.get('candidate_stocks', []) or []
     if candidate_stocks:
@@ -294,6 +567,41 @@ def _print_concept(data):
             break
 
 
+def _extract_roles(stock_data):
+    themes = stock_data.get("themes", []) or []
+    tags = []
+    for t in themes:
+        if isinstance(t, dict):
+            if t.get("anchor"):
+                tags.append("Anchor")
+            if (t.get("industry_score") or 0) >= 50:
+                tags.append("IndustryLeader")
+            if (t.get("candidate_score") or 0) >= 60:
+                tags.append("Candidate")
+    if len(themes) >= 2:
+        tags.append("MultiTheme")
+    seen = set()
+    tags = [x for x in tags if not (x in seen or seen.add(x))]
+    return {
+        "code": stock_data.get("code"),
+        "name": stock_data.get("name"),
+        "theme_count": len(themes),
+        "tags": tags,
+    }
+
+
+def _print_stock_batch(results, roles=False):
+    if roles:
+        print(f"{'Code':<12} {'Name':<12} {'ThemeCount':>11}  Tags")
+        print(f"{'----':<12} {'----':<12} {'-----------':>11}  ----")
+        for r in results.values():
+            tags = ",".join(r["tags"]) if r["tags"] else "-"
+            print(f"{r['code']:<12} {r['name']:<12} {r['theme_count']:>11}  {tags}")
+    else:
+        for r in results.values():
+            _print_stock(r)
+
+
 def _print_stock(data):
     print(f"Stock: {data.get('code', '')} {data.get('name', '')}")
     print(f"Market: {data.get('market', '-')}")
@@ -306,15 +614,15 @@ def _print_stock(data):
             name = t.get('name', '') if isinstance(t, dict) else str(t)
             weight = t.get('weight', 0) if isinstance(t, dict) else 0
             purity = t.get('purity_score') if isinstance(t, dict) else None
-            leader = t.get('leader_score') if isinstance(t, dict) else None
+            industry = t.get('industry_score') if isinstance(t, dict) else None
             candidate = t.get('candidate_score') if isinstance(t, dict) else None
             anchor = t.get('anchor') if isinstance(t, dict) else None
             bar = "█" * max(1, int(weight))
             parts = [f"weight:{weight:>5.1f}", bar]
             if purity is not None:
                 parts.append(f"pur:{purity:.1f}")
-            if leader is not None:
-                parts.append(f"ldr:{leader:.1f}")
+            if industry is not None:
+                parts.append(f"ind:{industry:.1f}")
             if candidate is not None:
                 parts.append(f"cnd:{candidate:.1f}")
             anchor_str = " [ANCHOR]" if anchor else ""
@@ -332,7 +640,7 @@ def _print_stock(data):
 
 def _print_leaders(data):
     theme_name = data.get("name", "-")
-    leaders = data.get("leader_stocks", []) or []
+    leaders = data.get("industry_leaders", []) or []
     qualified = data.get("qualified_stock_count", "?")
     total = data.get("stock_count", "?")
     anchors = data.get("anchors", []) or []
@@ -343,15 +651,15 @@ def _print_leaders(data):
         print(f"Anchors: {', '.join(anchors)}")
 
     if not leaders:
-        print("No leader stocks above threshold.")
+        print("No industry leaders above threshold.")
         return
 
-    print(f"\nLeader Stocks (Top {len(leaders)}):")
-    print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Leader':>7} {'Purity':>7} {'Liq':>5} {'MCap':>5} {'Anc':>3}")
-    print(f"  {'--':>2}  {'----':<10} {'----':<12} {'------':>7} {'-------':>7} {'---':>5} {'----':>5} {'---':>3}")
+    print(f"\nIndustry Leaders (Top {len(leaders)}):")
+    print(f"  {'#':>2}  {'Code':<10} {'Name':<12} {'Industry':>8} {'Purity':>7} {'Liq':>5} {'MCap':>5} {'Anc':>3}")
+    print(f"  {'--':>2}  {'----':<10} {'----':<12} {'--------':>8} {'-------':>7} {'---':>5} {'----':>5} {'---':>3}")
     for i, l in enumerate(leaders, 1):
         anchor_mark = " *" if l.get("anchor") else ""
-        print(f"  {i:>2}  {l.get('code',''):<10} {l.get('name',''):<12} {l.get('leader_score',0):>7.1f} {l.get('purity_score',0):>7.1f} {l.get('liquidity_score',0):>5.1f} {l.get('market_cap_score',0):>5.1f}{anchor_mark}")
+        print(f"  {i:>2}  {l.get('code',''):<10} {l.get('name',''):<12} {l.get('industry_score',0):>8.1f} {l.get('purity_score',0):>7.1f} {l.get('liquidity_score',0):>5.1f} {l.get('market_cap_score',0):>5.1f}{anchor_mark}")
 
 
 def _print_pure(data):
@@ -396,9 +704,7 @@ def _print_candidates(data):
 
 def main():
     if sys.platform == "win32":
-        sys.stdout = io.TextIOWrapper(
-            sys.stdout.buffer, encoding="utf-8", errors="replace"
-        )
+        sys.stdout.reconfigure(encoding="utf-8")
 
     parser = argparse.ArgumentParser(description="Query theme library")
     subparsers = parser.add_subparsers(dest="command")
@@ -412,8 +718,9 @@ def main():
     concept_p.add_argument("--json", action="store_true")
 
     stock_p = subparsers.add_parser("stock", help="Query stock themes and concepts")
-    stock_p.add_argument("code", help="Stock code (e.g., sz000977)")
+    stock_p.add_argument("code", help="Stock code(s), comma-separated (e.g., sz000977 or sz002371,sz300604,sh601869)")
     stock_p.add_argument("--json", action="store_true")
+    stock_p.add_argument("--roles", action="store_true", help="Output compact role tags only (batch mode by default)")
 
     kw_p = subparsers.add_parser("keyword", help="Query keyword mapping")
     kw_p.add_argument("word", help="Keyword to search")
@@ -426,7 +733,7 @@ def main():
     stats_p = subparsers.add_parser("stats", help="Show library statistics")
     stats_p.add_argument("--json", action="store_true")
 
-    leaders_p = subparsers.add_parser("leaders", help="Top leader stocks for a theme")
+    leaders_p = subparsers.add_parser("leaders", help="Top industry leaders for a theme")
     leaders_p.add_argument("name", help="Theme name")
     leaders_p.add_argument("--top", type=int, default=0, help="Limit results")
     leaders_p.add_argument("--json", action="store_true")
@@ -440,6 +747,11 @@ def main():
     candidates_p.add_argument("name", help="Theme name")
     candidates_p.add_argument("--top", type=int, default=0, help="Limit results")
     candidates_p.add_argument("--json", action="store_true")
+
+    market_p = subparsers.add_parser("market", help="Show market observation view for a theme")
+    market_p.add_argument("name", help="Theme name")
+    market_p.add_argument("--top", type=int, default=10, help="Limit results per section")
+    market_p.add_argument("--json", action="store_true")
 
     args = parser.parse_args()
 
@@ -460,12 +772,29 @@ def main():
                 _print_concept(data)
 
     elif args.command == "stock":
-        data = query_stock(args.code)
-        if data:
-            if args.json:
-                print(json.dumps(data, ensure_ascii=False, indent=2))
-            else:
-                _print_stock(data)
+        codes = [c.strip() for c in args.code.split(",") if c.strip()]
+
+        if len(codes) == 1 and not args.roles:
+            data = query_stock(codes[0])
+            if data:
+                if args.json:
+                    print(json.dumps(data, ensure_ascii=False, indent=2))
+                else:
+                    _print_stock(data)
+        else:
+            results = {}
+            for code in codes:
+                data = query_stock(code)
+                if data:
+                    if args.roles:
+                        results[code] = _extract_roles(data)
+                    else:
+                        results[code] = data
+            if results:
+                if args.json:
+                    print(json.dumps(results, ensure_ascii=False, indent=2))
+                else:
+                    _print_stock_batch(results, roles=args.roles)
 
     elif args.command == "keyword":
         kw, target, level = query_keyword(args.word)
@@ -506,11 +835,11 @@ def main():
     elif args.command == "leaders":
         data = query_theme(args.name)
         if data:
-            leaders = data.get("leader_stocks", []) or []
+            leaders = data.get("industry_leaders", []) or []
             if args.top > 0:
                 leaders = leaders[:args.top]
                 data = dict(data)
-                data["leader_stocks"] = leaders
+                data["industry_leaders"] = leaders
             if args.json:
                 print(json.dumps(data, ensure_ascii=False, indent=2))
             else:
@@ -541,6 +870,17 @@ def main():
                 print(json.dumps(data, ensure_ascii=False, indent=2))
             else:
                 _print_candidates(data)
+
+    elif args.command == "market":
+        data = query_theme(args.name)
+        if data:
+            if args.json:
+                view = _compute_market_view(data, args.top)
+                data = dict(data)
+                data["market_view"] = view
+                print(json.dumps(data, ensure_ascii=False, indent=2))
+            else:
+                _print_market(data, args.top)
 
     else:
         parser.print_help()
