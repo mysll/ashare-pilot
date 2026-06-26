@@ -27,6 +27,8 @@ predict
 memory
 docs
 
+*.zip
+
 # Theme Library generated data
 .opencode/skills/theme-library/cache/
 .opencode/skills/theme-library/concepts/
