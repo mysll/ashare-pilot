@@ -413,7 +413,7 @@ Do **not** remove these stocks in Step 2. Anchor stocks and theme core stocks (t
 
 - Keep stocks with `tech_score >= 50`.
 - Stocks with `tech_score 50-59` are flagged as `tech_risk: true` in output.
-- Stocks carrying `MA双熊`, `RSI>75`, `RSI<30`, or `炸板` flags are **not removed** for those reasons alone. They remain in the pool but their `Direction` in `mapper.md` must not be higher than `neutral-bull`, and the `Risk` column must show all flags.
+- Stocks carrying `MA双熊`, `RSI>75`, `RSI<30`, or `炸板` flags are **not removed** for those reasons alone. Their Direction ceiling is defined in the Direction section above; the `Risk` column must show all flags.
 
 ### Enrich theme_stocks.md
 
@@ -507,14 +507,114 @@ Range: 0-100. Money_Flow is inherently noisy (Eastmoney/Tonghuashun statistical 
 
 #### Direction
 
-**Directional feature — column value only, no prose analysis:**
+**Directional feature — column value only, no prose analysis.**
 
-| Direction | Condition |
+Direction is the semantic mapping of `composite_score`, not a re-scoring step. News Impact already flows into Composite; it does not get re-evaluated here.
+
+Complete flow:
+
+```
+Composite
+    ↓
+Direction Mapping
+    ↓
+Risk Ceiling (hard constraint)
+    ↓
+MajorEvent Override (±1 level, within ceiling only)
+    ↓
+Clamp (bullish / bearish boundary)
+    ↓
+Final Direction
+```
+
+---
+
+**Step 1 — Direction Mapping**
+
+| Composite | Direction |
 |-----------|-----------|
-| bullish | composite >= 70 AND news impact >= 60 |
-| neutral-bull | composite >= 55 AND news impact >= 50 |
-| neutral | composite >= 45 |
-| bearish | composite < 45 OR negative news impact |
+| >= 70 | bullish |
+| 55-69 | neutral-bull |
+| 45-54 | neutral |
+| < 45 | bearish |
+
+---
+
+**Step 2 — Risk Ceiling (hard constraint)**
+
+Stocks carrying any of the following flags have a Direction ceiling of `neutral-bull`:
+
+| Flag | Source |
+|------|--------|
+| MA双熊 | `fetch_pool_indicators` |
+| RSI>75 | `fetch_pool_indicators` |
+| RSI<30 | `fetch_pool_indicators` |
+| 炸板 | `fetch_pool_indicators` |
+
+The ceiling is uniform — no tiering by flag severity. Step 3, together with `memory/RULES.md`, decides how to handle each specific risk.
+
+---
+
+**Step 3 — MajorEvent Override**
+
+`MajorEventFlag` is a sparse, company-level signal. It can move Direction by exactly one level, but only within the Risk Ceiling.
+
+| MajorEventFlag | Effect |
+|----------------|--------|
+| Positive | Direction +1 level |
+| Negative | Direction -1 level |
+| None | no change |
+
+---
+
+**Step 4 — Clamp**
+
+Direction is bounded to four levels:
+
+```
+bullish
+   ↑
+neutral-bull
+   ↑
+neutral
+   ↑
+bearish
+```
+
+- `bullish + Positive` stays `bullish` (no level above bullish)
+- `bearish + Negative` stays `bearish` (no level below bearish)
+
+---
+
+**Direction design principles**
+
+1. Composite is the only scoring source for Direction.
+2. Risk Ceiling is a hard constraint; MajorEvent cannot break through it.
+3. Risk Ceiling is uniform (`neutral-bull`) for all technical risk flags.
+4. MajorEventFlag defaults to per-stock; industry/theme-level catalysts are `None`.
+5. MajorEventFlag moves Direction by at most one level.
+6. Final Direction is always one of: `bullish`, `neutral-bull`, `neutral`, `bearish`.
+7. Output `Direction` as a column value only; do not add prose analysis.
+
+#### MajorEventFlag
+
+`MajorEventFlag` captures company-level events large enough to shift the trading stance, separate from ordinary news heat.
+
+| Value | Meaning | Examples |
+|-------|---------|----------|
+| Positive | Direct company-level positive catalyst | National order directly named, major asset restructuring, core product breakthrough, earnings significantly above expectation |
+| Negative | Direct company-level negative catalyst | Major penalty, chairman under investigation, accounting fraud, suspension risk, major shareholder reduction, black-swan event |
+| None | No company-level event, or only industry/theme/news heat | AI conference, TSMC price hike, industry boom, policy direction — these affect ThemeHeat / NewsImpact only |
+
+**Default rule**: `MajorEventFlag = None` for every stock unless news explicitly names the company with a clear, discrete event.
+
+**Responsibility separation**:
+
+- `ThemeHeat` → captures board-level momentum
+- `NewsImpact` → captures news relevance and sentiment
+- `MajorEventFlag` → captures company-level event override only
+
+When in doubt, use `None`. Uncertainty should not create a Positive/Negative flag.
 
 #### ThemeRole Extraction
 
@@ -575,8 +675,8 @@ All stocks with Composite Score >= 55. Sort by Composite DESC.
 ```markdown
 ## Candidate Pool
 
-| Code | Name | Composite | Direction | Theme | RoleTags | Emotion | Turnover% | Risk |
-|------|------|-----------|-----------|-------|----------|---------|-----------|------|
+| Code | Name | Composite | Direction | MajorEventFlag | Theme | RoleTags | Emotion | Turnover% | Risk |
+|------|------|-----------|-----------|----------------|-------|----------|---------|-----------|------|
 ```
 
 Column sources:
@@ -584,6 +684,7 @@ Column sources:
 | Column | Source |
 |--------|--------|
 | Direction | From Direction computation (bullish / neutral-bull / neutral / bearish) — column value only |
+| MajorEventFlag | From MajorEventFlag judgment (Positive / Negative / None) |
 | Theme | Primary theme (highest heat theme from source_themes) |
 | RoleTags | From ThemeRole query (Anchor / IndustryLeader / Candidate / MultiTheme, comma-separated) |
 | Emotion | From theme_stocks.md sentiment sub-score |
@@ -655,6 +756,7 @@ The following sections and content types are **NEVER** included in mapper.md:
 - Support / Resistance levels (支撑/阻力位, ATR Stop Distance, VWAP)
 - Any form of trading recommendations or buy/stop/target suggestions
 - Impact direction prose (retained only as a column value in Candidate Pool)
+- Direction derivation prose (Risk Ceiling / MajorEvent Override intermediate states are not written to mapper.md; only final `Direction` and `MajorEventFlag` columns are output)
 
 ---
 

@@ -15,11 +15,23 @@ Mapper:     provided in prompt (predict/{date}/mapper.md)
 ```
 
 1. Read {Mapper} **Market State** section — 市场状态, 主题优先级, 仓位环境
-2. Read {Mapper} **Candidate Pool** — 候选池, Direction, 风险标记
+2. Read {Mapper} **Candidate Pool** — 候选池, Direction, MajorEventFlag, 风险标记
 3. Read {Mapper} **Strategy Inputs** table — Price, MA20, ATR, ATR%, High20, Low20 (**authoritative source**)
 4. Fetch market indices via `fetch_stock.py` (see "Market Context Fetch" below) — compute 大盘方向 / 结构性强度 / 成交水位 signals
 5. Read `memory/RULES.md` — active trading rules with verification history
 6. Generate `predict/{date}/strategy.md` (include an inline **Market Context** section)
+
+---
+
+## Direction Authority
+
+`Direction` and `MajorEventFlag` from `mapper.md` are **authoritative**. Do NOT recompute Direction.
+
+- Do NOT reinterpret `News Impact` to adjust Direction.
+- Do NOT upgrade or downgrade Direction unless the field is missing from mapper.md.
+- Consume `MajorEventFlag` as-is; do not re-derive it from news.
+
+Direction has already passed through Composite Mapping → Risk Ceiling → MajorEvent Override → Clamp in Step 2. Step 3's job is to trade within that Direction, not to second-guess it.
 
 ---
 
