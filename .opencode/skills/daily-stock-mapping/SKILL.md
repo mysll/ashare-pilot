@@ -14,17 +14,17 @@ Loaded by financial-news-mapper subagent when dispatched for pipeline stock-data
 | Theme Extraction | news.md | themes.md |
 | Stock Pool Build | themes.md | theme_stocks.md |
 | Technical Enrichment | theme_stocks.md | theme_stocks.md (enriched in-place) |
-| Structured Dataset Generation | theme_stocks.md (enriched) | mapper.md (6-section structured dataset: Market State, Theme Ranking, Candidate Pool, Strategy Inputs, Observation Pool, Excluded Stocks) |
+| Structured Dataset Generation | theme_stocks.md (enriched) | mapper.md (7-section structured dataset: Market State, Theme Ranking, Candidate Pool, Strategy Inputs, Score Trace, Observation Pool, Excluded Stocks) |
 
 ## Scope
 
-A-shares only (sh/sz prefix). Ignore HK/US and other markets.
+A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (`sh688*`, `bj*`) are **config-driven** — see `config/trading-scope.json` (§ Board Exclusion Policy). Default policy excludes both.
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
 **Format Rule:** All intermediate files are markdown. Write them directly — do NOT write scripts to generate JSON. The LLM is the author, not a code generator.
 
-**Layer Boundary:** Script outputs data + features + formula-based scores (25 fields from `fetch_pool_indicators.py`). Skill layer reads these directly — composite weighting, direction, hard/soft filter decisions, and table population are LLM territory. Do NOT write ad-hoc scoring scripts.
+**Layer Boundary:** Script outputs data + features + formula-based sub-scores (`fetch_pool_indicators.py`: 13 raw + 6 features + 5 scoring fields). Skill layer reads these directly — composite weighting, **DirectionBase→Final** mapping, **RiskType/RiskSeverity** grading, **NewsImpact** matrix cell selection, **MajorEvent** judgment, **Anomaly** annotation, and table population are LLM territory. Do NOT write ad-hoc scoring scripts.
 
 ## Red Flags — STOP and Restart the Stage
 
@@ -32,12 +32,14 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets.
 |---------|-----|
 | Theme name not found in Theme Library | Discard. Theme Library is the only source. |
 | Stock entered pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable to one of 4 sources. |
-| `sh688*` (科创板 STAR board) or `bj*` (北交所 BSE) stock entered the pool | Remove. Hard exclude — cannot trade. |
+| Stock in `config/trading-scope.json` excluded boards entered pool | Remove. Board exclusion is config-driven, not hardcoded. |
 | Wrote a Python/JS script to generate JSON intermediate file | Delete script. Write markdown directly. |
 | theme_stocks.md row missing `source_themes` column | Re-add. Downstream needs WHY a stock is in pool. |
 | mapper.md contains buy/stop/target recommendations | Remove strategy clauses. Strategy is Step 3 territory. |
-| Composite score or tech_score filled without showing calculation trace | Recompute with weights shown. |
-| Auto-removed a stock solely because of RSI>75 / RSI<30 / MA双熊 / 炸板 | Restore to pool. These are risk flags, not hard filters. |
+| Candidate Pool row missing `CompositeTrace` column | Re-add. Audit trace mandatory in V4-U. |
+| `risk_flags` array contains `流动性<3亿` token | Remove token. Liquidity hard-filter is handled in SKILL layer; do not double-flag. |
+| Stock with `fetch_failed: true` from Phase 2 appears in Candidate Pool | Move to Observation Pool with `Reason=Indicators_Fetch_Failed`. |
+| Auto-removed a stock solely because of RSI>75 / RSI<30 / MA双熊 / 炸板 | Restore to pool. These are risk flags, not hard filters. Direction ceiling is now graded by RiskSeverity, not uniform. |
 
 **Violating these is violating the spirit of the rules.**
 
@@ -95,7 +97,40 @@ theme_heat = policy × 0.40 + capital × 0.15 + emotion × 0.25 + news_count × 
 | policy | 40% | National/industrial policy, regulatory support |
 | capital | 15% | Capital activity, financing, institutional participation |
 | emotion | 25% | Market attention, media discussion, sentiment |
-| news_count | 20% | Number and density of related news |
+| news_count | 20% | Number and density of related news (raw integer, normalized to 0-100 before weighting) |
+
+> **News double-counting decision (V4-U)**: theme_heat 公式保留 `news_count × 0.20`，新闻对 composite 的总有效权重约 26%（theme_heat 间接 + NewsImpact 直接 20%）。**依靠 NewsImpact 在 MajorEvent=Negative 时 cap=60 缓解叠加膨胀**，作为设计接受。日常权重重叠不改。
+
+**Theme heat sub-score rubric (LLM MUST follow)**
+
+Policy (P):
+
+| Score | Condition |
+|-------|-----------|
+| 90-100 | 国家/行业政策明确点名主题；监管文件、国务院、部委 |
+| 75-89 | 强政策代理（标准、补贴、试点区）无头条政策 |
+| 60-74 | 间接政策受益（供应链、本地化） |
+| <60 | 无政策角度 — discard theme |
+
+Capital (C):
+
+| Score | Condition |
+|-------|-----------|
+| 85-100 | 融资流入/北向/龙虎榜净买入与主题对齐（今日或昨日） |
+| 65-84 | 板块成交放大、融资扩张 |
+| 45-64 | 中性 |
+| <45 | 流出或无资金信号 — 用 45 default |
+
+Emotion (E):
+
+| Score | Condition |
+|-------|-----------|
+| 90-100 | ≥3 flash 项 + 热股榜 + 主题内涨停簇 |
+| 75-89 | 2 条新闻 或 1 条重大头条 |
+| 60-74 | 仅语义匹配，媒体密度低 |
+| <60 | discard |
+
+**News count (N)** — 映射到主题的不同新闻条数原始计数（整数，显示截断至 20）。加权时按 `count / 20 × 100` 归一化到 0-100。
 
 ### Rank & Filter
 
@@ -156,14 +191,14 @@ The `market` view provides the following fields in JSON output (`market_view` ke
 | `market_attention` | Composite: 0.6×成交额 + 0.25×换手率 + 0.15×量比 (all percentile ranks) | Stocks with `attention_score >= 80` not in pool → add with `source = "market_active"` |
 | `top_gainers` | Today's strongest by `change_pct`, with `industry_score` column | Stocks with `change_pct >= 3%` not in pool → add with `source = "market_active"` |
 
-**Priority:** `cross_rank_highlights` stocks should be added FIRST, as they represent the strongest multi-dimensional signals. A stock appearing in 3+ top-N lists with `industry_score: --` is a classic "边缘扩散 → 新龙头" (edge diffusion → new leader) pattern — the most valuable trading signal the market view provides.
+**Priority:** `cross_rank_highlights` 表示该股出现在 ≥2 个 top-N 列表中，`attention_score` 与 `industry_score` 值已给出 — LLM 据此判断边缘扩散 / 中军启动 / 主题主线信号，可用 Anomaly 字段在 mapper.md 中透传。
 
 ### Inject News-mentioned Stocks
 
 Scan `news.md` for **explicitly mentioned A-share stocks** (codes or names). For each:
 
 1. Resolve stock name → code via `fetch_stock.py --search "名称"` or LLM knowledge of common codes
-2. Add to pool with `source = "news_mentioned"`, `score = News_Impact` (estimated from mention prominence: headline=100, body=80, listed-only=60)
+2. Add to pool with `source = "news_mentioned"`, `score = News_Impact`（per-stock rubric 见 § Structured Dataset Generation → NewsImpact；news_mentioned 阶段先按 R4×P3=95 之类粗估，下游 Structured Dataset 阶段按矩阵重打）
 3. Mark as `news_direct: true` to indicate this stock was directly named in news
 
 **Rationale:** A stock named in news may not appear in theme library TOP 30 candidates (e.g., small-cap 盛美上海 or non-core-concept 金博股份), but direct news mention is the strongest possible signal. These stocks skip theme-library constraints.
@@ -215,9 +250,10 @@ The same stock may appear under multiple themes. Deduplicate by stock code:
 
 1. Merge `source_themes` list, keep the highest score across themes, record all theme associations
 
-2. **Board filter — hard exclude (no exceptions):**
-   - `sh688*` — 科创板 (STAR Board)
-   - `bj*` — 北交所 (Beijing Stock Exchange)
+2. **Board filter — config-driven** (read `config/trading-scope.json`):
+   - 默认排除 `sh688*` (科创板 STAR) 和 `bj*` (北交所 BSE)
+   - excluded 股票写入 `Removed Stocks` 节并标 `ExclusionSource=board-policy`
+   - 不 silence-drop：	board-policy 排除的股要在 Excluded Stocks 列出（Step 3 / 配置审计需要）
 
 3. News-mentioned stocks (`news_direct: true`) and LHB stocks (`source: lhb`) bypass score-based dedup but NOT the board filter. A stock you cannot trade should never enter the pool.
 
@@ -242,14 +278,14 @@ Total unique stocks: 156 (deduplicated across themes)
 
 ## Stock Pool (Deduplicated)
 
-| # | Code | Name | Best Score | Source Themes | Anch? | News? | LHB? | Mkt? |
-|---|------|------|-----------|---------------|------|-------|------|------|
-| 1 | sz000977 | 浪潮信息 | 94.2 | AI算力(94.2), 英伟达产业链(47.3) | Yes | ✓ | — | — |
-| 2 | sh603019 | 中科曙光 | 88.5 | AI算力(88.5) | Yes | — | ✓ | — |
-| 3 | sh600522 | 中天科技 | 81.8 | AI算力(81.8) | No | — | — | ✓ |
+| # | Code | Name | Best Score | Source Themes | News? | LHB? | Mkt? |
+|---|------|------|-----------|---------------|-------|------|------|
+| 1 | sz000977 | 浪潮信息 | 94.2 | AI算力(94.2), 英伟达产业链(47.3) | ✓ | — | — |
+| 2 | sh603019 | 中科曙光 | 88.5 | AI算力(88.5) | — | ✓ | — |
+| 3 | sh600522 | 中天科技 | 81.8 | AI算力(81.8) | — | — | ✓ |
 | ... |
 
-Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source channels. Mkt? = from market_active query. Board filter: sh688* and bj* stocks are excluded (cannot trade).
+Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source channels. Mkt? = from market_active query. Board filter: see `config/trading-scope.json`. Anchor 判定在 Structured Dataset Generation 阶段一次性查 RoleTags，本表不列 Anch? 临时代号。
 ```
 
 ### Constraints
@@ -260,8 +296,8 @@ Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source chann
 - LHB and news-mentioned stocks are always kept; if they fail technical hard filters, flag for manual review instead of removal
 - Market-active stocks (`source: market_active`) are supplemental — they bypass theme library candidate ranking but NOT board/technical filters
 - Deduplication is mandatory before Technical Enrichment to avoid redundant API calls
-- Board filter (`sh688*` / `bj*`) is applied BEFORE Technical Enrichment — never fetch indicators for untradeable stocks
-- If a theme's post-filter candidate count drops below 8, re-run pure stock supplement with `--top 20` for that theme
+- Board filter（per `config/trading-scope.json`）is applied BEFORE Technical Enrichment — never fetch indicators for excluded boards
+- If a theme's post-filter hard-filter candidate count drops below 8, re-run pure stock supplement with `--top 20` for that theme — **最多 1 轮**，不可无限循环（P3-2）
 
 ---
 
@@ -328,7 +364,7 @@ Field reference:
 | Field | Layer | Purpose |
 |-------|-------|---------|
 | `code` | ID | Stock code |
-| **Raw indicators (15)** | Data | |
+| **Raw indicators (13)** | Data | (excluding `code`) |
 | `price`, `close` | K-line | Current price (last close), yesterday's close |
 | `turnover`, `change_pct`, `amount` | K-line | 换手率, 涨跌幅, 成交额/万元 (all float, no `%` suffix). `amount` unit: **万元** |
 | `rsi` | Indicator | RSI(14) — momentum / overbought |
@@ -345,14 +381,24 @@ Field reference:
 | `seal_quality` | 封板质量: `"封死"` / `"未封板"` / `"炸板"` / `"—"` | Sentiment input |
 | **Scoring (5)** | Weighted formula | |
 | `limit_up_freq` | Total limit-up days in last 10 records (int) | Sentiment input |
-| `traditional` | 7-factor weighted sub-score (0-100) | Tech score input |
+| `traditional` | 6-factor weighted sub-score (0-100, renormalized for missing factors) | Tech score input |
 | `sentiment` | 3-factor weighted sub-score (0-100) | Tech score input |
-| `tech_score` | `traditional × 0.70 + sentiment × 0.30` (0-100) | Composite input |
-| `risk_flags` | `["RSI>75","RSI<30","ATR>8%","MA双熊","流动性<3亿","炸板"]` — risk markers for Step 3 | Risk column |
+| `tech_score` | `traditional × 0.70 + sentiment × 0.30` (0-100) — `null` if traditional is null | Composite input |
+| `risk_flags` | `["RSI>75","RSI<30","ATR>8%","MA双熊","炸板"]` — risk markers for Step 3（V4-U: 已删 `流动性<3亿`，由 SKILL hard filter 处理） | Risk column |
+| `fetch_failed` | Optional `true` placeholder when Phase 2 fetch errored on this code — entry has no other fields | Failure marker |
 
 **Skill layer uses these directly** — no need to re-derive %B, ATR%, board streak, seal quality, or tech_score from raw K-line data. Skill's job: composite, direction, hard/soft filter decisions, table population.
 
 No further API calls needed. Read the JSON directly — do NOT write scripts to parse it.
+
+### Missing Data Handling (P0-4)
+
+`fetch_pool_indicators.py` 不再静默将缺失因子填为 50（旧 V3 行为会系统性拔高缺数据股票分数）。V4-U 新行为：
+
+- 任一因子原始数据 `None` → 该因子**子分跳过**，剩余因子权重按 `present_weight / sum(present_weights)` **重归一化**
+- 副作用（正向收益）：V3 weights = 1.01（22+19+13+22+16+9），V4-U 始终除以 sum(present_weights)，所以传统子分最大上限为 100 而非 101。修正 V3 潜在 bug。
+- 全部 6 个传统因子缺失 → `traditional = null` → `tech_score = null` → 股票降入 Observation Pool 标 `IndicatorsMissing`
+- Phase 2 fetch 异常 → JSON 仅有 `{"code", "fetch_failed": true}` → 同样降入 Observation Pool，标 `Indicators_Fetch_Failed`
 
 ### Scoring
 
@@ -362,12 +408,12 @@ No further API calls needed. Read the JSON directly — do NOT write scripts to 
 tech_score = Traditional × 0.70 + Sentiment × 0.30
 ```
 
-**Traditional Technical sub-score (0-100):** MA_Trend × 0.22 + MACD_Mom × 0.19 + RSI × 0.13 + Liquidity × 0.22 + BB_Position × 0.16 + ATR_Risk × 0.09
+**Traditional Technical sub-score (0-100):** MA_Trend × 0.22 + MACD_Mom × 0.19 + RSI × 0.13 + Liquidity × 0.22 + BB_Position × 0.16 + ATR_Risk × 0.09（缺失因子按 § Missing Data Handling 重归一）
 
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
-| 1 | **MA Trend** | 22% | Price > ma20 > ma50 = 100; Price > ma20, ma20 < ma50 = 60; Price < ma20, ma20 < ma50 = 0 |
-| 2 | **MACD Mom** | 19% | macdh > 0 AND accelerating = 100; macdh > 0 = 75; crossing 0 = 50; macdh < 0 = 25; deepening = 0 |
+| 1 | **MA Trend** | 22% | Price > ma20 > ma50 = 100; Price > ma20, ma20 < ma50 = 60; **Price < ma20, ma20 > ma50 = 40 (V4-U 回踩中期多头新增)**; Price < ma20, ma20 < ma50 = 0 (双熊) |
+| 2 | **MACD Mom** | 19% | macdh > 0 AND prev_macdh < macdh = 100 (加速); macdh > 0 = 75; **abs(macdh) < 0.05 = 50 (crossing 0)**; macdh < 0 (not deepening) = 25; **macdh < 0 AND prev_macdh > macdh = 0 (deepening)** — V4-U 实现 5 级（脚本读取 records[last_idx-1].macdh 判加速/deepening） |
 | 3 | **RSI** | 13% | 45-60 = 100; 60-70 = 80; 30-45 = 70; 70-75 = 40; >75 or <30 = 0 |
 | 4 | **Liquidity** | 22% | `amount / 10000` → 亿: ≥5亿 = 100; 3-5亿 = 70; 1-3亿 = 40; <1亿 = 0. Note: `amount` unit is 万元 |
 | 5 | **BB Position** | 16% | Use pre-computed `percent_b`. 0.4-0.6 = 100; 0.6-0.8 = 80; 0.2-0.4 = 70; >0.8 = 60; <0.2 = 20 |
@@ -391,46 +437,51 @@ Note: "Price" = auction price from Phase 1. A-share limit-up boards: Main Board 
 
 Remove stocks that fail ANY hard filter (based on yesterday's data):
 
-| Filter | Reject Condition | Data Source |
-|--------|-----------------|-------------|
-| Liquidity | `amount` < 30000 (万元) = 3亿 (300M CNY). Note: `amount` field unit is 万元 | fetch_pool_indicators (`amount` field) |
-| Extreme Volatility | atr_pct > 8% (abnormal volatility) | fetch_pool_indicators (`atr_pct` field) |
+| Filter | Reject Condition | Data Source | ExclusionSource |
+|--------|-----------------|-------------|------------------|
+| Liquidity | `amount` < 30000 (万元) = 3亿 (300M CNY). Note: `amount` field unit is 万元 | fetch_pool_indicators (`amount` field) | `hard-filter` |
+| Extreme Volatility | atr_pct > 8% (abnormal volatility) | fetch_pool_indicators (`atr_pct` field) | `hard-filter` |
+| Indicators fetch failed | `fetch_failed: true` in Phase 2 JSON | fetch_pool_indicators (placeholder row) | `indicators-fetch-failed` |
+
+**NOTE (P0-3)**: 流动性 < 3亿 已不再注入 `risk_flags` 数组（剧本里删除）。它仅作为 hard filter 删除股票到 Excluded Stocks，不重复标 flag。`ATR>8%` 也是 hard filter，但脚本仍会写进 `risk_flags`（保留作为 audit 痕迹）。
 
 ### Technical Risk Flags
 
-The following conditions are **risk markers only**, not auto-reject triggers. They are written to the `Risk?` column and passed to Step 3, where `memory/RULES.md` decides whether to trade, override, or downgrade:
+The following conditions are **risk markers only**, not auto-reject triggers. They are written to the `Risk?` column and graded via `RiskType` + `RiskSeverity`（见 § Structured Dataset Generation → Direction 模型）。Step 2 不再一刀切 `neutral-bull` ceiling：
 
-| Flag | Condition | Relevant RULES.md Reference |
-|------|-----------|----------------------------|
-| MA双熊 | Price < ma20 AND ma20 < ma50 | R73 / R74 (weak-market MA20 buffer) |
-| RSI>75 | RSI > 75 | R37 (strong-market RSI overbought exemption) |
-| RSI<30 | RSI < 30 | R61 (deep-oversold tiered handling) |
-| 炸板 | seal_quality = "炸板" | R39-v3 / R35-v3 (limit-up broken-board review) |
+| Flag | Condition | RiskType | RiskSeverity | Step 3 路由（OverrideHint token；RULES.md 定义在 companion phase 落定） |
+|------|-----------|----------|:------------:|---------|
+| RSI>75 | RSI > 75 | `overbought` | 2 | `R37` (theme heat ≥ 85) |
+| RSI<30 | RSI < 30 | `oversold-opportunity` | **1** | `R61` — 机会 hint，1 级 informational |
+| MA双熊 | Price < ma20 AND ma20 < ma50 | `trend-weak` | **3** | `R73` (weak regime) / `R74` (strong-sector) |
+| 炸板 | seal_quality = "炸板" | `broken-board` | 2 | `R39-v3` / `R35-v3` |
+| Auc<-5% | abs(auction_pct) > 5 AND auction < 0 | `auction-anomaly` | 2 | (Step 3 自行处理) |
 
-Do **not** remove these stocks in Step 2. Anchor stocks and theme core stocks (theme_heat >= 80) keep their pool status and carry the flag.
+Do **not** remove these stocks in Step 2. Anchor stocks and theme core stocks (theme_heat >= 80) keep their pool status and carry the flag。Step 3 据 OverrideHint token 在 RULES.md 框架内决定升级 / 降级 / 持平。
 
 ### Soft Filter
 
-- Keep stocks with `tech_score >= 50`.
-- Stocks with `tech_score 50-59` are flagged as `tech_risk: true` in output.
-- Stocks carrying `MA双熊`, `RSI>75`, `RSI<30`, or `炸板` flags are **not removed** for those reasons alone. Their Direction ceiling is defined in the Direction section above; the `Risk` column must show all flags.
+- Keep stocks with `tech_score >= 50`。`tech_score = null` (因子全缺) 也降入 Observation。
+- Stocks with `tech_score 50-59` flagged as `tech_risk: true` in output。
+- Stocks carrying `MA双熊`, `RSI>75`, `RSI<30`, or `炸板` flags **不**因这些 flag 单独移除。DirectionBase → DirectionFinal 调整见 § Direction 模型；`RiskFlags` 列必须显示所有 flag。
 
 ### Enrich theme_stocks.md
 
-Add technical columns to the stock table. Only remove rows that failed **hard filters** (liquidity < 3亿 or atr_pct > 8%). Stocks with technical risk flags (`MA双熊`, `RSI>75`, `RSI<30`, `炸板`) remain in the table with their flags shown in the `Risk?` column.
+Add technical columns to the stock table. Only remove rows that failed **hard filters** (liquidity < 3亿 / atr_pct > 8% / fetch_failed)。Stocks with technical risk flags (`MA双熊`, `RSI>75`, `RSI<30`, `炸板`) remain in the table with their flags shown in the `Risk?` column.
 
 ```markdown
 ## Stock Pool (After Technical Enrichment)
 
-| # | Code | Name | Best Score | Source Themes | Anch | Auc% | AucAmt | 情绪 | 连板 | 封板 | Tech | RSI | %B | MA50 | 换手% | Risk? |
-|---|------|------|-----------|---------------|------|------|--------|------|------|------|------|-----|----|----------|-------|-------|
-| 1 | sz000977 | 浪潮信息 | 94.2 | AI算力 | Yes | +1.2 | 3200万 | 75 | 1板 | 封死 | 78.5 | 55.3 | 0.62 | >ma50 | 6.8% | No |
-| 2 | sh600522 | 中天科技 | 88.5 | AI算力 | — | -0.5 | 800万 | 30 | 0 | — | 68.0 | 48.2 | 0.45 | >ma50 | 2.1% | No |
-| 3 | sh603986 | 兆易创新 | 92.0 | 半导体 | — | +3.5 | 8500万 | 85 | 2连板 | 封死 | 65.0 | 72.0 | 0.85 | >ma50 | 15.2% | RSI>75 |
-| 4 | sh600XXX | 某股 | 70.0 | AI算力 | — | +0.2 | 35000万 | 30 | 0 | — | 55.0 | 42.0 | 0.30 | <ma20 | 1.5% | MA双熊 |
+| # | Code | Name | Best Score | Source Themes | Auc% | AucAmt | 情绪 | 连板 | 封板 | Tech | RSI | %B | MA50 | 换手% | Risk? |
+|---|------|------|-----------|---------------|------|--------|------|------|------|------|-----|----|----------|-------|-------|
+| 1 | sz000977 | 浪潮信息 | 94.2 | AI算力 | +1.2 | 3200万 | 75 | 1板 | 封死 | 78.5 | 55.3 | 0.62 | >ma50 | 6.8% | No |
+| 2 | sh600522 | 中天科技 | 88.5 | AI算力 | -0.5 | 800万 | 30 | 0 | — | 68.0 | 48.2 | 0.45 | >ma50 | 2.1% | No |
+| 3 | sh603986 | 兆易创新 | 92.0 | 半导体 | +3.5 | 8500万 | 85 | 2连板 | 封死 | 65.0 | 72.0 | 0.85 | >ma50 | 15.2% | RSI>75 |
+| 4 | sh600XXX | 某股 | 70.0 | AI算力 | +0.2 | 35000万 | 30 | 0 | — | 55.0 | 42.0 | 0.30 | <ma20 | 1.5% | MA双熊 |
 | ... |
 
-Removed stocks (failed hard filters): list them with reason (liquidity or ATR>8% only).
+Removed stocks (failed hard filters): list them with reason + ExclusionSource (`hard-filter` / `indicators-fetch-failed`).
+Anch? 列已删 — Anchor 由 Structured Dataset 阶段一次性 `query_theme.py stock <code> --roles` 查 RoleTags 给出，本表不重复标。
 Columns: MA50=Price vs MA50, 情绪=Sentiment sub-score, 连板=consecutive boards, 封板=seal quality, 换手%=yesterday turnover rate.
 ```
 
@@ -467,6 +518,19 @@ python .opencode/skills/stock-analysis/scripts/fetch_money_flow.py --stock --jso
 | Industry money flow | Calibrate composite score `Money_Flow` dimension for stocks in that industry |
 | Stock money flow | Verify individual stock capital direction (主力净流入/流出 major net inflow/outflow) |
 
+**Money_Flow 打分公式（P1-1，V4-U 新增）**
+
+```
+Money_Flow = 0.6 × IndustryFlowScore + 0.4 × StockFlowScore
+
+  IndustryFlowScore = clamp(50 + 100 × 行业净流入 / 行业流通市值, 0, 100)
+  StockFlowScore    = 50 + sign(主力净流入) × min(|净流入| / amount, 1) × 50
+```
+
+- cookie 失效 / fetch 失败 → `Money_Flow = 50`（中性），RiskFlags 追加 `MoneyFlowStale`
+- intraday 实时 money flow 用上述公式；pre-market 走昨日数据作 direction proxy
+- 行业流通市值缺失时 `IndustryFlowScore = 50`，仅用 StockFlowScore（权重重归一为 100% StockFlow）
+
 ### Compute Fields
 
 #### Auction Signal
@@ -481,11 +545,43 @@ auction_score = Auction Change% × 0.40 + Auction Amount × 0.35 + Auction Turno
 
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
-| 1 | **Auction Change%** | 40% | `abs(percent)`. ±2~5% = 100; ±1~2% = 85; ±0.5~1% = 70; ±0~0.5% = 50; >±5% = 40 (auction anomaly, watch for manipulation). Direction: positive = full score, negative = halved |
+| 1 | **Auction Change%** | 40% | `abs(percent)`. ±2~5% = 100; ±1~2% = 85; ±0.5~1% = 70; ±0~0.5% = 50; >±5% = 40 (auction anomaly, watch for manipulation)。方向：positive = full score, negative = halved |
 | 2 | **Auction Amount** | 35% | `amount_10000` from `fetch_stock.py` (unit: 万). ≥5000万 = 100; 2000-5000万 = 75; 500-2000万 = 50; <500万 = 20. |
-| 3 | **Auction Turnover Rate** (optional) | 25% | `auction_volume / float_shares`. ≥0.3% = 100; 0.1-0.3% = 70; <0.1% = 40. Skip if float shares unavailable (weight merges into Auction Amount) |
+| 3 | **Auction Turnover Rate** (optional) | 25% | `auction_volume / float_shares`. ≥0.3% = 100; 0.1-0.3% = 70; <0.1% = 40. Skip if float shares unavailable → see below |
 
-Note: Auction data is only meaningful for pre-market runs. For intraday runs, set auction_score = 50 (neutral).
+**Auction Change% 边界顺序（P1-3，V4-U 固化）**：
+
+```
+先按 abs 分级 → 再按正负方向调整 → clip [0, 100]
+
+abs(percent):
+  ±2~5%   → 100
+  ±1~2%   → 85
+  ±0.5~1% → 70
+  ±0~0.5% → 50
+  >±5%    → 40
+
+if percent < 0: score /= 2     （halved）
+```
+
+明确边界情况：
+- `-3%` = 100 / 2 = **50**（不是 85 / 2）
+- `-0.3%` = 50 / 2 = **25**
+- `-6%` = 40 / 2 = **20**（异常竞价）
+- `+3%` = **100**（正向完整分）
+- `+6%` = **40**（异常正竞价 watch）
+
+**Auction Turnover Rate 缺失时归一（P1-2，V4-U 固化）**：
+
+```
+若 float_shares 不可得：
+  auction_score = AucChg% × (0.40 / 0.75) + AucAmt × (0.35 / 0.75)
+                 = AucChg% × 0.533 + AucAmt × 0.467
+```
+
+按 0.40:0.35 比例重归一，**不**简单将权重并入 AucAmt。
+
+Note: Auction data is only meaningful for pre-market runs. For intraday runs, set `auction_score = 50`（中性）。
 
 #### Composite Score
 
@@ -507,32 +603,28 @@ Range: 0-100. Money_Flow is inherently noisy (Eastmoney/Tonghuashun statistical 
 
 #### Direction
 
-**Directional feature — column value only, no prose analysis.**
+**Directional feature — DirectionBase + DirectionFinal 双列，无 prose。**
 
-Direction is the semantic mapping of `composite_score`, not a re-scoring step. News Impact already flows into Composite; it does not get re-evaluated here.
-
-Complete flow:
+V4-U 取消 V3 的一刀切 `neutral-bull` Risk Ceiling，改为 RiskType + RiskSeverity 分级 + OverrideHint token 路由。
 
 ```
 Composite
     ↓
-Direction Mapping
+Step A — DirectionBase (确定性映射)
     ↓
-Risk Ceiling (hard constraint)
+Step B — RiskType + RiskSeverity 分级（暂不动 Direction）
     ↓
-MajorEvent Override (±1 level, within ceiling only)
+Step C — DirectionFinal (MajorEvent + RegimeHint + RiskSeverity 软约束)
     ↓
-Clamp (bullish / bearish boundary)
-    ↓
-Final Direction
+Clamp [bearish .. bullish]
 ```
 
 ---
 
-**Step 1 — Direction Mapping**
+**Step A — DirectionBase（确定性，脚本可算）**
 
-| Composite | Direction |
-|-----------|-----------|
+| Composite | DirectionBase |
+|-----------|---------------|
 | >= 70 | bullish |
 | 55-69 | neutral-bull |
 | 45-54 | neutral |
@@ -540,81 +632,150 @@ Final Direction
 
 ---
 
-**Step 2 — Risk Ceiling (hard constraint)**
+**Step B — RiskType + RiskSeverity（区别于 V3：分级，不再一刀切）**
 
-Stocks carrying any of the following flags have a Direction ceiling of `neutral-bull`:
+每个 `risk_flags` 条目映射到 **一个 primary RiskType**（同时持有多 flag 取最高 severity）：
 
-| Flag | Source |
-|------|--------|
-| MA双熊 | `fetch_pool_indicators` |
-| RSI>75 | `fetch_pool_indicators` |
-| RSI<30 | `fetch_pool_indicators` |
-| 炸板 | `fetch_pool_indicators` |
+| RiskFlag | RiskType | RiskSeverity | 理由 |
+|----------|----------|:------------:|------|
+| RSI>75 | `overbought` | 2 | caution，不等同 trend break |
+| RSI<30 | `oversold-opportunity` | **1** | 机会 hint — **不**与 MA双熊 同档 |
+| MA双熊 | `trend-weak` | 3 | 结构性弱势 |
+| 炸板 | `broken-board` | 2 | 事件复盘 |
+| Auc<-5% | `auction-anomaly` | 2 | 操纵 / 恐慌竞价 |
+| ATR>8% | (hard exclude) | — | 留 Excluded, 不进 pool |
 
-The ceiling is uniform — no tiering by flag severity. Step 3, together with `memory/RULES.md`, decides how to handle each specific risk.
-
----
-
-**Step 3 — MajorEvent Override**
-
-`MajorEventFlag` is a sparse, company-level signal. It can move Direction by exactly one level, but only within the Risk Ceiling.
-
-| MajorEventFlag | Effect |
-|----------------|--------|
-| Positive | Direction +1 level |
-| Negative | Direction -1 level |
-| None | no change |
+**Key change from V3**: `RSI<30` severity **1**（informational）；`MA双熊` severity **3**。V3 一律压 `neutral-bull` → V4-U 分级。
 
 ---
 
-**Step 4 — Clamp**
+**Step C — DirectionFinal（软约束 + OverrideHint tokens）**
 
-Direction is bounded to four levels:
+按顺序应用，写入 `OverrideHint`：
 
 ```
-bullish
-   ↑
-neutral-bull
-   ↑
-neutral
-   ↑
-bearish
+DirectionFinal = DirectionBase
+FOR each adjustment:
+  IF MajorEvent = Positive      → shift +1 level (cap bullish)
+  IF MajorEvent = Negative      → shift -1 level (cap bearish)
+  IF RiskSeverity = 3 AND RegimeHint != strong-sector
+                                → cap at neutral-bull
+  IF RiskSeverity = 2           → no automatic cap; set OverrideHint only
+  IF RiskSeverity = 1           → no cap; set OverrideHint only
+CLAMP to [bearish … bullish]
 ```
 
-- `bullish + Positive` stays `bullish` (no level above bullish)
-- `bearish + Negative` stays `bearish` (no level below bearish)
+**OverrideHint tokens（Step 3 应用 RULES.md 前必须读）**
+
+| Token | When set | Step 3 含义 |
+|-------|----------|-------------|
+| `R37` | RiskType=overbought AND theme heat ≥ 85 | 强市场：不因 RSI auto-exclude |
+| `R61` | RiskType=oversold-opportunity | 分级 entry；不当日建仓 |
+| `R39-v3` | RiskType=broken-board AND theme heat ≥ 80 | 涨停炸板 watch 模式 |
+| `R35-v3` | Emotion ≥ 85 AND board_streak ≥ 1 | 连续探测 eligible |
+| `R73` | RiskType=trend-weak AND RegimeHint=weak | MA20 buffer / 更宽止损 |
+| `R74` | RiskType=trend-weak AND RegimeHint=strong-sector | 不因 MA 单维度降级 |
+
+> **R73 / R74 / R37 / R61 等 token 在 `memory/RULES.md` 的实际定义在 Phase 5 companion 阶段绑定**。本节先用 token 占位。
+
+DirectionFinal 是**默认 stance**，非 hard veto。Step 3 偏离时必须引用 OverrideHint token。
 
 ---
 
-**Direction design principles**
+**Direction design principles (V4-U)**
 
-1. Composite is the only scoring source for Direction.
-2. Risk Ceiling is a hard constraint; MajorEvent cannot break through it.
-3. Risk Ceiling is uniform (`neutral-bull`) for all technical risk flags.
-4. MajorEventFlag defaults to per-stock; industry/theme-level catalysts are `None`.
-5. MajorEventFlag moves Direction by at most one level.
-6. Final Direction is always one of: `bullish`, `neutral-bull`, `neutral`, `bearish`.
-7. Output `Direction` as a column value only; do not add prose analysis.
+1. Composite 是 DirectionBase 的唯一打分源
+2. RiskSeverity = 3 在 weak/panic regime 下硬压 `neutral-bull`；其它情形仅 hint
+3. RiskSeverity 分级不统一：1 ≠ 2 ≠ 3
+4. MajorEvent 默认 `None`，行业 / 主题级催化不可承载 MajorEvent
+5. MajorEvent 移动 Direction 至多 1 级
+6. DirectionFinal 永远是 `bullish` / `neutral-bull` / `neutral` / `bearish` 之一
+7. DirectionBase 与 DirectionFinal 同时输出，列值 only；推导过程不写 prose
 
-#### MajorEventFlag
+#### MajorEvent
 
-`MajorEventFlag` captures company-level events large enough to shift the trading stance, separate from ordinary news heat.
+V4-U 比 V3 严格 rubric — 默认 `None`：
 
-| Value | Meaning | Examples |
-|-------|---------|----------|
-| Positive | Direct company-level positive catalyst | National order directly named, major asset restructuring, core product breakthrough, earnings significantly above expectation |
-| Negative | Direct company-level negative catalyst | Major penalty, chairman under investigation, accounting fraud, suspension risk, major shareholder reduction, black-swan event |
-| None | No company-level event, or only industry/theme/news heat | AI conference, TSMC price hike, industry boom, policy direction — these affect ThemeHeat / NewsImpact only |
+| Value | Required evidence |
+|-------|-------------------|
+| **Positive** | 点名公司 + 离散事件：订单中标、重组、业绩 >20% 超、产品获批 |
+| **Negative** | 点名公司 + 离散事件：处罚、立案、造假、停牌、大幅减持 |
+| **None** | 其他一切 — **包括**行业景气、TSMC 涨价、论坛开幕 |
 
-**Default rule**: `MajorEventFlag = None` for every stock unless news explicitly names the company with a clear, discrete event.
-
+**Default rule**: 每只股票默认 `None` — 除非新闻明确点名公司并带离散事件。
 **Responsibility separation**:
+- `ThemeHeat` → 主题级动能
+- `NewsImpact` → 新闻关联度与情绪
+- `MajorEvent` → 公司级事件 override only
 
-- `ThemeHeat` → captures board-level momentum
-- `NewsImpact` → captures news relevance and sentiment
-- `MajorEventFlag` → captures company-level event override only
+不确定时用 `None`。Uncertainty 不应创造 Positive/Negative flag。
 
-When in doubt, use `None`. Uncertainty should not create a Positive/Negative flag.
+#### NewsImpact Rubric（per-stock, 0-100）
+
+V4-U 二维查表。LLM 选 **一格**，可插值 ±5 并在 Score Trace 给一行 reason。
+
+**Dimension 1: Relevance（rows）**
+
+| Tier | Code | Condition |
+|------|------|-----------|
+| R4 | Direct | 公司名或代码在头条 |
+| R3 | Supply-chain | 客户/供应商/合同方被点名 |
+| R2 | Sector | 主题级新闻，无公司名 |
+| R1 | Proxy | 仅指数/同行/行业数据 |
+| R0 | None | 无关联 — 不应在 pool |
+
+**Dimension 2: Prominence（columns）**
+
+| Tier | Code | Condition |
+|------|------|-----------|
+| P3 | Headline | 标题主体或首段 lead |
+| P2 | Body | 正文提及，material detail |
+| P1 | List | 仅表/列表/chain 提及 |
+| P0 | Absent | — |
+
+**Score matrix**
+
+|  | P3 Headline | P2 Body | P1 List |
+|--|:-----------:|:-------:|:-------:|
+| **R4 Direct** | 95 | 85 | 70 |
+| **R3 Supply-chain** | 80 | 70 | 55 |
+| **R2 Sector** | 65 | 55 | 40 |
+| **R1 Proxy** | 45 | 35 | 25 |
+
+**Adjustments（叠加，cap 0-100）**
+
+| Condition | Δ |
+|-----------|---|
+| 同股同日出现在 ≥2 个新闻源 | +5 |
+| Negative sentiment（penalty / investigation） | -20 |
+| MajorEvent = Positive / Negative | 用 MajorEvent 替代；NewsImpact **cap=60 for Negative**（缓解 News 双重计入叠加膨胀，见 § Theme Heat 决策②） |
+
+`NewsLink` = 指向 `news.md` 源行的最短指针（如 `flash#3`, `finance#12`）。
+
+#### Anomaly 字段（≤30 中文字）
+
+**目的**：透传 rubric 会扁平化的结构性模式，不重开 prose mapper。
+
+| Allowed | Example |
+|---------|---------|
+| 模式标签 | `三日缩量首板`, `板块龙头猝死`, `边缘扩散新龙头` |
+| 跨主题 | `跨半导体+AI算力` |
+| 事件形态 | `涨停开板二次封` |
+
+| Forbidden | 原因 |
+|-----------|------|
+| 买卖建议 | Step 3 领地 |
+| 价格目标 | Step 3 领地 |
+| >30 char | 保持表可扫描 |
+
+**必需情形** — 任一即写：
+
+- 股票经由 `market_active` cross_rank_highlights 入池
+- LHB 注入且净买入 > 0
+- board_streak ≥ 2 但 Composite < 70
+- LLM 判定 RiskType 单独不足以描述 setup
+
+否则 `—`。
 
 #### ThemeRole Extraction
 
@@ -639,34 +800,63 @@ Write Role Tags to Candidate Pool `RoleTags` column, comma-separated (e.g. `Anch
 
 ### Output: mapper.md
 
-Generate `mapper.md` as a pure structured dataset. **6 sections. No prose anywhere.** Sorted by `composite_score DESC`.
+Generate `mapper.md` as a pure structured dataset. **7 sections. No prose anywhere.** Sorted by `composite_score DESC`.
 
 ---
 
 #### Section 1: Market State
 
-Structured key-value table. Extract from news.md market overview + financing flow data.
+Structured key-value table。Extract from news.md market overview + 融资 + 指数预读。
 
 ```markdown
 ## Market State
 
 | Field | Value |
 |-------|-------|
-| DominantThemes | [[comma-separated top 2-3 themes by heat]] |
-| FinancingFlow | [[net financing flow direction and magnitude]] |
-| RiskFlags | [[comma-separated: RMBWeakness, MetalCrash, RateHike, etc.]] |
+| DominantThemes | 半导体(91), AI算力(80) |
+| FinancingFlow | +61.31亿净买入 |
+| RiskFlags | RMBWeakness, APACPressure |
+| BoardPolicy | sh688=exclude, bj=exclude |
+| RegimeHint | strong-sector |
 ```
 
+| Field | Type | Source | Notes |
+|-------|------|--------|-------|
+| DominantThemes | string | themes.md top 2-3 | 不变 |
+| FinancingFlow | string | news / fetch_special | 不变 |
+| RiskFlags | string | news.md 宏观扫描 | 逗号分隔 token |
+| **BoardPolicy** | string | `config/trading-scope.json` | 反映实际排除策略，非硬编码 |
+| **RegimeHint** | enum | LLM + 指数预读 | `strong-sector` \| `neutral` \| `weak` \| `panic` — **hint only**，Step 3 用实时指数确认 |
+
+**RegimeHint 阈值**（参考，Step 2 不硬编码进 Direction）：
+
+| Value | Condition（上证竞价/昨收） |
+|-------|---------------------------|
+| panic | < -1.5% |
+| weak | -1.5% ~ -0.5% |
+| neutral | ±0.5% |
+| strong-sector | neutral index BUT dominant theme heat ≥ 85 OR 科创50 > +2% |
+
 #### Section 2: Theme Ranking
+
+V4-U 新增 `HeatTrace` 审计列：
 
 ```markdown
 ## Theme Ranking
 
-| Theme | Heat | Rank |
-|-------|------|------|
+| Theme | Heat | Rank | HeatTrace |
+|-------|------|------|-----------|
+| 半导体 | 91 | 1 | P85/C70/E95/N8 |
 ```
 
-Sorted by Heat DESC. All themes with Heat >= 60.
+| Token | 含义 |
+|-------|------|
+| P | policy 0-100 |
+| C | capital 0-100 |
+| E | emotion 0-100 |
+| N | news_count（整数，归一化前） |
+
+Sorted by Heat DESC. All themes with Heat >= 60。
 
 #### Section 3: Candidate Pool
 
@@ -675,72 +865,147 @@ All stocks with Composite Score >= 55. Sort by Composite DESC.
 ```markdown
 ## Candidate Pool
 
-| Code | Name | Composite | Direction | MajorEventFlag | Theme | RoleTags | Emotion | Turnover% | Risk |
-|------|------|-----------|-----------|----------------|-------|----------|---------|-----------|------|
+| Code | Name | Composite | DirectionBase | DirectionFinal | Theme | RoleTags | NewsImpact | NewsLink | Emotion | Turnover% | RiskFlags | RiskType | RiskSeverity | OverrideHint | Anomaly | MajorEvent |
+|------|------|-----------|---------------|----------------|-------|----------|------------|----------|---------|-----------|-----------|----------|--------------|--------------|---------|------------|
+| sh603986 | 兆易创新 | 76.72 | bullish | neutral-bull | 半导体 | IndustryLeader,Candidate | 88 | flash#2 | 92.5 | 7.61% | RSI>75 | overbought | 2 | R37 | — | None |
+| sh600048 | 保利发展 | 42.1 | bearish | bearish | 房地产 | — | 35 | — | 10 | 1.2% | RSI<30,MA双熊 | oversold-opportunity | 1 | R61 | 利空出尽缩量 | None |
 ```
 
-Column sources:
+Column sources：
 
 | Column | Source |
 |--------|--------|
-| Direction | From Direction computation (bullish / neutral-bull / neutral / bearish) — column value only |
-| MajorEventFlag | From MajorEventFlag judgment (Positive / Negative / None) |
+| Composite | 5-factor weighted score |
+| DirectionBase | Direction Mapping (composite → bullish/neutral-bull/neutral/bearish) |
+| DirectionFinal | DirectionBase 经 MajorEvent + RiskSeverity + RegimeHint 调整后 |
 | Theme | Primary theme (highest heat theme from source_themes) |
 | RoleTags | From ThemeRole query (Anchor / IndustryLeader / Candidate / MultiTheme, comma-separated) |
+| NewsImpact | From NewsImpact rubric matrix |
+| NewsLink | news.md 源行最短指针 (e.g. `flash#3`) |
 | Emotion | From theme_stocks.md sentiment sub-score |
 | Turnover% | From theme_stocks.md yesterday turnover rate |
-| Risk | From theme_stocks.md Risk flags (e.g. RSI>75, 昨-7%, Auction<-5%) |
+| RiskFlags | From Phase 2 `risk_flags` 数组 |
+| RiskType | 看 § Direction → Step B 表 (primary per row by highest severity) |
+| RiskSeverity | 1/2/3 |
+| OverrideHint | Comma-separated RULE tokens，V4-U 新增 |
+| Anomaly | ≤30 中文字，看 § Anomaly 字段；无则 `—` |
+| MajorEvent | Positive / Negative / None，看 § MajorEvent rubric |
 
 #### Section 4: Strategy Inputs
 
-**ALL** Candidate Pool stocks must be covered. Do NOT truncate to Top 5 or Top 8.
+**ALL** Candidate Pool stocks must be covered. Do NOT truncate to Top 5 or Top 8。Candidate Pool > 50 行时按 Composite 降序每 25 行一个子表（P3-3）。
 
 ```markdown
 ## Strategy Inputs
 
-| Code | Price | MA20 | ATR | ATR% | High20 | Low20 |
-|------|-------|------|-----|------|--------|-------|
+| Code | Price | PriceSource | MA20 | ATR | ATR% | High20 | Low20 |
+|------|-------|-------------|------|-----|------|--------|-------|
 ```
 
 Data source: K-line records from Technical Enrichment Phase 2. No additional API calls.
 
-| Column | Source | Formula |
+| Column | Source / Formula | Notes |
 |--------|--------|---------|
-| Price | Auction price from Phase 1 batch call | From `fetch_stock.py` output (or `price` from Phase 2 if auction unavailable) |
-| MA20 | `ma20` field | From Phase 2 output |
-| ATR | `atr` field | From Phase 2 output |
+| **Price** (P0-6) | `fetch_stock.py` Phase 1 ; fallback to `price` from Phase 2 | 三态：昨收 / 竞价 / 盘中实时 |
+| **PriceSource** (P0-6, V4-U 新增) | `PrevClose` \| `Auction` \| `Live` | 解决 V3 Price 字段三态漂移 |
+| MA20 | `ma20` field | Phase 2 |
+| ATR | `atr` field | Phase 2 |
 | ATR% | `atr_pct` field | Pre-computed |
-| High20 | `high20` field | Pre-computed by `fetch_pool_indicators.py` |
-| Low20 | `low20` field | Pre-computed by `fetch_pool_indicators.py` |
+| High20 | `high20` field | Pre-computed |
+| Low20 | `low20` field | Pre-computed |
 
-#### Section 5: Observation Pool
+**PriceSource 三态决定**（V4-U P0-6）：
 
-All stocks with Composite Score < 55. Full list, no truncation.
+| PriceSource | 含义 | 运行时机 |
+|-------------|------|----------|
+| `PrevClose` | 昨日收盘 | pre-market < 9:15 |
+| `Auction` | 集合竞价价 | 9:15-9:25 |
+| `Live` | 盘中实时 | intraday 运行 |
+
+#### Section 5: Score Trace（V4-U 新增）
+
+每行一个 Candidate Pool 股。无 prose 也能审计。
+
+```markdown
+## Score Trace
+
+| Code | CompositeTrace | DirectionPath | NewsImpactCalc |
+|------|----------------|---------------|----------------|
+| sh603986 | T91×0.3+N88×0.2+A60×0.2+Tech78×0.2+MF70×0.1=76.7 | bullish→(RSI>75,sev2)→nb +R37 | R4×P3=95→88(多源+5) |
+```
+
+| Column | Content |
+|--------|--------|
+| CompositeTrace | 加权项 → 四舍五入结果 |
+| DirectionPath | base → risk adjustment → final + hints |
+| NewsImpactCalc | matrix cell + adjustments |
+
+**最低形式要求**：Candidate Pool 表必须含 `CompositeTrace` 列。Score Trace 表对 `Composite ≥ 70` 的股票强制（其余可选）。
+
+`CompositeTrace` 紧凑形式：`T<theme_heat>×0.3+N<news_impact>×0.2+A<auction>×0.2+Tech<tech_score>×0.2+MF<money_flow>×0.1=<composite>`。
+DirectionPath 格式：`<DirectionBase>→(<flag>, sev<N>)→<DirectionFinal> +<OverrideHint>`。
+
+#### Section 6: Observation Pool
+
+All stocks with Composite Score < 55. Full list, no truncation. 新增 Anomaly 列（V4-U）— 含 risk flag 但仍值得次日观察的可见标记。
 
 ```markdown
 ## Observation Pool
 
-| Code | Name | Composite | Theme | Reason |
-|------|------|-----------|-------|--------|
+| Code | Name | Composite | Theme | Reason | Anomaly |
+|------|------|-----------|-------|--------|---------|
+| sz000123 | 某股 | 48 | 半导体 | BelowThreshold | 三日缩量首板 |
 ```
 
 Reason examples:
 - `BelowThreshold` — Composite < 55
-- `TechnicalRisk` — failed soft filter, flagged in theme_stocks.md
+- `TechnicalRisk` — tech_score < 50 / RiskSeverity=3 但 keeping for watch
 - `WeakTheme` — theme heat below threshold
+- `Indicators_Fetch_Failed` — Phase 2 placeholder (P0-7)
+- `IndicatorsMissing` — 全部 traditional 因子缺数据 (P0-4)
 
-#### Section 6: Excluded Stocks
+#### Section 7: Excluded Stocks
 
-Extracted from theme_stocks.md `### Removed Stocks (Failed Hard Filters)` section.
+Extracted from theme_stocks.md `### Removed Stocks` 节。新增 `ExclusionSource` 列（V4-U）：
 
 ```markdown
 ## Excluded Stocks
 
-| Code | Name | ExclusionReason |
-|------|------|-----------------|
+| Code | Name | ExclusionReason | ExclusionSource |
+|------|------|-----------------|-----------------|
+| sh688256 | 寒武纪 | 科创板不可交易 | board-policy |
+| sz300975 | 商络电子 | atr_pct=9.0% > 8% | hard-filter |
 ```
 
-Examples: `Auction<-5%, MA趋势弱`, `非核心主题`, `RSI>75且无多头动能`
+| ExclusionSource | Meaning |
+|-----------------|---------|
+| `board-policy` | `config/trading-scope.json` 驱动（sh688/bj） |
+| `hard-filter` | liquidity < 3亿 / atr_pct > 8% |
+| `indicators-fetch-failed` | Phase 2 fetch 失败（P0-7） |
+| `soft-filter` | tech_score < 50 |
+| `manual` | LLM 显式排除并附 reason |
+
+---
+
+### Board Exclusion Policy (V4-U 配置化)
+
+写入 `.opencode/skills/daily-stock-mapping/config/trading-scope.json`：
+
+```json
+{
+  "boards": {
+    "sh688": { "exclude": true, "reason": "STAR board — account scope" },
+    "bj":    { "exclude": true, "reason": "BSE — account scope" },
+    "sh":    { "exclude": false },
+    "sz":    { "exclude": false }
+  },
+  "overrides": []
+}
+```
+
+Step 2 读 config → 写 `BoardPolicy` 到 Market State。overrides 允许单代码例外，无需改 SKILL。
+
+**影响**：toggled 时半导体/AI 主题 688 龙头以 `ExclusionSource=board-policy` 出现在 Excluded Stocks，非沉默丢弃。
 
 ---
 
@@ -748,15 +1013,40 @@ Examples: `Auction<-5%, MA趋势弱`, `非核心主题`, `RSI>75且无多头动�
 
 The following sections and content types are **NEVER** included in mapper.md:
 
-- Market background prose (市场背景 / 大盘方向 / 情绪温度 paragraph)
-- Tiered ranking labels (第一梯队 / 第二梯队 classification)
-- Individual stock analysis paragraphs with natural-language commentary (个股分解分析 with 新闻影响分析 / 技术面分析 / 资金面分析 / 综合 paragraphs)
-- Industry money flow section (行业资金流向 with prose commentary)
-- Summary / Conclusion (总结 / 综合评价 / 核心标的 / 风险点评 / 风格偏好)
-- Support / Resistance levels (支撑/阻力位, ATR Stop Distance, VWAP)
-- Any form of trading recommendations or buy/stop/target suggestions
-- Impact direction prose (retained only as a column value in Candidate Pool)
-- Direction derivation prose (Risk Ceiling / MajorEvent Override intermediate states are not written to mapper.md; only final `Direction` and `MajorEventFlag` columns are output)
+- Market background prose（市场背景 / 大盘方向 / 情绪温度 paragraph）
+- Tiered ranking labels（第一梯队 / 第二梯队 classification）
+- 个股分解分析 prose paragraphs（新闻影响分析 / 技术面分析 / 资金面分析 / 综合）
+- 行业资金流向 prose section（行业资金流向 with prose commentary）
+- 总结 / 综合评价 / 核心标的 / 风险点评 / 风格偏好 全段
+- 支撑/阻力位、ATR Stop Distance、VWAP 等 derived levels
+- 任何形式的买卖建议或 stop/target
+- Direction 推导 prose（Step A/B/C 中间态不写 mapper.md；只输出最终 `DirectionBase` / `DirectionFinal` + `RiskType` / `RiskSeverity` / `OverrideHint` 列）
+- NewsImpact 矩阵选择 prose（仅 Score Trace 写一行 calc，无段落）
+- Anomaly > 30 字或含买卖建议 / 价格目标
+
+---
+
+### Step 3 Read Contract（V4-U 新增）
+
+Step 3 **MUST** read in order:
+
+1. `Market State`：`RegimeHint`、`BoardPolicy`
+2. `Candidate Pool`：`DirectionFinal`、`RiskType`、`RiskSeverity`、`OverrideHint`、`Anomaly`
+3. `Strategy Inputs`：`Price`、`PriceSource`、`MA20`、`ATR`、`ATR%`、`High20`、`Low20`
+4. `memory/RULES.md`
+
+Step 3 **MUST NOT**:
+
+- 重新派生 Composite 或 NewsImpact
+- 当 `OverrideHint` 适用 token 时忽略该 token
+- `OverrideHint` 存在时把 `DirectionFinal` 视为 hard veto
+- 重新 fetch Strategy Inputs 已给字段（除非 missing/null/stale）
+
+**示例 decision log 行（目标格式）**：
+
+```
+sh603986: DirectionFinal=neutral-bull, OverrideHint=R37, RegimeHint=strong-sector → apply R37, retain 4★, MA20 buy zone unchanged
+```
 
 ---
 
@@ -765,6 +1055,7 @@ The following sections and content types are **NEVER** included in mapper.md:
 The **Strategy Inputs** table in mapper.md is the **authoritative source** for Step 3 on these fields:
 
 - Price
+- PriceSource
 - MA20
 - ATR
 - ATR%
@@ -778,4 +1069,31 @@ Re-fetch from API only if:
 - Field is invalid (negative, zero where nonsensical)
 - Stale data detected (exceeds freshness window)
 
-**Default behavior: no re-fetch.** Step 3 should load Strategy Inputs and proceed to calculation — never start with "I'll need to fetch data" or "Need ATR/MA20/High20".
+**Default behavior: no re-fetch.** Step 3 should load Strategy Inputs and proceed to calculation — never start with "I'll need to fetch data" or "Need ATR/MA20/High20"。
+
+---
+
+### Migration: V3 → V4-U
+
+| V3 field | V4-U mapping |
+|----------|-------------|
+| Direction | → DirectionBase + DirectionFinal |
+| MajorEventFlag | → MajorEvent |
+| Risk | → RiskFlags + RiskType + RiskSeverity |
+| (none) | + NewsImpact, NewsLink, OverrideHint, Anomaly, CompositeTrace |
+| (none) | + PriceSource (Strategy Inputs) |
+| (none) | + ExclusionSource (Excluded Stocks) |
+| (none) | + Section 5 Score Trace |
+
+**Backward compatibility**：Step 3 skill 在 V4-U mapper 缺 `DirectionFinal` 时退化为 V3 处理（`Direction` 兼作 base+final，`OverrideHint=—`）。
+
+---
+
+## Open Questions（ retained，Phase 5 companion 阶段定）
+
+1. Score Trace 强制范围：建议 `Composite ≥ 70` 强制，其余可选 — 待 Phase 5 落定
+2. `RegimeHint` vs Step 3 intraday index fetch 重叠：intraday Step 3 实时 fetch authoritative，RegimeHint 仅 pre-market prior — 已确认
+3. `R73 / R74` 在 `memory/RULES.md` 是否已定义：Phase 5 落定后启用 OverrideHint token
+4. MACD 加速判定阈值 `mh > prev_mh` 用 0 量级还是 0.1 量级：脚本暂定 `abs(mh) < 0.05` 判 crossing
+5. `query_theme.py pure --all-themes` 批量化：作为 follow-up issue 跟进
+6. News 双重计入权重问题：决策② 接受 V4 cap=60 缓解方案 — 已确认

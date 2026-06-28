@@ -1,0 +1,9 @@
+{
+  "boards": {
+    "sh688": { "exclude": true, "reason": "STAR board — account scope" },
+    "bj":    { "exclude": true, "reason": "BSE — account scope" },
+    "sh":    { "exclude": false },
+    "sz":    { "exclude": false }
+  },
+  "overrides": []
+}
