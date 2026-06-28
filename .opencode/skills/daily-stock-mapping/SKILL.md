@@ -458,7 +458,7 @@ The following conditions are **risk markers only**, not auto-reject triggers. St
 | 炸板 | seal_quality = "炸板" | `broken_board` → Step 3 decides |
 | Auc<-5% | auction change < -5% | `auction_anomaly` → Step 3 decides |
 
-**V5 difference from V4-U**：1/2/3 severity grading removed from Step 2. Step 3 reads `RiskType` set + RegimeHint + MajorEvent → determines severity. OverrideHint token 在 Step 3 真正从 RULES.md 应用。
+**V5 difference from V4-U**：1/2/3 severity grading removed from Step 2. Step 3 reads `RiskType` set + RegimeHint + MajorEvent → determines severity. 历史经验通过 LLM 语义匹配 RULES.md 全文应用（不依赖 token ID）。
 
 ### Soft Filter
 
@@ -1089,7 +1089,7 @@ Re-fetch from API only if:
 
 1. Score Trace 强制范围：建议 `Composite ≥ 70` 强制，其余可选 — 待 Phase 5 落定
 2. `RegimeHint` vs Step 3 intraday index fetch 重叠：intraday Step 3 实时 fetch authoritative，RegimeHint 仅 pre-market prior — 已确认
-3. `R73 / R74` 在 `memory/RULES.md` 是否已定义：Phase 5 落定后启用 OverrideHint token
+3. RULES.md 历史记忆与 Step 3 语义匹配验证（Phase 5 落定）
 4. MACD 加速判定阈值 `mh > prev_mh` 用 0 量级还是 0.1 量级：脚本暂定 `abs(mh) < 0.05` 判 crossing
 5. `query_theme.py pure --all-themes` 批量化：作为 follow-up issue 跟进
 6. News 双重计入权重问题：决策② 接受 V4 cap=60 缓解方案 — 已确认

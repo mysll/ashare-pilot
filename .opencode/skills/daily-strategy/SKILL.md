@@ -1,6 +1,6 @@
 ---
 name: daily-strategy
-description: Generate daily trading strategy from V5 mapper.md. Used as Step 3 of daily-market-analysis pipeline. Step 3 is the REASONING layer — consumes Step 2 Computed Perception, produces Direction / RiskSeverity / OverrideHint application / Buy/Stop/Target via structured ReasoningTrace.
+description: Generate daily trading strategy from V5 mapper.md. Used as Step 3 of daily-market-analysis pipeline. Step 3 is the REASONING layer — consumes Step 2 Computed Perception, produces Direction / RiskSeverity / 历史规则应用 / Buy/Stop/Target via structured ReasoningTrace.
 ---
 
 # Daily Strategy Generation (V5)
@@ -41,7 +41,7 @@ Step 3 不只是“在 Direction 内交易” — Step 3 **是 Direction 的产�
 Inputs:
   Date:       provided in prompt (YYYY-MM-DD)
   Mapper:     predict/{date}/mapper.md   (Step 2 V5 output, 7 sections)
-  Rules:      memory/RULES.md            (OverrideHint token 真实定义)
+  Rules:      memory/RULES.md            (历史的固化记忆，LLM 读全文作语义匹配)
   News:       predict/{date}/news.md     (仅 for Conditional Reread 单条回查)
 ```
 
@@ -49,7 +49,7 @@ Inputs:
 2. Read `mapper.md` **Candidate Pool** — V5 prefix columns（`comp.value/conf`, `tech.value/conf`, `th_heat.value/conf`, `news_imp.value/conf`, `maj_ev.pol`, `risk_type.value`, `pattern.*`, `auc.value`, `anomaly`, `NewsLink`）
 3. Read `mapper.md` **Strategy Inputs** — Price, PriceSource, MA20, ATR, ATR%, High20, Low20（**authoritative source**）
 4. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
-5. Read `memory/RULES.md` — 加载 OverrideHint token 真实定义
+5. Read `memory/RULES.md` 全文 — LLM 通读历史固化记忆，自主判断哪些规则与当前场景语义匹配（RULES.md 是自然语言记忆，非结构化 token 库；LLM 凭语义关联，不凭 token ID 查表）
 6. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
 7. Generate `predict/{date}/strategy.md` (含 **ReasoningTrace** + **Market Context** + 推荐列表)
 
@@ -117,11 +117,10 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 
 5. 评 RiskSeverity (Step 3-D)
    └─ RiskSeverity = 3 AND RegimeHint not strong-sector → cap at neutral-bull
-   └─ RiskSeverity = 2 → no auto cap; 记 OverrideHint
-   └─ RiskSeverity = 1 → no cap; 记 OverrideHint
+   └─ RiskSeverity = 2 → no auto cap; 记 ReasoningTrace
+   └─ RiskSeverity = 1 → no cap; 记 ReasoningTrace
 
-6. 应用 OverrideHint tokens (Step 3-E)
-   └─ token 应用后调整 Direction 或仅在 ReasoningTrace 记录 effect
+6. 读 RULES.md 全文，若匹配场景则应用并记 ReasoningTrace
 
 7. Clamp to [bearish .. bullish]
    └─ 最终 Direction ∈ {bullish, neutral-bull, neutral, bearish}
@@ -150,9 +149,9 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 |-------------------|:--------:|------|
 | `trend_weak` + (weak/panic/neutral) | **3** | 结构性弱势，硬压 |
 | `trend_weak` + strong-sector | **2** | 大盘强势下 trend_weak 降级 |
-| `overbought` + strong-sector | **1** | R37: 强市场 RSI 超买豁免 — 仅 informational |
+| `overbought` + strong-sector | **1** | 强市场 RSI 超买 — 仅 informational，视为机会 hint 非风险 |
 | `overbought` + (weak/neutral) | **2** | caution |
-| `oversold_opportunity` + any | **1** | R61: 深超卖是机会 hint, 非 risk |
+| `oversold_opportunity` + any | **1** | 深超卖是机会 hint, 非 risk |
 | `broken_board` + strong-sector | **2** | caution; R39/R35 watch |
 | `broken_board` + weak | **3** | 弱市场炸板危险 |
 | `auction_anomaly` + any | **2** | caution |
@@ -160,25 +159,8 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 
 **Severity 应用到 Direction（Step 3-C 第 5 步）**：
 - Severity 3: cap Direction at `neutral-bull`（若 RegimeHint != strong-sector）
-- Severity 2: no cap; OverrideHint 记录
-- Severity 1: no cap; OverrideHint 记录
-
-### Step 3-E — OverrideHint Token 真实应用
-
-V5 Step 3 不再仅作 "占位"。每个 token 在 `memory/RULES.md` 必须有真实定义。Step 3 决定是否 apply 以及 apply 后 effect：
-
-| Token | Trigger Condition | Step 3 Action |
-|-------|------------------|----------------|
-| `R37` | RiskType=overbought AND th_heat.value ≥ 85 | 不因 RSI 排除；保留 4★；MA20 buy zone 不变 |
-| `R61` | RiskType=oversold_opportunity | 分级 entry；不当日建仓；可分 2-3 笔 |
-| `R39-v3` | RiskType=broken_board AND th_heat.value ≥ 80 | watch 模式；缩仓 1-2 星；放宽止损 |
-| `R35-v3` | sentiment ≥ 85 AND board_streak ≥ 1 | 连续探测 eligible；tauten stop is allowed |
-| `R73` | RiskType=trend_weak AND RegimeHint=weak | MA20 buffer / 更宽止损；仓位 ×0.6 |
-| `R74` | RiskType=trend_weak AND RegimeHint=strong-sector | MA 单维度不降级；保留评级 |
-
-**Token 未在 RULES.md 定义时**：ReasoningTrace 记 `OverrideHint xxx_pending_RULES_md_definition`，沿用 V5 默认 severity rule。
-
----
+- Severity 2: no cap; 记 ReasoningTrace
+- Severity 1: no cap; 记 ReasoningTrace
 
 ## PerceptionOverride Mechanism (V5 新增)
 
@@ -327,7 +309,7 @@ Re-fetch only if：missing / invalid / stale。**Default: no re-fetch。**
 - **DirectionPath**：`comp_value → DirectionBase倾向 → (overrides applied) → final Direction`
   - 例：`86.7→bullish; risk_type=overbought sev2; regime=strong; maj_ev=Neutral; final=bullish`
 - **RuleApplications**：tokens 实际应用情况
-  - 例：`R37:apply,retain 4★; R35-v3:apply,widen stop`
+  - 例：`强市场超买豁免 → retain 4★; 涨停延续探测 → widen stop`
 - **PerceptionOverride**：异常情形下 Step 3 异议 Step 2 字段；无则 `—`
 - **RereadTriggered**：触发条件 + 回读结果；无则 `—`
 
@@ -346,12 +328,12 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 - RiskSeverity 反向扣分
 - Pattern 多维组合（如 `heat=RISING + leader=STABLE + volume=SURGE` = 满档）
 - MajorEvent Polarity 加减
-- OverrideHint 是否 apply（apply R37 / R35-v3 加分）
+- 历史经验是否匹配当前场景（如强市场超买豁免/涨停延续探测 → 加分）
 - Anomaly 中暗含的 setup（如"龙头启动 + 板块未退潮" 加 1⭐）
 
 ### Memory Integration
 
-**BEFORE** generating → READ `memory/RULES.md` for active rules + OverrideHint token 定义
+**BEFORE** generating → READ `memory/RULES.md` 全文 — LLM 通读历史记忆作语义匹配
 
 **AFTER** generating → append strategy entry to `memory/daily/INDEX.md`：
 ```markdown
@@ -367,7 +349,7 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 | "Do NOT recompute Direction" — 接受 mapper Direction | **RECOMPUTE Direction** via Reasoning Flow |
 | "Consume MajorEventFlag as-is" | Consume `maj_ev.pol` as input；may shift Direction per rule |
 | 不评 RiskSeverity（沿用 Step 2） | **评 RiskSeverity** per § Step 3-D |
-| OverrideHint 仅占位（V4-U） | **真 apply** per RULES.md token definitions |
+| OverrideHint 仅占位（V4-U） | **真应用** per 语义匹配 RULES.md 历史记忆 |
 | 不重读 news.md | Conditional Reread via 3 triggers + 3 hard contradictions |
 | 无 PerceptionOverride | Override allowed for whitelisted fields with audit |
 | 无 ReasoningTrace 输出 | **ReasoningTrace 强制结构化输出** |
@@ -378,7 +360,7 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 
 ## Open Questions（Phase 5 companion 阶段定）
 
-1. R73 / R74 / R39-v3 / R35-v3 等在 `memory/RULES.md` 的实际定义（V5 启用前必须绑）
+1. Confidence 校准起点 +85 阈值是否强制
 2. Confidence 校准起点 +85 阈值是否强制
 3. Override T+1 验证机制落地形式（人工 vs 自动）
 4. Regression Audit 30 日窗口命中口径
@@ -390,6 +372,6 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 
 V5 Step 3 是 Reasoning Layer：
 - **输入**：V5 mapper.md computed perception + Confidence + Pattern + Anomaly + Market Context + RULES.md
-- **输出**：Direction + RiskSeverity + OverrideHint 应用 + Buy/Stop/Target + ReasoningTrace + (可选) PerceptionOverride
+- **输出**：Direction + RiskSeverity + 历史规则应用 + Buy/Stop/Target + ReasoningTrace + (可选) PerceptionOverride
 - **核心规则**：Unidirectional Flow（不重读新闻）+ Override Audit（写 trace）+ RuleBind（apply 同时记 effect）
 - **永远不做**：Execution 层补信息；扫全文 news.md 重新映射主题；override 不可 override 字段（如 comp, tech_score）；ad-hoc 创造参数表外的 stop 倍数
