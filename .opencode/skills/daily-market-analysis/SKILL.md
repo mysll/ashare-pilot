@@ -3,9 +3,17 @@ name: daily-market-analysis
 description: Use when users request comprehensive daily financial market analysis workflow - generates news briefing, stock data mapping, and trading strategy recommendations in sequence.
 ---
 
-# Daily Market Analysis Workflow
+# Daily Market Analysis Workflow (V5)
 
-3-step pipeline: news briefing → theme-driven stock mapping → trading strategy.
+3-step pipeline implementing the V5 Compute → Perception → Reasoning architecture:
+
+| Layer | Step | Agent | Output |
+|-------|------|-------|--------|
+| Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
+| Perception | Step 1+2 | financial-news-analyst + financial-news-mapper | news.md → themes.md → theme_stocks.md → mapper.md |
+| Reasoning | Step 3 | trading-strategist | strategy.md (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
+
+Step 2 NEVER produces Direction or RiskSeverity (V5 Invariant 1). Step 3 is the sole Reasoning layer.
 
 ## Workflow
 
@@ -17,37 +25,48 @@ digraph workflow {
     // Step 1
     "Step 1: News Brief" [label="Step 1\nNews Brief\n(financial-news-analyst)", style=filled, fillcolor="#e6f3ff"];
 
-    // Step 2 subgraph
+    // Step 2 subgraph → Perception Layer
     subgraph cluster_step2 {
-        label="Step 2: Stock Mapping (financial-news-mapper)";
+        label="Step 2: Perception\n(financial-news-mapper + daily-stock-mapping V5 skill)";
         style=filled;
         fillcolor="#fff3e6";
         color="#cc9933";
+        fontsize=11;
 
         "2.1 Theme Extraction" [shape=box, style=filled, fillcolor="#fff3e6"];
         "2.2 Stock Pool Build" [shape=box, style=filled, fillcolor="#fff3e6"];
-        "2.3 Technical Enrichment" [shape=box, style=filled, fillcolor="#fff3e6"];
-        "2.4 Impact Analysis" [shape=box, style=filled, fillcolor="#fff3e6"];
+        "2.3 Technical Enrichment\n(Python V5 nested schema)" [shape=box, style=filled, fillcolor="#e6e6e6"];
+        "2.4 Structured Dataset" [shape=box, style=filled, fillcolor="#fff3e6"];
     }
 
-    // Step 3
-    "Step 3: Strategy" [label="Step 3\nTrading Strategy\n(trading-strategist subagent\n+ daily-strategy skill)", style=filled, fillcolor="#e6ffe6"];
+    // Step 3 → Reasoning Layer
+    "Step 3: Reasoning" [label="Step 3\nReasoning Layer\n(trading-strategist subagent\n+ daily-strategy V5 skill)\n\nDirection / RiskSeverity\nOverrideHint / ReasoningTrace", style=filled, fillcolor="#e6ffe6"];
 
-    // Data sources (left)
-    subgraph cluster_datasources {
-        label="Data Sources";
+    // Compute Layer (left)
+    subgraph cluster_compute {
+        label="Compute Layer (Python)";
+        style=dashed;
+        color="#666666";
+        fontsize=10;
+
+        "fetch_pool_indicators.py\n(V5 nested JSON)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "fetch_stock.py\n(auction)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "fetch_money_flow.py" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "fetch_special.py\n(lhb)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "query_theme.py\n(candidates/market/pure)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+    }
+
+    // Skills (bottom)
+    subgraph cluster_skills {
+        label="Skills";
         style=dashed;
         color="#888888";
+        fontsize=10;
 
         "daily-news-brief" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "daily-stock-mapping\n(V5 Perception)" [shape=folder, style=filled, fillcolor="#fff3e6"];
+        "daily-strategy\n(V5 Reasoning)" [shape=folder, style=filled, fillcolor="#e6ffe6"];
         "theme-library" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "query_theme.py\n(market)" [shape=folder, style=filled, fillcolor="#fff3e6"];
-        "fetch_stock.py\n(auction)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_indicators.py\n(MA/MACD/RSI/BB/ATR)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_money_flow.py\n(yesterday)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_special.py\n(lhb)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "daily-stock-mapping\nskill" [shape=folder, style=filled, fillcolor="#fff3e6"];
-        "daily-strategy\nskill" [shape=folder, style=filled, fillcolor="#e6ffe6"];
     }
 
     // Output files (right)
@@ -59,41 +78,51 @@ digraph workflow {
         "news.md" [shape=note, style=filled, fillcolor="#fffdeb"];
         "themes.md" [shape=note, style=filled, fillcolor="#fffdeb"];
         "theme_stocks.md\n(enriched)" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "mapper.md" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "strategy.md" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "mapper.md\n(V5 7-section)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "strategy.md\n(+ReasoningTrace)" [shape=note, style=filled, fillcolor="#fffdeb"];
     }
 
     // Main pipeline flow
     "Step 1: News Brief" -> "2.1 Theme Extraction";
     "2.1 Theme Extraction" -> "2.2 Stock Pool Build";
-    "2.2 Stock Pool Build" -> "2.3 Technical Enrichment";
-    "2.3 Technical Enrichment" -> "2.4 Impact Analysis";
-    "2.4 Impact Analysis" -> "Step 3: Strategy";
+    "2.2 Stock Pool Build" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
+    "2.3 Technical Enrichment\n(Python V5 nested schema)" -> "2.4 Structured Dataset";
+    "2.4 Structured Dataset" -> "Step 3: Reasoning";
 
     // Output file writes
     "Step 1: News Brief" -> "news.md";
     "2.1 Theme Extraction" -> "themes.md";
-    "2.3 Technical Enrichment" -> "theme_stocks.md\n(enriched)";
-    "2.4 Impact Analysis" -> "mapper.md";
-    "Step 3: Strategy" -> "strategy.md";
+    "2.3 Technical Enrichment\n(Python V5 nested schema)" -> "theme_stocks.md\n(enriched)";
+    "2.4 Structured Dataset" -> "mapper.md\n(V5 7-section)";
+    "Step 3: Reasoning" -> "strategy.md\n(+ReasoningTrace)";
 
-    // Data source feeds
+    // Skill feeds
     "daily-news-brief" -> "Step 1: News Brief";
-        "theme-library" -> "2.1 Theme Extraction";
-        "theme-library" -> "2.2 Stock Pool Build";
-        "query_theme.py\n(market)" -> "2.2 Stock Pool Build";
-    "fetch_stock.py\n(auction)" -> "2.3 Technical Enrichment";
-    "fetch_indicators.py\n(MA/MACD/RSI/BB/ATR)" -> "2.3 Technical Enrichment";
-    "fetch_money_flow.py\n(yesterday)" -> "2.4 Impact Analysis";
+    "daily-stock-mapping\n(V5 Perception)" -> "2.1 Theme Extraction";
+    "daily-strategy\n(V5 Reasoning)" -> "Step 3: Reasoning";
+    "theme-library" -> "2.1 Theme Extraction";
+    "theme-library" -> "2.2 Stock Pool Build";
+
+    // Compute feeds
+    "fetch_pool_indicators.py\n(V5 nested JSON)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
+    "fetch_stock.py\n(auction)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
+    "fetch_money_flow.py" -> "2.4 Structured Dataset";
     "fetch_special.py\n(lhb)" -> "2.2 Stock Pool Build";
-    "daily-stock-mapping\nskill" -> "2.1 Theme Extraction";
-    "daily-strategy\nskill" -> "Step 3: Strategy";
+    "query_theme.py\n(candidates/market/pure)" -> "2.2 Stock Pool Build";
 
     // Inter-stage file reads (dashed)
     "themes.md" -> "2.2 Stock Pool Build" [style=dashed];
-    "theme_stocks.md\n(enriched)" -> "2.4 Impact Analysis" [style=dashed];
+    "theme_stocks.md\n(enriched)" -> "2.4 Structured Dataset" [style=dashed];
     "news.md" -> "2.1 Theme Extraction" [style=dashed];
-    "mapper.md" -> "Step 3: Strategy" [style=dashed];
+    "mapper.md\n(V5 7-section)" -> "Step 3: Reasoning" [style=dashed];
+
+    // V5 architecture annotation
+    { rank=same; "2.1 Theme Extraction" "2.2 Stock Pool Build" "2.3 Technical Enrichment\n(Python V5 nested schema)" "2.4 Structured Dataset" }
+    {
+        label="V5 Architecture: Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (strategy.md)";
+        shape=plaintext;
+        fontsize=11;
+    }
 }
 ```
 
@@ -139,11 +168,13 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 
 ---
 
-## Step 2: Stock Data Mapping
+## Step 2: Stock Data Mapping (Perception Layer)
 
 **Agent:** `financial-news-mapper`
 
-**Action:** Load skill `daily-stock-mapping` and follow its workflow.
+**Action:** Load skill `daily-stock-mapping` (V5 Perception) and follow its workflow.
+
+**V5 note:** Step 2 is the Perception Layer per V5 Invariant 1. It produces `mapper.md` as a structured perception dataset (7 sections) with per-field confidence. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
 
 **Prompt (exact format, MUST NOT deviate):**
 
@@ -167,11 +198,13 @@ Outputs:
 
 ---
 
-## Step 3: Trading Strategy
+## Step 3: Trading Strategy (Reasoning Layer)
 
 **Agent:** `trading-strategist`
 
-**Action:** Load skill `daily-strategy` and follow its workflow.
+**Action:** Load skill `daily-strategy` (V5 Reasoning) and follow its workflow.
+
+**V5 note:** Step 3 is the sole Reasoning Layer. It consumes V5 `mapper.md` computed perceptions (value + confidence + trace) and produces Direction、RiskSeverity、OverrideHint application、ReasoningTrace and strategy. Conditional Reread via NewsLink pointers only — never full news.md scan.
 
 **Prompt (exact format, MUST NOT deviate):**
 
@@ -195,21 +228,21 @@ Output:
 
 ## Output Files
 
-| File | Content | Step |
-|------|---------|------|
-| `predict/{date}/news.md` | News briefing, market overview, key events | 1 |
-| `predict/{date}/themes.md` | Matched themes with heat/confidence | 2.1 |
-| `predict/{date}/theme_stocks.md` | Deduplicated stock pool with technicals | 2.2-2.3 |
-| `predict/{date}/mapper.md` | Composite-scored stock analysis report | 2.4 |
-| `predict/{date}/strategy.md` | 10 stock predictions with ratings and price targets + inline market context | 3 |
+| File | Content | Layer / Step |
+|------|---------|-------------|
+| `predict/{date}/news.md` | News briefing, market overview, key events | Perception (Step 1) |
+| `predict/{date}/themes.md` | Matched themes with heat/confidence sub-scores | Perception (Step 2.1) |
+| `predict/{date}/theme_stocks.md` | Deduplicated stock pool with technicals + Pattern 5-dim states | Perception (Step 2.2-2.3) |
+| `predict/{date}/mapper.md` | V5 7-section perception dataset: Market State, Theme Ranking, Candidate Pool (prefix columns with confidence), Strategy Inputs, Score Trace, Observation Pool, Excluded Stocks | Perception (Step 2.4) |
+| `predict/{date}/strategy.md` | Reasoning result: Direction / RiskSeverity / OverrideHint 应用 + Buy/Stop/Target + ReasoningTrace + Market Context (RegimeHint) | Reasoning (Step 3) |
 
 ## Quick Reference
 
-| Step | Agent | Input | Output |
-|------|-------|-------|--------|
-| 1 | financial-news-analyst | - | news.md |
-| 2 | financial-news-mapper + daily-stock-mapping skill | news.md | themes.md → theme_stocks.md → mapper.md |
-| 3 | trading-strategist + daily-strategy skill | mapper.md | strategy.md (含 market context) |
+| Layer | Step | Agent | Input | Output | Key V5 constraint |
+|-------|------|-------|-------|--------|-------------------|
+| Perception | 1 | financial-news-analyst + daily-news-brief | — | news.md | — |
+| Perception | 2 | financial-news-mapper + daily-stock-mapping V5 | news.md | themes.md → theme_stocks.md → mapper.md | **No Direction / RiskSeverity** (Invariant 1) |
+| Reasoning | 3 | trading-strategist + daily-strategy V5 | mapper.md + RULES.md | strategy.md (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
 
 ## Common Usage
 
@@ -223,3 +256,7 @@ Output:
 - Each step depends on previous output
 - Directory: `predict/{YYYY}-{MM}-{DD}/` (e.g., `predict/2026-04-07/`)
 - All output in Chinese (中文)
+- **V5 architecture:** Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (strategy.md formatted output)
+- `fetch_pool_indicators.py` outputs V5 nested JSON (`raw_observation` + `computed_perception` each with `{value, confidence, trace}` per field)
+- Step 2 NEVER produces Direction / RiskSeverity — Step 3 is the sole Reasoning authority
+- Daily pipeline runs at any time; data availability depends on market state (see § Execution Timing)

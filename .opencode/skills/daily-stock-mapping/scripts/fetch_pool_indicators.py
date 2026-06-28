@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-"""Fetch technical indicators and compute feature engineering for a pool of stocks.
+"""Fetch technical indicators and compute feature engineering for a pool of stocks. V5.
 
 Used by daily-stock-mapping Phase 2 Technical Enrichment.
-Outputs a flat JSON array with fields per stock:
-  - 13 raw indicators + code = 14 raw fields
-    (price, close, turnover, change_pct, amount,
-     rsi, atr, ma20, ma50, macd, macdh, boll_ub, boll_lb)
-  - 6 pre-computed features (high20, low20, atr_pct, percent_b, board_streak, seal_quality)
-  - 5 scoring fields (limit_up_freq, traditional, sentiment, tech_score, risk_flags)
-  - On fetch failure: {"code", "fetch_failed": true} placeholder row (no other fields)
+Outputs V5 nested JSON (raw_observation + computed_perception) with per-field confidence:
+  - raw_observation (19 fields): {value, confidence} per field  (raw data = 100% confidence)
+  - computed_perception: tech_score / traditional / sentiment / risk_type / risk_flags
+    each with {value, confidence, trace} where confidence reflects data completeness
+  - On fetch failure: {"code", "fetch_failed": true, "raw_observation": {}, "computed_perception": {}}
 
-All numeric fields are float/int — no string-formatted values like "14.38%".
+All numeric values are float/int — no string-formatted values like "14.38%".
 
 Usage:
     python fetch_pool_indicators.py sh600519,sz000001,sz002156 --json
@@ -60,6 +58,80 @@ def _get_board_limit(code: str) -> float:
     return 10.0
 
 
+# ── V5 risk_type mapping ──
+_RISK_TYPE_MAP = {
+    "RSI>75": "overbought",
+    "RSI<30": "oversold_opportunity",
+    "MA双熊": "trend_weak",
+    "炸板": "broken_board",
+}
+
+
+def _map_risk_type(flags):
+    """Map V4-U risk_flags to V5 risk_type list."""
+    types = []
+    for f in flags:
+        t = _RISK_TYPE_MAP.get(f)
+        if t and t not in types:
+            types.append(t)
+    return types
+
+
+# V5 raw_observation field list (order preserved)
+_RAW_FIELDS = [
+    "price", "close", "turnover", "change_pct", "amount",
+    "rsi", "macd", "macdh", "ma20", "ma50",
+    "boll_ub", "boll_lb", "atr",
+    "high20", "low20", "atr_pct", "percent_b",
+    "board_streak", "seal_quality", "limit_up_freq",
+]
+
+
+def _to_v5_nested(code, row, trad_present_count):
+    """Convert V4-U flat row to V5 nested {raw_observation, computed_perception}."""
+    # ── raw_observation ──
+    raw = {}
+    for f in _RAW_FIELDS:
+        v = row.get(f)
+        raw[f] = {"value": v, "confidence": 100 if v is not None else 0}
+
+    # ── computed_perception ──
+    ts = row.get("tech_score")
+    trad = row.get("traditional")
+    sent = row.get("sentiment")
+    risk_flags = row.get("risk_flags", [])
+    risk_types = _map_risk_type(risk_flags)
+
+    # tech_score confidence = present factors / 6
+    ts_conf = round(trad_present_count / 6 * 100) if ts is not None else 0
+    ts_trace = f"present_factors={trad_present_count}/6; renormalized; trad{trad}×0.70+sent{sent}×0.30={ts}" if ts is not None else None
+
+    # traditional trace
+    trad_trace = f"present_factors={trad_present_count}/6; weights renormalized" if trad is not None else None
+
+    cp = {
+        "tech_score": {"value": ts, "confidence": ts_conf, "trace": ts_trace} if ts is not None else {"value": None, "confidence": 0, "trace": None},
+        "traditional": {"value": trad, "confidence": ts_conf, "trace": trad_trace} if trad is not None else {"value": None, "confidence": 0, "trace": None},
+        "sentiment": {"value": sent, "confidence": 100 if sent is not None else 0},
+        "risk_type": {"value": risk_types, "confidence": 100},
+        "risk_flags": {"value": risk_flags, "confidence": 100},
+    }
+
+    return {
+        "code": code,
+        "fetch_failed": False,
+        "raw_observation": raw,
+        "computed_perception": cp,
+    }
+
+
+def _raw_num(raw, field, default=0):
+    """Extract numeric value from V5 raw_observation[field]."""
+    entry = raw.get(field, {})
+    v = entry.get("value") if isinstance(entry, dict) else entry
+    return v if v is not None else default
+
+
 def main():
     import time
     _t0 = time.time()
@@ -87,8 +159,11 @@ def main():
             records = fetch_history(code, range_str="3m", source=args.source)
             if not records:
                 print(f"[SKIP] {code}: no data", file=sys.stderr)
-                # P0-7: append placeholder row so SKILL layer can route to Observation Pool
-                results.append({"code": code, "fetch_failed": True})
+                # P0-7 / V5: placeholder for Observation Pool routing
+                results.append({
+                    "code": code, "fetch_failed": True,
+                    "raw_observation": {}, "computed_perception": {},
+                })
                 continue
 
             indicators = calculate_indicators(records, INDICATOR_LIST)
@@ -280,6 +355,7 @@ def main():
             else:
                 traditional = None
                 row["traditional"] = None
+            trad_present_count = len(trad_present)
 
             # Sentiment sub-score (3 factors) — 数据恒可计算
             bs = row["board_streak"]
@@ -322,12 +398,17 @@ def main():
                 flags.append("炸板")
             row["risk_flags"] = flags
 
-            results.append(row)
+            # ── V5 nested conversion ──
+            result = _to_v5_nested(code, row, trad_present_count)
+            results.append(result)
 
         except Exception as e:
             print(f"[ERROR] {code}: {e}", file=sys.stderr)
-            # P0-7: placeholder row so SKILL layer can route.indicators_fetch_failed
-            results.append({"code": code, "fetch_failed": True})
+            # P0-7 / V5: placeholder row for SKILL Observation Pool routing
+            results.append({
+                "code": code, "fetch_failed": True,
+                "raw_observation": {}, "computed_perception": {},
+            })
             continue
 
     # ── Output ─────────────────────────────────────────────
@@ -341,26 +422,33 @@ def main():
         else:
             lines = [
                 f"{'Code':<12} {'Price':>8} {'Chg%':>7} {'RSI':>6} {'ATR':>6} "
-                f"{'MA20':>8} {'Tech':>6} {'Sent':>5} {'Streak':>6} {'Seal'}"
+                f"{'MA20':>8} {'Tech':>6} {'Conf%':>6} {'Streak':>6} {'RiskType'}"
             ]
             lines.append("-" * len(lines[0]))
             for r in results:
                 if r.get("fetch_failed"):
                     lines.append(f"{r['code']:<12}  [indicators_fetch_failed]")
                     continue
-                ts = r.get("tech_score")
-                ts_fmt = f"{ts:>6.1f}" if ts is not None else f"{'--':>6}"
+                raw = r.get("raw_observation", {})
+                cp = r.get("computed_perception", {})
+                ts = cp.get("tech_score", {})
+                ts_v = ts.get("value")
+                ts_conf = ts.get("confidence", 0)
+                rt = cp.get("risk_type", {}).get("value", [])
+                rt_fmt = ",".join(rt) if rt else "—"
+                ts_fmt = f"{ts_v:>6.1f}" if ts_v is not None else f"{'--':>6}"
+                conf_fmt = f"{ts_conf:>5.0f}%" if ts_conf else f"{'--':>6}"
                 vals = [
                     r["code"],
-                    f"{r.get('price') or 0:>8.2f}",
-                    f"{r.get('change_pct') or 0:>7.2f}",
-                    f"{r.get('rsi') or 0:>6.1f}",
-                    f"{r.get('atr') or 0:>6.2f}",
-                    f"{r.get('ma20') or 0:>8.2f}",
+                    f"{_raw_num(raw, 'price'):>8.2f}",
+                    f"{_raw_num(raw, 'change_pct'):>7.2f}",
+                    f"{_raw_num(raw, 'rsi'):>6.1f}",
+                    f"{_raw_num(raw, 'atr'):>6.2f}",
+                    f"{_raw_num(raw, 'ma20'):>8.2f}",
                     ts_fmt,
-                    f"{r.get('sentiment') or 0:>5.0f}",
-                    f"{r['board_streak']:>6}",
-                    r["seal_quality"],
+                    conf_fmt,
+                    f"{_raw_num(raw, 'board_streak'):>6.0f}",
+                    rt_fmt,
                 ]
                 lines.append(" ".join(vals))
             output_str = "\n".join(lines)
