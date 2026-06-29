@@ -97,13 +97,13 @@ RegimeHint 是 Step 3 独有的 reasoning 输出（不在 mapper.md 中）。
 
 V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）。
 
-输出到 `strategy.md` 方向列时使用中文枚举：`看多` / `中性偏多` / `中性` / `看空`。
+输出到 `strategy.md` 方向列时使用中文枚举：`看多` / `偏多` / `中性` / `看空`。
 
 ```
 1. 读 comp.value (Python 已给)
    └─ 使用 DirectionBase 阈值表：
       >= 70 → 看多 倾向
-      55-69 → 中性偏多 倾向
+      55-69 → 偏多 倾向
       45-54 → 中性 倾向
       < 45 → 看空 倾向
 
@@ -120,14 +120,14 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
    └─ Neutral: no shift
 
 5. 评 RiskSeverity (Step 3-D)
-   └─ RiskSeverity = 3 AND RegimeHint not strong-sector → cap at 中性偏多
+   └─ RiskSeverity = 3 AND RegimeHint not strong-sector → cap at 偏多
    └─ RiskSeverity = 2 → no auto cap; 记 ReasoningTrace
    └─ RiskSeverity = 1 → no cap; 记 ReasoningTrace
 
 6. 读 RULES.md 全文，若匹配场景则应用并记 ReasoningTrace
 
 7. Clamp to [看空 .. 看多]
-   └─ 最终 Direction ∈ {看多, 中性偏多, 中性, 看空}
+   └─ 最终 Direction ∈ {看多, 偏多, 中性, 看空}
 
 8. DirectionPivot 检查（见下）
 ```
@@ -137,7 +137,7 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 | comp.value | 倾向 (DirectionBase) |
 |-----------|---------------------|
 | >= 70 | 看多 |
-| 55-69 | 中性偏多 |
+| 55-69 | 偏多 |
 | 45-54 | 中性 |
 | < 45 | 看空 |
 
@@ -354,7 +354,7 @@ These are Intraday Entry Plan territory. Morning outputs **Trade Profile** — t
 
    Columns: # / 代码(Code) / 名称(Name) / 板块(Sector) / 方向(Direction) / 评级(Rating) / 交易策略(Entry Profile) / 入场条件(Entry Trigger) / 仓位(PosBudget) / 持仓(Horizon)
 
-   **方向枚举**: `看多` / `中性偏多` / `中性` / `看空`
+   **方向枚举**: `看多` / `偏多` / `中性` / `看空`
    **交易策略枚举**: `趋势跟随` / `回调布局` / `强势接力` / `防御布局` / `暂不参与`
    **入场条件**: 简短定性描述 如 `开盘站稳MA5` / `回踩MA20` / `竞价确认` / `首根K线确认`
    **持仓枚举**: `T+0` / `T+1` / `中期`
