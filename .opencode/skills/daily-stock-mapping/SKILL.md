@@ -356,7 +356,7 @@ Example output (one element per stock):
   "atr_pct": 6.50,          "percent_b": 0.82,
   "board_streak": 2,        "seal_quality": "封死",
   "limit_up_freq": 3,       "traditional": 73.2,   "sentiment": 92.5,
-  "market_sentiment": 78.5, "vol_ratio_5d": 1.83,
+  "market_sentiment": 78.5, "vol_ratio_5d": 1.83, "board_sentiment": 92.5, "sentiment_driver": "board",
   "tech_score": 79.0,       "risk_flags": ["RSI>75"]
 }]
 ```
@@ -381,11 +381,13 @@ Field reference:
 | `percent_b` | `(close - boll_lb) / (boll_ub - boll_lb)` | BB Position scoring |
 | `board_streak` | Consecutive limit-up days (int 0/1/2/3...) | Sentiment input |
 | `seal_quality` | 封板质量: `"封死"` / `"未封板"` / `"炸板"` / `"—"` | Sentiment input |
-| **Scoring (6)** | Weighted formula | |
+| **Scoring (8)** | Weighted formula | |
 | `limit_up_freq` | Total limit-up days in last 10 records (int) | Sentiment input |
 | `traditional` | 6-factor weighted sub-score (0-100, renormalized for missing factors) | Tech score input |
 | `sentiment` | max(Board Sentiment, Market Sentiment); 0-100 | Tech score input |
-| `market_sentiment` | Non-board attention sub-score: turnover×0.40 + high20×0.35 + vol_ratio×0.25 (0-100) | Sentiment split |
+| `market_sentiment` | Non-board attention sub-score: turnover×0.35 + high20×0.25 + vol_ratio×0.20 + momentum×0.20 (0-100) | Sentiment split |
+| `board_sentiment` | Board-only sub-score: streak×0.50 + freq×0.25 + seal×0.25 (0-100); includes broken-board decay | Sentiment split |
+| `sentiment_driver` | `"board"` / `"market"` / `"tie"` — which path scored higher | Sentiment audit |
 | `vol_ratio_5d` | Today's amount / 5-day average amount (float) | Feature input |
 | `tech_score` | `traditional × 0.70 + sentiment × 0.30` (0-100) — `null` if traditional is null | Composite input |
 | `risk_flags` | `["RSI>75","RSI<30","ATR>8%","MA双熊","炸板"]` — risk markers for Step 3（V4-U: 已删 `流动性<3亿`，由 SKILL hard filter 处理） | Risk column |
@@ -427,7 +429,12 @@ tech_score = Traditional × 0.70 + Sentiment × 0.30
 
 Scored from pre-computed `board_streak` (int), `seal_quality` (str), `turnover` (float), `high20` (float), and `vol_ratio_5d` (float) fields in Phase 2 output.
 
-**Board Sentiment** = Board Streak × 0.50 + Limit-up Frequency × 0.25 + Seal Quality × 0.25 (V5.0公式，连板因子保留不动)
+**Board Sentiment** = Board Streak × 0.50 + Limit-up Frequency × 0.25 + Seal Quality × 0.25
+
+V5.2 新增断板衰减（P2）：
+| `board_streak == 0` 且 `limit_up_freq >= 2` | streak_s = max(0, 45) |
+| `board_streak == 0` 且 `limit_up_freq >= 1` | streak_s = max(0, 35) |
+| 昨日未涨停但前日涨停（断板第一日） | streak_s = max(0, 40) |
 
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
@@ -435,13 +442,20 @@ Scored from pre-computed `board_streak` (int), `seal_quality` (str), `turnover` 
 | 8b | **Limit-up Frequency** (涨停频率) | 25% | Use pre-computed `limit_up_freq`: ≥3=100; 2=80; 1=60; 0=0 |
 | 8c | **Seal Quality** (封板质量) | 25% | `seal_quality = "封死"` = 100; `seal_quality = "未封板"` = 60; `seal_quality = "炸板"` = 15; `seal_quality = "—"` = 0 |
 
-**Market Sentiment (V5.1新增)** = Turnover Rate × 0.40 + High20 Proximity × 0.35 + Volume Ratio × 0.25
+**Market Sentiment (V5.2)** = Turnover Rate × 0.35 + High20 Proximity × 0.25 + Volume Ratio × 0.20 + Momentum × 0.20
+
+4 因子重分配：降 High20 权重减少与 %B 重叠，新增动量因子覆盖涨跌幅量级。V5.2 权重分布 trade-off：
+- High20 降 10pp（35%→25%）减少与 traditional 中 BB Position 的相关性
+- 新增 Momentum （20%）补充 traditional 没有直接奖励的涨跌幅量级
+
+方向修正（P3）：当 `change_pct < 0` 时，Turnover 和 Volume Ratio 子分 ×0.5（防放量阴跌被误判为高情绪）
 
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
-| 8d | **Turnover Rate** (换手率活跃度) | 40% | Use pre-computed `turnover`: ≥10%=100; 5-10%=85; 3-5%=70; 1-3%=55; 0.5-1%=35; <0.5%=20 |
-| 8e | **High20 Proximity** (阶段新高邻近度) | 35% | Use pre-computed `high20`: close≥h20×0.99=100; ≥0.95=85; ≥0.88=65; ≥0.75=45; <0.75=25 |
-| 8f | **Volume Ratio** (5日均量比) | 25% | Use pre-computed `vol_ratio_5d`: ≥2.0=100; 1.5-2.0=85; 1.2-1.5=70; 0.8-1.2=50; 0.5-0.8=35; <0.5=20 |
+| 8d | **Turnover Rate** (换手率活跃度) | 35% | Use pre-computed `turnover`: ≥10%=100; 5-10%=85; 3-5%=70; 1-3%=55; 0.5-1%=35; <0.5%=20 |
+| 8e | **High20 Proximity** (阶段新高邻近度) | 25% | Use pre-computed `high20`: close≥h20×0.99=100; ≥0.95=85; ≥0.88=65; ≥0.75=45; <0.75=25 |
+| 8f | **Volume Ratio** (5日均量比) | 20% | Use pre-computed `vol_ratio_5d`: ≥2.0=100; 1.5-2.0=85; 1.2-1.5=70; 0.8-1.2=50; 0.5-0.8=35; <0.5=20 |
+| 8g | **Momentum** (涨跌幅量级) | 20% | Use pre-computed `change_pct`. Rubric based on `abs(change_pct)`: 涨停阈值95%以上=100; ≥7%=90; ≥5%=80; ≥3%=65; ≥1%=50; ≥0%=35; <0%=20 |
 
 Note: "Price" = auction price from Phase 1. A-share limit-up boards: Main Board 10%, STAR/ChiNext 20%, BSE 30%. Both `board_streak` and `seal_quality` are pre-computed by `fetch_pool_indicators.py` — no need to re-derive from K-line history.
 

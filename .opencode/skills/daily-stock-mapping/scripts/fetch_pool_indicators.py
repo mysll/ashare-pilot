@@ -85,7 +85,7 @@ _RAW_FIELDS = [
     "high20", "low20", "atr_pct", "percent_b",
     "board_streak", "seal_quality", "limit_up_freq",
     "prev_close", "dist_ma20_atr", "position_state", "yesterday_limit_up",
-    "vol_ratio_5d", "market_sentiment",
+    "vol_ratio_5d", "market_sentiment", "board_sentiment", "sentiment_driver",
 ]
 
 
@@ -115,6 +115,8 @@ def _to_v5_nested(code, row, trad_present_count):
         "tech_score": {"value": ts, "confidence": ts_conf, "trace": ts_trace} if ts is not None else {"value": None, "confidence": 0, "trace": None},
         "traditional": {"value": trad, "confidence": ts_conf, "trace": trad_trace} if trad is not None else {"value": None, "confidence": 0, "trace": None},
         "sentiment": {"value": sent, "confidence": 100 if sent is not None else 0},
+        "board_sentiment": {"value": row.get("board_sentiment"), "confidence": 100},
+        "sentiment_driver": {"value": row.get("sentiment_driver"), "confidence": 100},
         "risk_type": {"value": risk_types, "confidence": 100},
         "risk_flags": {"value": risk_flags, "confidence": 100},
     }
@@ -457,10 +459,33 @@ def main():
                 vol_s = 50
 
             row["vol_ratio_5d"] = round(vol_ratio, 3) if vol_ratio is not None else None
-            market_sentiment = round(tov_s * 0.40 + h20_s * 0.35 + vol_s * 0.25, 1)
+
+            # P3: Direction correction — 下跌日换手/量比子分减半
+            chg_val = row.get("change_pct")
+            if chg_val is not None and chg_val < 0:
+                tov_s = round(tov_s * 0.5)
+                vol_s = round(vol_s * 0.5)
+
+            # F4: Momentum score (涨跌幅量级 — 补 traditional 粒度空缺)
+            # board_limit already set from _get_board_limit(code) above
+            thresh = board_limit * 0.95
+            if chg_val is not None:
+                abs_c = abs(chg_val)
+                if   abs_c >= thresh:   mom_s = 100
+                elif abs_c >= 7:        mom_s = 90
+                elif abs_c >= 5:        mom_s = 80
+                elif abs_c >= 3:        mom_s = 65
+                elif abs_c >= 1:        mom_s = 50
+                elif abs_c >= 0:        mom_s = 35
+                else:                   mom_s = 20
+            else:
+                mom_s = 50
+
+            # V5.2: 4 因子重分配 — 降 High20 权重减少与 %B 重叠，新增动量覆盖
+            market_sentiment = round(tov_s * 0.35 + h20_s * 0.25 + vol_s * 0.20 + mom_s * 0.20, 1)
             row["market_sentiment"] = market_sentiment
 
-            # ── Board Sentiment (vs4 formula, unchanged) ──────
+            # ── Board Sentiment (V5.2: 含断板衰减) ────────────
             bs = row["board_streak"]
             lf = row["limit_up_freq"]
             sq = row["seal_quality"]
@@ -469,6 +494,21 @@ def main():
             elif bs == 2: streak_s = 85
             elif bs == 1: streak_s = 65
             else:         streak_s = 0
+
+            # P2: 断板衰减 — 今日无板但近期有板经历
+            if bs == 0:
+                if lf >= 2:
+                    streak_s = max(streak_s, 45)
+                elif lf >= 1:
+                    streak_s = max(streak_s, 35)
+            # 昨日未涨停但前日涨停 → 断板第一日
+            ylu = row.get("yesterday_limit_up", False)
+            if not ylu and last_idx > 0:
+                prev2_idx = max(0, last_idx - 2)
+                prev2_pct_val = _to_float(records[prev2_idx].get("change_pct"))
+                prev2_thresh = board_limit * 0.95
+                if prev2_pct_val is not None and prev2_pct_val >= prev2_thresh:
+                    streak_s = max(streak_s, 40)
 
             if lf >= 3:    freq_s = 100
             elif lf == 2:  freq_s = 80
@@ -480,8 +520,18 @@ def main():
             elif sq == "炸板":   seal_s = 15
             else:               seal_s = 0
 
-            board_sentiment = streak_s * 0.50 + freq_s * 0.25 + seal_s * 0.25
+            board_sentiment = round(streak_s * 0.50 + freq_s * 0.25 + seal_s * 0.25, 1)
             sentiment = round(max(board_sentiment, market_sentiment), 1)
+
+            if board_sentiment > market_sentiment:
+                sentiment_driver = "board"
+            elif market_sentiment > board_sentiment:
+                sentiment_driver = "market"
+            else:
+                sentiment_driver = "tie"
+
+            row["board_sentiment"] = board_sentiment
+            row["sentiment_driver"] = sentiment_driver
             row["sentiment"] = sentiment
 
             # tech_score — traditional 缺失则 tech_score=None
