@@ -115,8 +115,17 @@ V5 Step 3 per-stock reasoning:
 
 Call `compute_entry_plan.py` for concrete prices + Tail Action:
 
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `codes` | str | 逗号分隔股票代码 |
+| `--session` | enum | `intraday`（尾盘执行）/ `open`（开盘可选） |
+| `--profile` | path | Trade Profile JSON 文件路径 |
+| `--indicators` | path | V5 nested pool_indicators.json 路径 |
+| `--intraday-data` | path | 盘中特征 JSON（仅 `--session intraday` 时传入） |
+| `--json` | flag | 输出 JSON 数组 |
+
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/compute_entry_plan.py \
+python .opencode/skills/intraday-strategy/scripts/compute_entry_plan.py \
   <codes> --session intraday \
   --profile predict/{date}/strategy.md \
   --indicators predict/{date}/pool_indicators.json \
