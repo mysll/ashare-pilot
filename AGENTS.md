@@ -1,5 +1,23 @@
 # Trading Office Agents
 
+## Setup
+
+```bash
+pip install -r .opencode/scripts/requirements.txt    # requests, websocket-client
+```
+
+`.env` (not tracked in git — create it):
+```
+EASTMONEY_USERNAME=your_username
+EASTMONEY_PASSWORD=your_password
+EASTMONEY_COOKIE_BACKEND=file   # optional: skip auto-login fallback
+```
+
+Cookie alternative (Windows-only, Chrome-profile extraction):
+```bash
+update_cookie.bat
+```
+
 ## Stock Code Prefixes
 
 | Market | Prefix | Example |
@@ -20,6 +38,7 @@ memory/daily/{date}/     Verification & review (verification.md) — written pos
 memory/RULES.md          Trading rules — MUST read before generating strategy
 memory/PERFORMANCE.md    Cumulative performance & key dates
 memory/MEMORY.md         Memory system navigation
+.opencode/agents/        Custom subagent definitions (financial-news-analyst, financial-news-mapper, trading-strategist)
 ```
 
 ## Key Scripts
@@ -51,9 +70,12 @@ python .opencode/skills/theme-library/scripts/query_theme.py stock sz000977,sh60
 
 ## Theme Library Build Order
 
-Mandatory sequence. Steps depend on prior output:
+Mandatory sequence. Steps depend on prior output. Or use the all-in-one batch file:
 
 ```bash
+update_theme.bat                                           # Full build (concepts + stocks + library)
+update_theme_stock.bat                                     # Skip concepts, only stocks + library
+
 python .opencode/skills/theme-library/scripts/fetch_concepts.py -q     # 1. Board list (resume on failure)
 python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py  # 2. Member stocks (after concepts exist)
 python .opencode/skills/theme-library/scripts/build_library.py         # 3. Build index files
@@ -64,7 +86,6 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 - **NEVER** use `fetch_all_astocks.py` in the pipeline (~5500 stocks, 60s — too slow for pre-market)
 - Target only stocks in the pool (30-50), not full market
 - All output files are markdown written directly by the LLM — do NOT write scripts to generate them
-- Board filter: `sh688*` (科创) and `bj*` (北交) stocks are always excluded
 - A-share scope only (sh/sz prefix). HK/US and other markets are excluded from the daily workflow
 - Pre-market data availability: auction data from 9:15-9:25, technicals from yesterday's close, money flow is yesterday's
 
@@ -72,17 +93,10 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 
 Before generating `strategy.md`, MUST read `memory/RULES.md` for active trading rules. After market close, verification goes to `memory/daily/{date}/verification.md`. New rule discoveries update `memory/RULES.md` with verification history.
 
-## Cookie Setup (East Money APIs)
+## Automation
 
-Some East Money endpoints require authentication. Auto-login requires credentials in `.env`:
-
+```bash
+auto.bat                        # Cron daemon (default: 9:19 weekday daily-market-analysis)
+python .opencode/scripts/cron-daemon.py --dry-run    # Check next run
+python .opencode/scripts/cron-daemon.py --once        # Run once immediately
 ```
-EASTMONEY_USERNAME=your_username
-EASTMONEY_PASSWORD=your_password
-```
-
-```
-python .opencode/skills/stock-analysis/scripts/refresh_cookie.py --refresh
-```
-
-Set `EASTMONEY_COOKIE_BACKEND=file` in `.env` to disable auto-login fallback.
