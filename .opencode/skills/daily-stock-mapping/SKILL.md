@@ -356,6 +356,7 @@ Example output (one element per stock):
   "atr_pct": 6.50,          "percent_b": 0.82,
   "board_streak": 2,        "seal_quality": "封死",
   "limit_up_freq": 3,       "traditional": 73.2,   "sentiment": 92.5,
+  "market_sentiment": 78.5, "vol_ratio_5d": 1.83,
   "tech_score": 79.0,       "risk_flags": ["RSI>75"]
 }]
 ```
@@ -374,16 +375,18 @@ Field reference:
 | `ma50` | Indicator | 50-SMA — medium-term trend |
 | `boll_ub`, `boll_lb` | Indicator | Bollinger upper/lower bands |
 | `atr` | Indicator | ATR(14) — volatility |
-| **Feature engineering (6)** | Formula | |
+| **Feature engineering (7)** | Formula | |
 | `high20`, `low20` | `max(high[-20:])`, `min(low[-20:])` | Strategy Inputs |
 | `atr_pct` | `atr / close × 100` | ATR Risk scoring |
 | `percent_b` | `(close - boll_lb) / (boll_ub - boll_lb)` | BB Position scoring |
 | `board_streak` | Consecutive limit-up days (int 0/1/2/3...) | Sentiment input |
 | `seal_quality` | 封板质量: `"封死"` / `"未封板"` / `"炸板"` / `"—"` | Sentiment input |
-| **Scoring (5)** | Weighted formula | |
+| **Scoring (6)** | Weighted formula | |
 | `limit_up_freq` | Total limit-up days in last 10 records (int) | Sentiment input |
 | `traditional` | 6-factor weighted sub-score (0-100, renormalized for missing factors) | Tech score input |
-| `sentiment` | 3-factor weighted sub-score (0-100) | Tech score input |
+| `sentiment` | max(Board Sentiment, Market Sentiment); 0-100 | Tech score input |
+| `market_sentiment` | Non-board attention sub-score: turnover×0.40 + high20×0.35 + vol_ratio×0.25 (0-100) | Sentiment split |
+| `vol_ratio_5d` | Today's amount / 5-day average amount (float) | Feature input |
 | `tech_score` | `traditional × 0.70 + sentiment × 0.30` (0-100) — `null` if traditional is null | Composite input |
 | `risk_flags` | `["RSI>75","RSI<30","ATR>8%","MA双熊","炸板"]` — risk markers for Step 3（V4-U: 已删 `流动性<3亿`，由 SKILL hard filter 处理） | Risk column |
 | `fetch_failed` | Optional `true` placeholder when Phase 2 fetch errored on this code — entry has no other fields | Failure marker |
@@ -420,15 +423,25 @@ tech_score = Traditional × 0.70 + Sentiment × 0.30
 | 5 | **BB Position** | 16% | Use pre-computed `percent_b`. 0.4-0.6 = 100; 0.6-0.8 = 80; 0.2-0.4 = 70; >0.8 = 60; <0.2 = 20 |
 | 6 | **ATR Risk** | 9% | Use pre-computed `atr_pct`. 1.5-3% = 100; 3-5% = 70; <1.5% = 60; >5% = 30 |
 
-**Sentiment sub-score (0-100):** Board Streak × 0.50 + Limit-up Frequency × 0.25 + Seal Quality × 0.25
+**Sentiment sub-score (0-100):** max(Board Sentiment, Market Sentiment)
 
-Scored from pre-computed `board_streak` (int) and `seal_quality` (str) fields in Phase 2 output:
+Scored from pre-computed `board_streak` (int), `seal_quality` (str), `turnover` (float), `high20` (float), and `vol_ratio_5d` (float) fields in Phase 2 output.
+
+**Board Sentiment** = Board Streak × 0.50 + Limit-up Frequency × 0.25 + Seal Quality × 0.25 (V5.0公式，连板因子保留不动)
 
 | # | Factor | Weight | Scoring |
 |---|--------|--------|---------|
 | 8a | **Board Streak** (连板强度) | 50% | `board_streak >= 3` = 100; `board_streak = 2` = 85; `board_streak = 1` = 65; `board_streak = 0` = 0 |
 | 8b | **Limit-up Frequency** (涨停频率) | 25% | Use pre-computed `limit_up_freq`: ≥3=100; 2=80; 1=60; 0=0 |
 | 8c | **Seal Quality** (封板质量) | 25% | `seal_quality = "封死"` = 100; `seal_quality = "未封板"` = 60; `seal_quality = "炸板"` = 15; `seal_quality = "—"` = 0 |
+
+**Market Sentiment (V5.1新增)** = Turnover Rate × 0.40 + High20 Proximity × 0.35 + Volume Ratio × 0.25
+
+| # | Factor | Weight | Scoring |
+|---|--------|--------|---------|
+| 8d | **Turnover Rate** (换手率活跃度) | 40% | Use pre-computed `turnover`: ≥10%=100; 5-10%=85; 3-5%=70; 1-3%=55; 0.5-1%=35; <0.5%=20 |
+| 8e | **High20 Proximity** (阶段新高邻近度) | 35% | Use pre-computed `high20`: close≥h20×0.99=100; ≥0.95=85; ≥0.88=65; ≥0.75=45; <0.75=25 |
+| 8f | **Volume Ratio** (5日均量比) | 25% | Use pre-computed `vol_ratio_5d`: ≥2.0=100; 1.5-2.0=85; 1.2-1.5=70; 0.8-1.2=50; 0.5-0.8=35; <0.5=20 |
 
 Note: "Price" = auction price from Phase 1. A-share limit-up boards: Main Board 10%, STAR/ChiNext 20%, BSE 30%. Both `board_streak` and `seal_quality` are pre-computed by `fetch_pool_indicators.py` — no need to re-derive from K-line history.
 

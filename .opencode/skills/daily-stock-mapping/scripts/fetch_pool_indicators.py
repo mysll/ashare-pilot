@@ -85,6 +85,7 @@ _RAW_FIELDS = [
     "high20", "low20", "atr_pct", "percent_b",
     "board_streak", "seal_quality", "limit_up_freq",
     "prev_close", "dist_ma20_atr", "position_state", "yesterday_limit_up",
+    "vol_ratio_5d", "market_sentiment",
 ]
 
 
@@ -407,7 +408,59 @@ def main():
                 row["traditional"] = None
             trad_present_count = len(trad_present)
 
-            # Sentiment sub-score (3 factors) — 数据恒可计算
+            # ── Market Sentiment (非板情绪因子) ─────────────────
+            # F1: Turnover Rate score
+            tov = row.get("turnover")
+            if tov is not None:
+                if tov >= 10:       tov_s = 100
+                elif tov >= 5:      tov_s = 85
+                elif tov >= 3:      tov_s = 70
+                elif tov >= 1:      tov_s = 55
+                elif tov >= 0.5:    tov_s = 35
+                else:               tov_s = 20
+            else:
+                tov_s = 50
+
+            # F2: High20 Proximity score
+            h20 = row.get("high20")
+            p   = row.get("price")
+            if h20 is not None and p is not None and h20 > 0:
+                h20_ratio = p / h20
+                if   h20_ratio >= 0.99:  h20_s = 100
+                elif h20_ratio >= 0.95:  h20_s = 85
+                elif h20_ratio >= 0.88:  h20_s = 65
+                elif h20_ratio >= 0.75:  h20_s = 45
+                else:                    h20_s = 25
+            else:
+                h20_s = 50
+
+            # F3: Volume Ratio (5-day avg amount ratio)
+            if len(records) >= 6:
+                prev_amounts = [_to_float(records[i].get("amount")) for i in range(last_idx - 5, last_idx)]
+                prev_amounts = [a for a in prev_amounts if a is not None and a > 0]
+                if prev_amounts:
+                    avg_amt_5d = sum(prev_amounts) / len(prev_amounts)
+                    vol_ratio = (row["amount"] or 0) / avg_amt_5d
+                else:
+                    vol_ratio = None
+            else:
+                vol_ratio = None
+
+            if vol_ratio is not None:
+                if   vol_ratio >= 2.0:  vol_s = 100
+                elif vol_ratio >= 1.5:  vol_s = 85
+                elif vol_ratio >= 1.2:  vol_s = 70
+                elif vol_ratio >= 0.8:  vol_s = 50
+                elif vol_ratio >= 0.5:  vol_s = 35
+                else:                   vol_s = 20
+            else:
+                vol_s = 50
+
+            row["vol_ratio_5d"] = round(vol_ratio, 3) if vol_ratio is not None else None
+            market_sentiment = round(tov_s * 0.40 + h20_s * 0.35 + vol_s * 0.25, 1)
+            row["market_sentiment"] = market_sentiment
+
+            # ── Board Sentiment (vs4 formula, unchanged) ──────
             bs = row["board_streak"]
             lf = row["limit_up_freq"]
             sq = row["seal_quality"]
@@ -427,8 +480,9 @@ def main():
             elif sq == "炸板":   seal_s = 15
             else:               seal_s = 0
 
-            sentiment = streak_s * 0.50 + freq_s * 0.25 + seal_s * 0.25
-            row["sentiment"] = round(sentiment, 1)
+            board_sentiment = streak_s * 0.50 + freq_s * 0.25 + seal_s * 0.25
+            sentiment = round(max(board_sentiment, market_sentiment), 1)
+            row["sentiment"] = sentiment
 
             # tech_score — traditional 缺失则 tech_score=None
             if traditional is None:
