@@ -40,18 +40,20 @@ Step 3 不只是“在 Direction 内交易” — Step 3 **是 Direction 的产�
 ```
 Inputs:
   Date:       provided in prompt (YYYY-MM-DD)
-  Mapper:     predict/{date}/mapper.md   (Step 2 V5 output, 7 sections)
-  Rules:      memory/RULES.md            (历史的固化记忆，LLM 读全文作语义匹配)
-  News:       predict/{date}/news.md     (仅 for Conditional Reread 单条回查)
+  Mapper:     predict/{date}/mapper.md      (Step 2 V5 output, 7 sections)
+  Rules:      memory/RULES.md + memory/SHARED_RULES.md  (LLM 全文语义匹配)
+  Indicators: predict/{date}/pool_indicators.json       (V5 nested, for compute_trade_profile.py)
+  News:       predict/{date}/news.md        (仅 for Conditional Reread 单条回查)
 ```
 
 1. Read `mapper.md` **Market State** — DominantThemes, BoardPolicy, FinancingFlow, RiskFlags
-2. Read `mapper.md` **Candidate Pool** — V5 prefix columns（`comp.value/conf`, `tech.value/conf`, `th_heat.value/conf`, `news_imp.value/conf`, `maj_ev.pol`, `risk_type.value`, `pattern.*`, `auc.value`, `anomaly`, `NewsLink`）
-3. Read `mapper.md` **Strategy Inputs** — Price, PriceSource, MA20, ATR, ATR%, High20, Low20（**authoritative source**）
+2. Read `mapper.md` **Candidate Pool** — V5 prefix columns
+3. Read `mapper.md` **Strategy Inputs** — Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 (**authoritative source**)
 4. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
-5. Read `memory/RULES.md` 全文 — LLM 通读历史固化记忆，自主判断哪些规则与当前场景语义匹配（RULES.md 是自然语言记忆，非结构化 token 库；LLM 凭语义关联，不凭 token ID 查表）
-6. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
-7. Generate `predict/{date}/strategy.md` (含 **ReasoningTrace** + **Market Context** + 推荐列表)
+5. Read `memory/RULES.md` + `memory/SHARED_RULES.md` 全文 — LLM 语义匹配
+6. **Generate Trade Profiles** via `compute_trade_profile.py` — per-stock playbook + anchor + chase (§ Trade Profile Generation)
+7. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
+8. Generate `predict/{date}/strategy.md` (含 **Trade Profile 表** + **ReasoningTrace** + **Market Context**)
 
 ---
 
@@ -93,37 +95,39 @@ RegimeHint 是 Step 3 独有的 reasoning 输出（不在 mapper.md 中）。
 
 ### Step 3-C — Direction 推理（per stock）
 
-V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）：
+V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）。
+
+输出到 `strategy.md` 方向列时使用中文枚举：`看多` / `中性偏多` / `中性` / `看空`。
 
 ```
 1. 读 comp.value (Python 已给)
    └─ 使用 DirectionBase 阈值表：
-      >= 70 → bullish 倾向
-      55-69 → neutral-bull 倾向
-      45-54 → neutral 倾向
-      < 45 → bearish 倾向
+      >= 70 → 看多 倾向
+      55-69 → 中性偏多 倾向
+      45-54 → 中性 倾向
+      < 45 → 看空 倾向
 
 2. 读 comp.conf
-   └─ 若 < 60: Direction ConfidenceFlag=True (Consider warnings)
-   └─ 若 < 30: Direction 维持倾向 但加 "low_confidence" tag
+   └─ 若 < 60: Direction ConfidenceFlag=True (考虑警告)
+   └─ 若 < 30: Direction 维持倾向 但加 "低置信" tag
 
 3. 读 risk_type.value (list, e.g., ["overbought"])
    └─ Step 3 评 RiskSeverity (见 Step 3-D)
 
 4. 读 maj_ev.pol
-   └─ Positive: Direction +1 level (cap bullish)
-   └─ Negative: Direction -1 level (cap bearish)
+   └─ Positive: Direction +1 level (cap 看多)
+   └─ Negative: Direction -1 level (cap 看空)
    └─ Neutral: no shift
 
 5. 评 RiskSeverity (Step 3-D)
-   └─ RiskSeverity = 3 AND RegimeHint not strong-sector → cap at neutral-bull
+   └─ RiskSeverity = 3 AND RegimeHint not strong-sector → cap at 中性偏多
    └─ RiskSeverity = 2 → no auto cap; 记 ReasoningTrace
    └─ RiskSeverity = 1 → no cap; 记 ReasoningTrace
 
 6. 读 RULES.md 全文，若匹配场景则应用并记 ReasoningTrace
 
-7. Clamp to [bearish .. bullish]
-   └─ 最终 Direction ∈ {bullish, neutral-bull, neutral, bearish}
+7. Clamp to [看空 .. 看多]
+   └─ 最终 Direction ∈ {看多, 中性偏多, 中性, 看空}
 
 8. DirectionPivot 检查（见下）
 ```
@@ -132,14 +136,14 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 
 | comp.value | 倾向 (DirectionBase) |
 |-----------|---------------------|
-| >= 70 | bullish |
-| 55-69 | neutral-bull |
-| 45-54 | neutral |
-| < 45 | bearish |
+| >= 70 | 看多 |
+| 55-69 | 中性偏多 |
+| 45-54 | 中性 |
+| < 45 | 看空 |
 
 阈值是参考框架；Step 3 据完整 Context（confidence + pattern + risk_type + Regime + MajorEvent）综合判定 Direction final。允许偏离 DirectionBase 但必须写理由（ReasoningTrace）。
 
-**DirectionPivot**（V5 新增）：如果 `anomaly` 非空且 LLM 判定 anomaly 暗示 Base 阈值不够（如"龙头断板但板块未退潮" → 即使 comp 在 50-55 中性区，仍可升 Direction 一档 bullish）— 必须在 ReasoningTrace 写 "DirectionPivot: anomaly-driven +1 level; reason=..."。
+**DirectionPivot**（V5 新增）：如果 `anomaly` 非空且 LLM 判定 anomaly 暗示 Base 阈值不够（如"龙头断板但板块未退潮" → 即使 comp 在 50-55 中性区，仍可升 Direction 一档 看多）— 必须在 ReasoningTrace 写 "DirectionPivot: anomaly-driven +1 level; reason=..."。
 
 ### Step 3-D — RiskSeverity 评定
 
@@ -161,6 +165,24 @@ V5 Step 3 **必须自算 Direction**（V4-U 的 DirectionBase/Final 已删除）
 - Severity 3: cap Direction at `neutral-bull`（若 RegimeHint != strong-sector）
 - Severity 2: no cap; 记 ReasoningTrace
 - Severity 1: no cap; 记 ReasoningTrace
+
+### Step 3-E — Trade Profile（V1.1 新增 per stock）
+
+Direction 评定后，调用 `compute_trade_profile.py` 为每只非 bearish 标的生成 Trade Profile：
+
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/compute_trade_profile.py <codes> --regime <RegimeHint> --from-indicators predict/{date}/pool_indicators.json --json
+```
+
+For mainline stocks, add `--mainline --sector-heat <heat>`.
+For MOMENTUM candidates, add `--kcb-pct <pct> --sector-pct <pct>`.
+
+LLM then:
+1. Validates playbook against Pattern 5-dim states
+2. Applies RULES semantic matching for playbook/anchor overrides
+3. Writes invalidation condition in Chinese (≤50 chars)
+4. Confirms or adjusts Profile fields
+5. **Does NOT** produce Buy Zone / Stop / Target (Entry Plan territory)
 
 ## PerceptionOverride Mechanism (V5 新增)
 
@@ -246,43 +268,69 @@ Stop-loss widens in weak markets (2×ATR) to avoid noise stops, tightens in stro
 
 ---
 
-## Buy / Stop / Target Formulas
+## Trade Profile Generation (V1.1)
 
-For each stock, derive quantitative levels from **Strategy Inputs** table in `mapper.md`：
+For each stock in Candidate Pool with `comp.value >= 55` and `Direction != bearish`,
+generate a **Trade Profile** — not a price. Trade Profile defines "how to trade this stock"
+(playbook, anchor preference, chase policy, position budget, invalidation).
 
-| 参数 | 公式 | 数据来源 |
-|------|------|---------|
-| **买入区间** | `[MA20, MA20 + 0.5×ATR]` | Strategy Inputs.MA20, .ATR |
-| **止损价** | `买入价 - 1.5×ATR` (or 2×ATR 弱市场) | Strategy Inputs.ATR |
-| **止盈目标一** | `High20` | Strategy Inputs.High20 |
-| **止盈目标二** | `High20 + ATR` | Strategy Inputs.High20, .ATR |
+### Script Call
 
-Strategy Inputs table is **authoritative source** — use its values directly, do not re-derive or re-fetch.
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/compute_trade_profile.py \
+  <code_1>,<code_2>,...,<code_N> \
+  --regime <RegimeHint> \
+  --from-indicators predict/{date}/pool_indicators.json \
+  --json
+```
 
-### MA20 vs Low20 支撑选择
+For each stock that is `mainline` (in DominantThemes), also pass `--mainline --sector-heat <heat>`.
+For MOMENTUM candidates, also pass `--kcb-pct <pct> --sector-pct <pct>`.
+For LIMIT_UP_CONT candidates, also pass `--yesterday-limit-up`.
 
-- If MA20 > Low20 → use MA20 as primary support
-- If MA20 < Low20 (bearish) → use Low20 as last-resort support, flag stock as high-risk
+### Playbook Decision (LLM confirms/overrides Python output)
 
-### Data Source Rule
+Python `compute_trade_profile.py` produces a default Profile based on regime + position_state.
+Step 3 LLM reads the Profile JSON, then:
 
-Strategy Inputs is **authoritative** for: Price, PriceSource, MA20, ATR, ATR%, High20, Low20.
+1. Validates: does the playbook match Pattern 5-dim states?
+2. Applies RULES semantic matching for overrides
+3. Confirms or adjusts: playbook, anchor, chase, invalidation
+4. **Does NOT produce** Buy Zone / Stop / Target (these are Entry Plan territory)
 
-Re-fetch only if：missing / invalid / stale。**Default: no re-fetch。**
+### Trade Profile Fields
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `playbook` | enum | 交易计划: `追涨`(MOMENTUM) / `低吸`(PULLBACK) / `打板`(LIMIT_UP_CONT) / `防守`(DEFENSIVE) / `观望`(WATCH_ONLY) |
+| `preferred_anchor` | enum | 首选支撑锚点: `MA20` / `MA5` / `OPEN` / `FLEX` |
+| `chase_policy` | enum | 追高政策: `NO_CHASE` / `MA5_ONLY` / `OPEN_PROBE_OK` |
+| `entry_window` | enum | 偏好入场窗口: `OPEN` / `MORNING_DIP` / `TAIL` / `ANY` |
+| `position_budget` | float | 仓位预算上限 (e.g. 0.02 = 2%) |
+| `stop_policy` | enum | 止损策略: `ATR_1.5` / `ATR_2.0` / `PCT_R35` |
+| `time_horizon` | enum | 持仓意图: `T+0` / `T+1` / `SWING` |
+| `invalidation` | str | 失效条件 (<=50 chars Chinese) |
+| `ref_ma20` | float | 参考 MA20 (非买区) |
+| `ref_ma5` | float | 参考 MA5 (非买区) |
+| `ref_high20` | float | 参考 High20 |
+| `max_extension_atr` | float | 允许偏离锚点上限 (ATR 倍数) |
+
+### Playbook → Rule Mapping
+
+| Playbook | Trigger | Implicit Rules |
+|----------|---------|---------------|
+| `追涨` (MOMENTUM) | 主线 + 科创50>2% or 板块>2.5% | R68 → `preferred_anchor=MA5` |
+| `打板` (LIMIT_UP_CONT) | 昨涨停 + 主线≥4★ | R35-v4 → `OPEN_PROBE_OK` |
+| `低吸` (PULLBACK) | 震荡/弱市, PULLBACK state | Default MA20, `NO_CHASE` |
+| `防守` (DEFENSIVE) | 弱市 but direction偏多 | R70 → `MORNING_DIP`, 观测30min |
+| `观望` (WATCH_ONLY) | Extended / RiskSeverity≥3 | 当日不交易, 等Intraday or 次日 |
 
 ---
 
-## Coverage & Scope
+## Output: strategy.md (V5 + Trade Profile)
 
-- **Scope**：A-shares only (sh/sz prefix)
-- **Coverage**：ALL stocks in `mapper.md` Strategy Inputs table (i.e., all Candidate Pool stocks with `comp.value ≥ 55`)
-- **Size**：Minimum 10, maximum 25
-
----
-
-## Output: strategy.md (V5 结构)
-
-**Quantitative foundation**：Buy zones, stops, targets are formula-driven — validate and adjust based on context, do not invent numbers。
+**Structural change**: Morning no longer outputs static Buy Zone / Stop / Target in its main table.
+These are Intraday Entry Plan territory. Morning outputs **Trade Profile** — the trading intent.
 
 ### Structure
 
@@ -292,32 +340,43 @@ Re-fetch only if：missing / invalid / stale。**Default: no re-fetch。**
    - Step 3 评定的 RegimeHint
    - 市场状态 classification + 仓位系数 / 止损倍数 from Parameter Adjustment table
 
-2. **Strategy (10 stocks)** — table with formula-derived levels + Step 3 Reasoning 调整
+2. **Strategy (10 stocks)** — Trade Profile table (V1.1)
    ```markdown
-   | Code | Name | Sector | Direction | RiskSeverity | Rating | Buy Zone | Stop | Target1 | Target2 | Position |
+   | 代码 | 名称 | 板块 | 方向 | 风险 | 评级 | 打法 | 锚点价 | 追高 | 入场窗 | 仓位 | 止损策 | 持仓 | 失效条件 |
+   |------|------|------|:---:|:---:|:---:|------|:---:|:---:|:---:|:---:|:---:|:---:|----------|
+   | sh603986 | 兆易创新 | 半导体 | 看多 | 1 | 5★ | 追涨 | MA5≈748 | MA5可追 | 开盘 | 2% | ATR×1.5 | T+1 | 板块热度<4★或炸板 |
    ```
 
-3. **Reasoning Trace** (V5 强制结构化)
+   Columns: 代码(Code) / 名称(Name) / 板块(Sector) / 方向(Direction) / 风险(RiskSeverity) / 评级(Rating) / 打法(Playbook) / 锚点价(Anchor+Price) / 追高(Chase) / 入场窗(EntryWindow) / 仓位(PosBudget) / 止损策(StopPolicy) / 持仓(Horizon) / 失效条件(Invalidation)
+
+   **方向枚举**: `看多` / `中性偏多` / `中性` / `看空`
+   **打法枚举**: `追涨`(MOMENTUM) / `低吸`(PULLBACK) / `打板`(LIMIT_UP_CONT) / `防守`(DEFENSIVE) / `观望`(WATCH_ONLY)
+   **锚点价**: 锚点名+参考价格，如 `MA5≈748` / `MA20≈159` / `开盘价≈27.84` / `尾盘均价≈174`
+   **追高枚举**: `不追`(NO_CHASE) / `MA5可追`(MA5_ONLY) / `开盘可试`(OPEN_PROBE_OK)
+   **止损策枚举**: `ATR×1.5`(ATR_1.5) / `ATR×2.0`(ATR_2.0) / `涨停比例`(PCT_R35)
+   **持仓枚举**: `T+0` / `T+1` / `中期`(SWING)
+
+   **Deprecated columns** (removed from main table): Buy Zone / Stop / Target1 / Target2.
+
+3. **Reasoning Trace** (V5 mandatory)
    ```markdown
-   | Code | DirectionPath | RuleApplications | PerceptionOverride | RereadTriggered |
+   | 代码 | 方向路径 | 规则应用 | 感知覆写 | 回读触发 | 画像追溯 |
+   |------|----------|----------|----------|----------|----------|
+   | sh600667 | 77.0→看多; risk=超买sev1(R37); regime=强市; final=看多 | R37(超买豁免); R70(MA5切换); R35(打板→趋势豁免) | — | — | 打板→开盘≈27.84→一致 |
    ```
+   - 方向路径(DirectionPath): `comp_value → DirectionBase → overrides → final Direction`
+   - 规则应用(RuleApplications): tokens 实际应用
+   - 感知覆写(PerceptionOverride): Step 3 override Step 2字段; 无则 `—`
+   - 回读触发(RereadTriggered): 触发条件 + 回读结果; 无则 `—`
+   - **画像追溯(ProfileTrace)** (V1.1): `{打法}→{锚点价}→{匹配状态}`
 
-4. **Watchlist (Optional)** — indicators_fetch_failed stocks from Observation Pool, **不参与 Direction 决策**
-
-### ReasoningTrace 字段说明
-
-- **DirectionPath**：`comp_value → DirectionBase倾向 → (overrides applied) → final Direction`
-  - 例：`86.7→bullish; risk_type=overbought sev2; regime=strong; maj_ev=Neutral; final=bullish`
-- **RuleApplications**：tokens 实际应用情况
-  - 例：`强市场超买豁免 → retain 4★; 涨停延续探测 → widen stop`
-- **PerceptionOverride**：异常情形下 Step 3 异议 Step 2 字段；无则 `—`
-- **RereadTriggered**：触发条件 + 回读结果；无则 `—`
+4. **Watchlist (Optional)** — Observation Pool stocks, 不参与 Direction 决策
 
 ### 3 "super predictions"
 
 从 Strategy 10 中选 3 个：
 - 每个 from a **different sector**
-- 有 formula-derived entry/stop/target + LLM context adjustment
+- 每个有 clear Trade Profile (playbook + anchor + invalidation)
 - 至少有 1 个 Rating ≥ 4⭐
 
 ### Rating 评级
@@ -326,19 +385,27 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 - `comp.value` 高分加成
 - `comp.conf` 高置信加成
 - RiskSeverity 反向扣分
-- Pattern 多维组合（如 `heat=RISING + leader=STABLE + volume=SURGE` = 满档）
+- Pattern 多维组合
 - MajorEvent Polarity 加减
-- 历史经验是否匹配当前场景（如强市场超买豁免/涨停延续探测 → 加分）
-- Anomaly 中暗含的 setup（如"龙头启动 + 板块未退潮" 加 1⭐）
+- 历史经验是否匹配当前场景
+- Anomaly 中暗含的 setup
+- **V1.1**: Playbook 与 Pattern 的一致性 (如 pattern.heat=RISING + MOMENTUM = 满档)
 
 ### Memory Integration
 
-**BEFORE** generating → READ `memory/RULES.md` 全文 — LLM 通读历史记忆作语义匹配
+**BEFORE** generating → READ `memory/RULES.md` + `memory/SHARED_RULES.md` 全文
 
-**AFTER** generating → append strategy entry to `memory/daily/INDEX.md`：
-```markdown
-| {MM-DD} | 策略 | <top 3 picks with ratings> | [`strategy`](../../predict/{YYYY-MM-DD}/strategy.md) |
-```
+**AFTER** generating → append strategy entry to `memory/daily/INDEX.md`
+
+### Red Flags — STOP and Fix
+
+| Symptom | Fix |
+|---------|-----|
+| Main table contains `Buy Zone` / `Stop` / `Target` columns | **Remove**. Prices are Entry Plan (Intraday) territory. |
+| Trade Profile missing from Candidate Pool stock with Direction != bearish | Add. All non-bearish stocks need a Profile. |
+| `WATCH_ONLY` stock has position_budget > 0 | Fix. WATCH_ONLY = no position. |
+| Profile not validated against Pattern 5-dim | LLM must validate playbook against pattern.* states. |
+| Step 3 hand-writes prices into Profile | **Violation**. Prices belong in Entry Plan only. |
 
 ---
 

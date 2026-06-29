@@ -22,6 +22,7 @@ digraph workflow {
     "predict/{date}/strategy.md" [shape=note];
     "memory/daily/{date}/\nverification.md" [shape=note];
     "memory/daily/INDEX.md" [shape=note];
+    "memory/SHARED_RULES.md" [shape=note];
     "memory/RULES.md" [shape=note];
 
     "Step 1: Read Strategy" -> "predict/{date}/strategy.md";
@@ -31,6 +32,7 @@ digraph workflow {
     "memory/daily/{date}/\nverification.md" -> "Step 4: Write Memory";
     "Step 4: Write Memory" -> "memory/daily/INDEX.md";
     "Step 4: Write Memory" -> "memory/RULES.md";
+    "Step 4: Write Memory" -> "memory/SHARED_RULES.md";
 }
 ```
 
@@ -137,13 +139,15 @@ Memory uses the following structure (see `memory/MEMORY.md` for full guide):
 ```
 memory/
 ├── MEMORY.md              ← Navigation hub
-├── RULES.md               ← Trading rules (active/observation/retired)
+├── SHARED_RULES.md        ← General rules (Morning + Intraday)
+├── RULES.md               ← Morning-specific rules (竞价/开盘/首根K线)
+├── INTRADAY_RULES.md      ← Intraday/T+1 rules
 ├── PERFORMANCE.md         ← Cumulative performance stats
 └── daily/
     ├── INDEX.md           ← Daily record index (reverse chronological)
     └── YYYY-MM-DD/
-        ├── strategy.md    ← (legacy) historical strategy, or use predict/
-        └── verification.md ← Verification report
+        ├── verification.md ← Morning verification report
+        └── intraday_verification.md ← Intraday verification report
 ```
 
 #### 4a. Write Verification File
@@ -199,8 +203,17 @@ If a strategy file also exists in `predict/`, also add:
 | {MM-DD} | 策略 | <top 3 picks summary> | [`strategy`](../../predict/{YYYY-MM-DD}/strategy.md) |
 ```
 
-#### 4c. Update RULES.md (if new rules or rule status changes)
+#### 4c. Update Rule Files (if new rules or rule status changes)
 
+New rules go to the **appropriate file** based on scope:
+
+| Rule Scope | File | Examples |
+|------------|------|----------|
+| 通用(全天通用) | `memory/SHARED_RULES.md` | R36(非主线降级), R37(超买豁免), R62(主线虹吸压缩) |
+| 早盘(竞价/开盘/首根K线) | `memory/RULES.md` | R35(涨停延续), R38(竞价陷阱), R70(MA5切换) |
+| 尾盘/T+1 | `memory/INTRADAY_RULES.md` | 尾盘策略发现的新规律 |
+
+Actions per file:
 - **New rule discovered**: Add to "观察中" section with `⚠️ 首验` status
 - **Rule status change**: Update status emoji and verification count
 - **Rule retirement**: Move rule to deprecated section with reason
@@ -216,7 +229,8 @@ If a strategy file also exists in `predict/`, also add:
 |------|---------|--------------|
 | `memory/daily/{date}/verification.md` | Detailed verification with results, lessons, rule triggers | Step 3+4 |
 | `memory/daily/INDEX.md` (updated) | Index entry linking to verification file | Step 4b |
-| `memory/RULES.md` (updated) | New rules or rule status changes | Step 4c |
+| `memory/SHARED_RULES.md` (updated) | New general rules or status changes | Step 4c |
+| `memory/RULES.md` (updated) | New morning-specific rules or status changes | Step 4c |
 
 ## Quick Reference
 
@@ -225,7 +239,7 @@ If a strategy file also exists in `predict/`, also add:
 | 1 | Read Strategy | `predict/{date}/strategy.md` | Extracted predictions |
 | 2 | Fetch Actuals | Stock codes from strategy | Real-time/intraday prices |
 | 3 | trading-strategist analysis | Predictions + actuals | Full comparison report |
-| 4 | Write Memory | Analysis report | `memory/daily/{date}/verification.md` + update INDEX.md/RULES.md |
+| 4 | Write Memory | Analysis report | `memory/daily/{date}/verification.md` + update INDEX.md/RULES.md/SHARED_RULES.md |
 
 ## Common Usage
 
@@ -240,11 +254,11 @@ User requests:
 ## Important Notes
 
 - Run after market close for full-day data, or intraday for partial verification
-- **BEFORE** generating analysis → READ `memory/RULES.md` to understand existing rules and cumulative validation counts
+- **BEFORE** generating analysis → READ `memory/SHARED_RULES.md` (通用规则) **AND** `memory/RULES.md` (早盘规则) to understand existing rules and cumulative validation counts
 - **AFTER** generating review:
   - Write verification to `memory/daily/{YYYY-MM-DD}/verification.md`
   - Append entry to `memory/daily/INDEX.md`
-  - Update `memory/RULES.md` if new rules or status changes
+  - Update `memory/SHARED_RULES.md` (通用规则), `memory/RULES.md` (早盘规则), or `memory/INTRADAY_RULES.md` (尾盘规则) depending on rule scope
 - Cumulative rule counts should be tracked (e.g., "第32次验证")
 - Output in Chinese (中文输出)
 - If today's strategy file does not exist yet, report error and suggest running daily-market-analysis first
