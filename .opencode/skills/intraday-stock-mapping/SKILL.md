@@ -239,8 +239,8 @@ TailFlowScore: Strong Inflow=100, Weak Inflow=70, Neutral=50, Outflow=25.
 ```markdown
 ## Strategy Inputs
 
-| Code | Price | PriceSource | MA20 | ATR | ATR% | High20 | Low20 |
-|------|-------|-------------|------|-----|------|--------|-------|
+| Code | Price | PriceSource | MA20 | MA5 | ATR | ATR% | High20 | Low20 |
+|------|-------|-------------|------|-----|-----|------|--------|-------|
 ```
 
 PriceSource = `Live` (盘中实时). All other fields from V5 schema.

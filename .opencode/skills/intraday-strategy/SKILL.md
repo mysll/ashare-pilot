@@ -51,7 +51,7 @@ Inputs:
 
 1. Read `intraday_mapper.md` **Market State** — DominantThemes, Breadth, CapitalDirection
 2. Read `intraday_mapper.md` **Candidate Pool** — Tradeability, OvernightScore, TailFlow, comp, tech, pattern.*, risk_type, anomaly, RoleTags
-3. Read `intraday_mapper.md` **Strategy Inputs** — Price (Live), PriceSource, MA20, ATR, ATR%, High20, Low20
+3. Read `intraday_mapper.md` **Strategy Inputs** — Price (Live), PriceSource, MA20, MA5, ATR, ATR%, High20, Low20
 4. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
 5. Read `memory/SHARED_RULES.md` + `memory/INTRADAY_RULES.md` 全文 — LLM 语义匹配
 6. **对每个 Candidate Pool stock 执行 Intraday Reasoning Flow**
