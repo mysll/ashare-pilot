@@ -891,8 +891,8 @@ Column sources：
 ```markdown
 ## Strategy Inputs
 
-| Code | Price | PriceSource | MA20 | ATR | ATR% | High20 | Low20 |
-|------|-------|-------------|------|-----|------|--------|-------|
+| Code | Price | PriceSource | MA20 | MA5 | ATR | ATR% | High20 | Low20 |
+|------|-------|-------------|------|-----|-----|------|--------|-------|
 ```
 
 Data source: K-line records from Technical Enrichment Phase 2. No additional API calls.
@@ -902,6 +902,7 @@ Data source: K-line records from Technical Enrichment Phase 2. No additional API
 | **Price** (P0-6) | `fetch_stock.py` Phase 1 ; fallback to `price` from Phase 2 | 三态：昨收 / 竞价 / 盘中实时 |
 | **PriceSource** (P0-6, V4-U 新增) | `PrevClose` \| `Auction` \| `Live` | 解决 V3 Price 字段三态漂移 |
 | MA20 | `ma20` field | Phase 2 |
+| **MA5** (V1.1) | `ma5` field from Phase 2 | 5日均线，锚点价参考（追涨打法） |
 | ATR | `atr` field | Phase 2 |
 | ATR% | `atr_pct` field | Pre-computed |
 | High20 | `high20` field | Pre-computed |
@@ -1025,7 +1026,7 @@ Step 3 **MUST** read in order:
 
 1. `Market State`：`BoardPolicy`, `DominantThemes`, `FinancingFlow`, `RiskFlags`
 2. `Candidate Pool`：`comp.value`, `comp.conf`, `tech.value`, `tech.conf`, `th_heat.value`, `th_heat.conf`, `news_imp.value`, `news_imp.conf`, `maj_ev.pol`, `risk_type.value`, `pattern.*`, `auc.value`, `anomaly`, `NewsLink`
-3. `Strategy Inputs`：`Price`, `PriceSource`, `MA20`, `ATR`, `ATR%`, `High20`, `Low20`
+3. `Strategy Inputs`：`Price`, `PriceSource`, `MA20`, `MA5`, `ATR`, `ATR%`, `High20`, `Low20`
 4. `memory/RULES.md`
 5. `news.md`（**仅做 Conditional Reread 单条回查** — 见 § V5 Conditional Reread 触发条件）
 
