@@ -80,10 +80,11 @@ def _map_risk_type(flags):
 # V5 raw_observation field list (order preserved)
 _RAW_FIELDS = [
     "price", "close", "turnover", "change_pct", "amount",
-    "rsi", "macd", "macdh", "ma20", "ma50",
+    "rsi", "macd", "macdh", "ma20", "ma50", "ma5",
     "boll_ub", "boll_lb", "atr",
     "high20", "low20", "atr_pct", "percent_b",
     "board_streak", "seal_quality", "limit_up_freq",
+    "prev_close", "dist_ma20_atr", "position_state", "yesterday_limit_up",
 ]
 
 
@@ -249,6 +250,55 @@ def main():
                 if pct is not None and pct >= threshold:
                     freq += 1
             row["limit_up_freq"] = freq
+
+            # ── V1.1 Trade Profile fields ────────────────────
+
+            # ma5: 5-day simple moving average from last 5 daily closes
+            ma5_window = records[-5:]
+            ma5_closes = [_to_float(r["close"]) for r in ma5_window]
+            ma5_closes = [v for v in ma5_closes if v is not None]
+            row["ma5"] = sum(ma5_closes) / len(ma5_closes) if ma5_closes else None
+
+            # prev_close: yesterday's close
+            if last_idx > 0:
+                row["prev_close"] = _to_float(records[last_idx - 1].get("close"))
+            else:
+                row["prev_close"] = None
+
+            # dist_ma20_atr: distance from MA20 in ATR multiples
+            atr_v = row.get("atr")
+            m20_v = row.get("ma20")
+            row["dist_ma20_atr"] = (close_val - m20_v) / atr_v if (
+                close_val is not None and m20_v is not None and
+                atr_v is not None and atr_v != 0
+            ) else None
+
+            # position_state: PULLBACK | TREND | EXTENDED | GAP_UP
+            da = row["dist_ma20_atr"]
+            hs = row.get("high20")
+            bs_val = row["board_streak"]
+            if da is not None:
+                if da <= 1.0:
+                    row["position_state"] = "PULLBACK"
+                elif da <= 2.5:
+                    row["position_state"] = "TREND"
+                else:
+                    row["position_state"] = "EXTENDED"
+                if (bs_val is not None and bs_val >= 2 and
+                        hs is not None and close_val is not None and
+                        close_val >= hs * 0.98):
+                    row["position_state"] = "EXTENDED"
+            else:
+                row["position_state"] = None
+
+            # yesterday_limit_up: whether yesterday hit limit-up (>= 95% of board limit)
+            if last_idx > 0:
+                prev_pct = _to_float(records[last_idx - 1].get("change_pct"))
+                row["yesterday_limit_up"] = (
+                    prev_pct is not None and prev_pct >= threshold
+                )
+            else:
+                row["yesterday_limit_up"] = False
 
             # Traditional technical sub-score (6 factors)
             p = row["price"]
