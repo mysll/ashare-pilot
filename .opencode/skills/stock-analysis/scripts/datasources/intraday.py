@@ -16,11 +16,15 @@ from .utils import format_price, format_volume, format_amount, format_percent, t
 from .eastmoney import load_cookie
 
 PUSH2_URL = "https://push2.eastmoney.com/api/qt/clist/get"
+INDEX_URL = "https://push2.eastmoney.com/api/qt/stock/get"
 NORTH_BOUND_URL = "https://push2.eastmoney.com/api/qt/kamt.rt/get"
 
 A_STOCK_FILTER = "m:0+t:6,m:0+t:13,m:0+t:80,m:1+t:2,m:1+t:23"
 CONCEPT_FILTER = "m:90+t:3"
 MARKET_OVERVIEW_UT = "fa5fd1943385f9554f5b7d918a9e"
+INDEX_UT = "fa5fd1943c7b386f172d6893dbfba10b"
+
+INDEX_FIELDS = "f43,f46,f60,f113,f114,f115,f116"
 
 A_STOCK_BASIC_FIELDS = "f2,f3,f4,f5,f6,f7,f8,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21"
 
@@ -101,62 +105,69 @@ class EastMoneyIntradayDataSource(BaseDataSource):
         thresh = self._limit_threshold(board)
         return change_pct <= -thresh and change_pct >= -(thresh + 1.0)
 
-    def fetch_market_breadth(self) -> dict:
-        """Fetch market breadth: up/down/limit counts."""
-        fs = A_STOCK_FILTER
-        fields = "f2,f3,f12,f13,f14"
-        ut = MARKET_OVERVIEW_UT
-        url = f"{PUSH2_URL}?pn=1&pz=6000&po=0&np=1&ut={ut}&fltt=2&invt=2&fid=f3&fs={fs}&fields={fields}"
+    def _fetch_index_snapshot(self, secid: str) -> dict:
+        """Fetch a single index snapshot from the qt/stock/get endpoint.
 
+        Returns {price, yestclose, up, down, flat} partial dict,
+        or None on failure.
+        """
+        url = f"{INDEX_URL}?ut={INDEX_UT}&fields={INDEX_FIELDS}&secid={secid}"
         try:
-            data = self._request_with_retry(url)
+            resp = requests.get(url, headers=self._get_push2_headers(), timeout=10)
+            data = resp.json()
         except Exception:
-            return {"error": "fetch failed"}
+            return None
 
         if not data or data.get("rc") != 0:
-            return {"error": "api returned error", "rc": data.get("rc") if data else None}
+            return None
 
-        diff = data.get("data", {}).get("diff", [])
-        if not diff:
-            return {"error": "no data"}
+        d = data.get("data", {})
+        if not d:
+            return None
 
-        total = len(diff)
-        up_count = 0
-        down_count = 0
-        flat_count = 0
-        limit_up_count = 0
-        limit_down_count = 0
-        total_change = 0.0
+        return {
+            "price": d.get("f43"),
+            "yestclose": d.get("f60"),
+            "up": d.get("f113", 0) or 0,
+            "down": d.get("f114", 0) or 0,
+            "flat": d.get("f115", 0) or 0,
+        }
 
-        for item in diff:
-            change = item.get("f3")
-            if change is None or change == "-" or change == "":
-                flat_count += 1
-                continue
-            try:
-                change = float(change)
-            except (ValueError, TypeError):
-                flat_count += 1
-                continue
+    def fetch_market_breadth(self) -> dict:
+        """Fetch market breadth from index snapshot API.
 
-            total_change += change
-            code = str(item.get("f12", ""))
-            market = item.get("f13", 0)
-            board = self._classify_stock(code, market)
+        Uses qt/stock/get for Shanghai (1.000001) and Shenzhen (0.399001)
+        to get pre-computed up/down/flat counts. Falls back to limit_up_pool
+        for limit-up/limit-down counts.
+        """
+        sh = self._fetch_index_snapshot("1.000001")
+        sz = self._fetch_index_snapshot("0.399001")
 
-            if change > 0.001:
-                up_count += 1
-                if self._is_limit_up(change, board):
-                    limit_up_count += 1
-            elif change < -0.001:
-                down_count += 1
-                if self._is_limit_down(change, board):
-                    limit_down_count += 1
-            else:
-                flat_count += 1
+        if not sh and not sz:
+            return {"error": "both index snapshots failed"}
 
-        avg_change = round(total_change / total, 2) if total > 0 else 0.0
+        up_count = (sh.get("up", 0) if sh else 0) + (sz.get("up", 0) if sz else 0)
+        down_count = (sh.get("down", 0) if sh else 0) + (sz.get("down", 0) if sz else 0)
+        flat_count = (sh.get("flat", 0) if sh else 0) + (sz.get("flat", 0) if sz else 0)
+        total = up_count + down_count + flat_count
+
         up_ratio = round(up_count / total * 100, 2) if total > 0 else 0.0
+
+        # limit-up/limit-down: derive from limit_up_pool
+        limit_up = self.fetch_limit_up_pool(top=500)
+        limit_up_count = len(limit_up)
+
+        limit_down_count = 0
+        for s in limit_up:
+            try:
+                chg = float(str(s.get("change_pct", "0")).replace("%", "").replace("+", ""))
+            except (ValueError, TypeError):
+                chg = 0.0
+            if chg <= -9.5:
+                limit_down_count += 1
+
+        if limit_down_count == 0:
+            limit_down_count = None
 
         return {
             "total": total,
@@ -166,8 +177,10 @@ class EastMoneyIntradayDataSource(BaseDataSource):
             "up_ratio": up_ratio,
             "limit_up_count": limit_up_count,
             "limit_down_count": limit_down_count,
-            "avg_change": avg_change,
+            "avg_change": None,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "source": "index_snapshot",
+            "partial": (sh is None or sz is None),
         }
 
     def _to_full_code(self, code: str, market: int) -> str:
