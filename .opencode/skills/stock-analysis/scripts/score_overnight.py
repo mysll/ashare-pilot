@@ -27,11 +27,14 @@ import sys
 
 
 WEIGHTS_V1_1 = {
-    "theme_continuity": 0.30,
-    "capital_continuity": 0.25,
-    "tail_strength": 0.20,
-    "position_advantage": 0.15,
+    "theme_continuity": 0.20,
+    "capital_continuity": 0.20,
+    "tail_strength": 0.15,
+    "position_advantage": 0.10,
     "risk_penalty": 0.10,
+    "intensity": 0.10,
+    "conviction": 0.10,
+    "consistency": 0.05,
 }
 
 
@@ -283,6 +286,9 @@ def compute_scores(pool):
             + capital_pct * WEIGHTS_V1_1["capital_continuity"]
             + tail_pct * WEIGHTS_V1_1["tail_strength"]
             + position_pct * WEIGHTS_V1_1["position_advantage"]
+            + intensity_pct * WEIGHTS_V1_1["intensity"]
+            + conviction_pct * WEIGHTS_V1_1["conviction"]
+            + consistency_pct * WEIGHTS_V1_1["consistency"]
             - (100.0 - risk_pct) * WEIGHTS_V1_1["risk_penalty"],
             1,
         )
@@ -295,9 +301,9 @@ def compute_scores(pool):
             "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": WEIGHTS_V1_1["tail_strength"], "contrib": round(tail_pct * WEIGHTS_V1_1["tail_strength"], 1)},
             "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": WEIGHTS_V1_1["position_advantage"], "contrib": round(position_pct * WEIGHTS_V1_1["position_advantage"], 1)},
             "risk_penalty": {"raw": round(r["risk"], 3), "pct": risk_pct, "weight": WEIGHTS_V1_1["risk_penalty"], "contrib": round((100.0 - risk_pct) * WEIGHTS_V1_1["risk_penalty"], 1)},
-            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct},
-            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct},
-            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct},
+            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct, "weight": WEIGHTS_V1_1["intensity"], "contrib": round(intensity_pct * WEIGHTS_V1_1["intensity"], 1)},
+            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct, "weight": WEIGHTS_V1_1["conviction"], "contrib": round(conviction_pct * WEIGHTS_V1_1["conviction"], 1)},
+            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct, "weight": WEIGHTS_V1_1["consistency"], "contrib": round(consistency_pct * WEIGHTS_V1_1["consistency"], 1)},
         }
 
         confidence = compute_confidences(stock, r, all_raws)
