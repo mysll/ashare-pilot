@@ -1,5 +1,5 @@
 ---
-name: overnight-market-analysis
+name: intraday-market-analysis
 description: Use when users request comprehensive intraday overnight alpha analysis workflow — runs market scan at ~14:30, discovers stocks with capital continuity, scores for tomorrow expected premium. Generates intraday_mapper.md with A/B/C tier opportunity pool.
 ---
 
@@ -38,7 +38,7 @@ Step 1 (Perception)  ←  general + intraday-market-scan
 Step 2 (Perception)  ←  general + intraday-stock-discovery
         │               reads JSON → theme_ranking.md
         ▼
-Step 3 (Reasoning)   ←  trading-strategist + overnight-strategy
+Step 3 (Reasoning)   ←  trading-strategist + intraday-strategy
                         reads JSON + market_state.md + theme_ranking.md
                         → intraday_mapper.md (7-section) + overnight_strategy.md (明日交易计划)
 ```
@@ -170,7 +170,7 @@ Output:
 
 **Agent:** `trading-strategist`
 
-**Action:** Load skill `overnight-strategy` (V1 Reasoning) and follow its workflow.
+**Action:** Load skill `intraday-strategy` (V1 Reasoning) and follow its workflow.
 
 **V1 note:** Step 3 is the sole Reasoning Layer. It consumes the opportunity_pool.json (already scored by Python), reads the market context from Step 1+2 outputs, and produces the final `intraday_mapper.md` with Direction, RiskSeverity, and Expected Premium interpretations.
 
@@ -184,7 +184,7 @@ The Python `score_overnight.py` has ALREADY computed all scores. The LLM's job i
 **Prompt (exact format, MUST NOT deviate):**
 
 ```
-Load skill `overnight-strategy` and execute.
+Load skill `intraday-strategy` and execute.
 
 Date: {YYYY-MM-DD}
 
@@ -227,7 +227,7 @@ Outputs:
 | Compute | — | bash (run_pipeline.py) | — | 7 JSON files | Run ONCE before all steps |
 | Perception | 1 | general + intraday-market-scan | 4 JSON files | market_state.md | No Direction / RiskSeverity |
 | Perception | 2 | general + intraday-stock-discovery | 2 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
-| Reasoning | 3 | trading-strategist + overnight-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
+| Reasoning | 3 | trading-strategist + intraday-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
 
 ## Common Usage
 

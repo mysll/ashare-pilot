@@ -1,5 +1,5 @@
 ---
-name: overnight-strategy
+name: intraday-strategy
 description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes enriched ComputePool + ThemeRanking, scores for tomorrow expected premium, outputs OpportunityPool with A/B/C tiers + intraday_mapper.md. This is the sole Reasoning layer.
 ---
 
