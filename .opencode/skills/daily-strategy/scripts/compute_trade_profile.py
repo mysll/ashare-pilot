@@ -205,9 +205,23 @@ def main():
     if args.from_indicators:
         with open(args.from_indicators, "r", encoding="utf-8") as f:
             pool = json.load(f)
-        for entry in pool:
+        if not pool:
+            print("[ERROR] Indicators file is empty", file=sys.stderr)
+            sys.exit(1)
+        for i, entry in enumerate(pool):
+            if not isinstance(entry, dict) or "code" not in entry:
+                first_key = list(entry.keys())[0] if isinstance(entry, dict) else type(entry).__name__
+                print(
+                    f"[ERROR] Entry [{i}] missing 'code' key (found: {first_key}). "
+                    f"Pool format mismatch: `fetch_indicators.py` produces K-line records — "
+                    f"use `fetch_pool_indicators.py` instead for V5 nested format.",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
             indicators_data[entry["code"]] = entry
     else:
+        _pool_scripts = Path(__file__).resolve().parent.parent.parent / "daily-stock-mapping" / "scripts"
+        sys.path.insert(0, str(_pool_scripts))
         from fetch_pool_indicators import main as fetch_main
         import io
         old_stdout = sys.stdout

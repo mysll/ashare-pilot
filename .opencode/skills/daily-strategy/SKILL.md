@@ -46,6 +46,15 @@ Inputs:
   News:       predict/{date}/news.md        (仅 for Conditional Reread 单条回查)
 ```
 
+**If `pool_indicators.json` does not exist** — generate it with the Step 2 script (**NOT** `stock-analysis/scripts/fetch_indicators.py`):
+
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <code_1>,<code_2>,... --json -o predict/{date}/pool_indicators.json
+```
+
+`fetch_pool_indicators.py` produces V5 nested format `[{code, raw_observation, computed_perception}, ...]`.
+Do **NOT** use `stock-analysis/scripts/fetch_indicators.py` — it outputs K-line time-series without `code` fields, incompatible with `compute_trade_profile.py`.
+
 1. Read `mapper.md` **Market State** — DominantThemes, BoardPolicy, FinancingFlow, RiskFlags
 2. Read `mapper.md` **Candidate Pool** — V5 prefix columns
 3. Read `mapper.md` **Strategy Inputs** — Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 (**authoritative source**)
