@@ -287,10 +287,70 @@ class EastMoneyDataSource(BaseDataSource):
             time.sleep(random.uniform(1, 3))
         return results
 
+    def fetch_board_money_flow_by_field(
+        self, field: str = "f174", board_type: str = "concept", top: int = 100,
+    ) -> list:
+        """Fetch board-level money flow by arbitrary field from East Money.
+
+        Args:
+            field: Sort field (f62=主力净流入, f174=unknown metric)
+            board_type: 'concept' (t:3), 'industry' (t:2), or 'all' (s:4)
+            top: Number of top results to return
+
+        Returns sorted list of {code, name, value, source}.
+        """
+        board_map = {
+            "concept": "m%3A90%2Bt%3A3",
+            "industry": "m%3A90%2Bt%3A2",
+            "all": "m%3A90%2Bs%3A4",
+        }
+        code_param = board_map.get(board_type, board_map["all"])
+        url = f"https://data.eastmoney.com/dataapi/bkzj/getbkzj?key={field}&code={code_param}"
+        headers = {
+            "User-Agent": self._get_random_ua(),
+            "Referer": "https://data.eastmoney.com/",
+            "Accept": "*/*",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+        try:
+            self._wait_for_rate_limit()
+            self._check_rate_limit()
+            resp = requests.get(url, headers=headers, timeout=15)
+            data = resp.json()
+            self._request_count += 1
+        except Exception:
+            return []
+        if not data or data.get("rc") != 0:
+            return []
+        diff = data.get("data", {}).get("diff", [])
+        diff = sorted(diff, key=lambda x: x.get(field, 0) or 0, reverse=True)[:top]
+        results = []
+        for item in diff:
+            val = item.get(field, 0)
+            if val == "-" or val is None:
+                val = 0
+            results.append({
+                "code": item.get("f12", ""),
+                "name": item.get("f14", ""),
+                "value": to_yi(val),
+                "field": field,
+                "board_type": board_type,
+                "source": "eastmoney",
+            })
+        return results
+
+    def fetch_concept_money_flow(self, field: str = "f174", top: int = 100) -> list:
+        """Fetch concept board money flow (概念板块资金流向)."""
+        return self.fetch_board_money_flow_by_field(field=field, board_type="concept", top=top)
+
+    def fetch_industry_money_flow_by_field(self, field: str = "f174", top: int = 100) -> list:
+        """Fetch industry sector money flow (行业板块资金流向)."""
+        return self.fetch_board_money_flow_by_field(field=field, board_type="industry", top=top)
+
     def fetch_industry_money_flow(self, top: int = 100) -> list:
         """Fetch industry money flow data from East Money.
 
-        Returns industry-level capital flow data (主力净流入).
+        Returns industry-level capital flow data (主力净流入 f62, all boards).
         """
         headers = {
             "User-Agent": self._get_random_ua(),
@@ -310,7 +370,6 @@ class EastMoneyDataSource(BaseDataSource):
         if not data or data.get("rc") != 0:
             return []
         diff = data.get("data", {}).get("diff", [])
-        # Sort by f62 (主力净流入) descending and take top N
         diff = sorted(diff, key=lambda x: x.get("f62", 0) or 0, reverse=True)[:top]
         results = []
         for item in diff:
@@ -319,10 +378,10 @@ class EastMoneyDataSource(BaseDataSource):
                 net_inflow = 0
             results.append(
                 {
-                    "code": item.get("f12", ""),  # 行业代码
-                    "type": item.get("f13", 0),  # 类型
-                    "industry": item.get("f14", ""),  # 行业名称
-                    "net_inflow": to_yi(net_inflow),  # 主力净流入
+                    "code": item.get("f12", ""),
+                    "type": item.get("f13", 0),
+                    "industry": item.get("f14", ""),
+                    "net_inflow": to_yi(net_inflow),
                     "source": "eastmoney",
                 }
             )
