@@ -76,22 +76,22 @@ V5 Step 3 per-stock reasoning:
 
 ```
 1. 读 comp.value → DirectionBase 倾向:
-   ≥ 70 → bullish
-   55-69 → neutral-bull
-   45-54 → neutral
-   < 45 → bearish
+   ≥ 70 → 看多
+   55-69 → 偏多
+   45-54 → 中性
+   < 45 → 看空
 
 2. 读 Tradeability (Step 2 已分类):
    Suitable → Direction 维持
    Watch → Direction 维持但 confidence 降一档
-   Extended → Direction cap at neutral-bull
-   Avoid → Direction force to bearish (override composite)
+   Extended → Direction cap at 偏多
+   Avoid → Direction force to 看空 (override composite)
 
 3. 读 risk_type.value → 评 RiskSeverity (Step 3-C)
 
 4. 读 SHARED_RULES + INTRADAY_RULES → 语义匹配应用 → 记 ReasoningTrace
 
-5. Final Direction ∈ {bullish, neutral-bull, neutral, bearish}
+5. Final Direction ∈ {看多, 偏多, 中性, 看空}
 ```
 
 ### Step 3-C — RiskSeverity 评定
@@ -154,31 +154,35 @@ LLM then:
 2. **Tail Position Table** (max 8, min 0 — 允许空仓)
 
 ```markdown
-| # | 代码 | 名称 | 主题 | 可交易性 | 画像匹配 | 尾盘操作 | 买入区间 | 锚点价 | 入场方式 | 止损 | 仓位 | 次日预期 |
-|---|------|------|------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1 | sh603986 | 兆易创新 | AI算力 | 可布局 | 一致 | 推荐 | 745~752 | 尾盘均价≈748 | 尾盘试仓 | 738 | 1.5% | 高 |
-| 2 | sz000977 | 浪潮信息 | AI算力 | 观察 | 降级 | 等待 | — | — | 等待 | — | — | 中等 |
+| # | 代码 | 名称 | 板块 | 方向 | 评级 | 可交易性 | 画像匹配 | 尾盘操作 | 买入区间 | 锚点价 | 入场方式 | 止损 | 仓位 | 持仓 | 次日预期 |
+|---|------|------|------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | sh603986 | 兆易创新 | AI算力 | 看多 | ★★★★☆ | 可布局 | 一致 | 推荐 | 745~752 | 尾盘均价≈748 | 尾盘试仓 | 738 | 1.5% | T+1 | 高 |
+| 2 | sz000977 | 浪潮信息 | AI算力 | 偏多 | ★★★☆☆ | 观察 | 降级 | 等待 | — | — | 等待 | — | — | T+1 | 中等 |
 ```
 
+**方向枚举**: `看多` / `偏多` / `中性` / `看空`
+**评级**: 1-5★ (综合 comp/confidence/RiskSeverity/Pattern/Anomaly)
 **锚点价**: `MA20≈价格` / `MA5≈价格` / `尾盘均价≈价格` / `开盘价≈价格` / `VWAP≈价格`
 **入场方式枚举**: `限价入区` / `开盘试仓` / `尾盘试仓` / `市价执行` / `等待` / `不追`
 **画像匹配枚举**: `一致` / `降级` / `失效` / `新发现`
 **尾盘操作枚举**: `推荐` / `轻仓` / `等待` / `不追` / `跳过`
+**持仓枚举**: `T+0` / `T+1`
 **次日预期枚举**: `高` / `中等` / `低` / `风险`
 
 3. **ReasoningTrace** (per stock)
 
 ```markdown
-| 代码 | 方向路径 | 规则应用 | 风险追溯 | 画像追溯 |
-|------|----------|----------|----------|----------|
-| sh603986 | 88.5→看多; profile=追涨→尾盘试仓 | SHARED R37: 强市超买豁免 | 超买+强市=1 | 追涨+尾盘均价≈748→一致 |
+| 代码 | 方向路径 | 规则应用 | 感知覆写 | 风险追溯 | Profile追溯 |
+|------|----------|----------|----------|----------|-------------|
+| sh603986 | 88.5→看多; ★★★★☆; profile=追涨→尾盘试仓 | SHARED R37: 强市超买豁免 | — | 超买+强市=1 | 追涨+尾盘均价≈748→一致 |
 ```
 
+**方向路径格式**: `{comp.value}→{方向}; {评级}; profile={打法}→{入场方式}`
 **风险追溯 (SeverityTrace) 格式**: `{风险类型}+{市态}={等级}`<br>
 **风险类型枚举**: `超买`(overbought) / `趋势弱`(trend_weak) / `炸板`(broken_board) / `超卖机会`(oversold_opportunity)<br>
 **市态枚举**: `强市`(strong-sector) / `中性`(neutral) / `弱市`(weak) / `恐慌`(panic)<br>
 **等级**: `1`(观察) / `2`(谨慎) / `3`(规避)<br>
-**画像追溯 格式**: `{打法}→{锚点价}→{匹配状态}`<br>
+**Profile追溯 格式**: `{打法}→{锚点价}→{匹配状态}`<br>
 **打法枚举**: `追涨`(MOMENTUM) / `低吸`(PULLBACK) / `打板`(LIMIT_UP_CONT) / `防守`(DEFENSIVE) / `观望`(WATCH_ONLY)
 
 4. **Prediction Review** (Audit, optional — after reasoning)
