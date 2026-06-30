@@ -100,6 +100,18 @@ If generating tomorrow's trading plan:
 - Set stop-loss based on ATR (from enriched data)
 - Note: buy execution window is 14:50-14:57
 
+## Output: overnight_strategy.md
+
+Alongside `intraday_mapper.md`, generate `overnight_strategy.md` with:
+
+1. **Market Context** — RegimeHint, 明日预期
+2. **Strategy Table** — per-stock: 方向 / 交易策略 / 仓位 / 持仓意图 (T+0/T+1)
+   - 方向枚举: `持有偏多` / `持有` / `谨慎持有` / `观望`
+   - 交易策略枚举: `趋势跟随` / `回调布局` / `强势接力` / `防御布局`
+3. **T+1 兑现计划** — 每只核心持仓如何退出（竞价条件 / 开盘策略 / 止损线）
+4. **Risk Control** — 整体风控、仓位上限、止损规则、板块分散
+5. **ReasoningTrace** — per-stock 方向推理路径 + 规则应用
+
 ## Constraints
 
 - This is the ONLY skill that outputs Direction, RiskSeverity, or Expected Premium

@@ -11,7 +11,7 @@ description: Use when users request comprehensive intraday overnight alpha analy
 |-------|------|-------|--------|
 | Compute | Python | `run_pipeline.py` | market_breadth.json, indices.json, concept_ranking.json, north_bound.json, scan_pool.json, compute_pool_enriched.json, opportunity_pool.json |
 | Perception | Step 1+2 | general + general | market_state.md → theme_ranking.md |
-| Reasoning | Step 3 | trading-strategist | intraday_mapper.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace) |
+| Reasoning | Step 3 | trading-strategist | intraday_mapper.md + overnight_strategy.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace + T+1兑现计划) |
 
 Step 1 and Step 2 NEVER produce Direction or RiskSeverity. Step 3 is the sole Reasoning layer.
 
@@ -40,7 +40,7 @@ Step 2 (Perception)  ←  general + intraday-stock-discovery
         ▼
 Step 3 (Reasoning)   ←  trading-strategist + overnight-strategy
                         reads JSON + market_state.md + theme_ranking.md
-                        → intraday_mapper.md (7-section)
+                        → intraday_mapper.md (7-section) + overnight_strategy.md (明日交易计划)
 ```
 
 ## Execution Timing
@@ -193,8 +193,9 @@ Inputs:
 - intraday/{YYYY-MM-DD}/market_state.md
 - intraday/{YYYY-MM-DD}/theme_ranking.md
 
-Output:
-- intraday/{YYYY-MM-DD}/intraday_mapper.md
+Outputs:
+- intraday/{YYYY-MM-DD}/intraday_mapper.md (7-section)
+- intraday/{YYYY-MM-DD}/overnight_strategy.md (明日操作计划：方向/仓位/兑现/风控/ReasoningTrace)
 ```
 
 **CRITICAL:** Do NOT inline any file content, stock tables, rules, formulas, or analysis. Keep the prompt clean.
@@ -217,6 +218,7 @@ Output:
 | `intraday/{date}/market_state.md` | Market strength, breadth, capital direction, top 10 concepts | Perception (Step 1) |
 | `intraday/{date}/theme_ranking.md` | Statistical theme ranking (bottom-up, stock-derived) | Perception (Step 2) |
 | `intraday/{date}/intraday_mapper.md` | 7-section: Market State, Theme Ranking, Opportunity Pool (A/B/C), Stock Details, Score Trace, Observation Pool, Excluded Stocks | Reasoning (Step 3) |
+| `intraday/{date}/overnight_strategy.md` | 明日交易计划：Market Context, Strategy表(A/B/C), T+1兑现计划, Risk Control, ReasoningTrace | Reasoning (Step 3) |
 
 ## Quick Reference
 
@@ -225,7 +227,7 @@ Output:
 | Compute | — | bash (run_pipeline.py) | — | 7 JSON files | Run ONCE before all steps |
 | Perception | 1 | general + intraday-market-scan | 4 JSON files | market_state.md | No Direction / RiskSeverity |
 | Perception | 2 | general + intraday-stock-discovery | 2 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
-| Reasoning | 3 | trading-strategist + overnight-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md | Sole Reasoning authority; scores pre-computed by Python |
+| Reasoning | 3 | trading-strategist + overnight-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
 
 ## Common Usage
 

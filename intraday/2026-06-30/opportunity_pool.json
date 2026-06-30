@@ -1,0 +1,2759 @@
+{
+  "weights_version": "V1_Rule_Based",
+  "scored_count": 100,
+  "opportunity_pool_size": 30,
+  "leader_watch": [],
+  "premium_candidates": [
+    {
+      "code": "sz300223",
+      "name": "北京君正",
+      "price": "248.90",
+      "change_pct": "+2.83%",
+      "amount": "136.02亿",
+      "turnover": "+13.28%",
+      "volume_ratio": "1.04",
+      "swing": "+12.59%",
+      "total_mv": "12038406.09亿",
+      "source_pool": "turnover",
+      "quick_score": 71.3,
+      "enriched": {
+        "real_time": {
+          "price": "248.90",
+          "open": "230.00",
+          "high": "255.49",
+          "low": "225.01",
+          "yestclose": "242.05",
+          "volume": "56020303",
+          "amount": "13602375896"
+        },
+        "money_flow": {
+          "main_net_inflow": "8.27",
+          "main_ratio": "+6.08%",
+          "super_large_net": "6.93",
+          "large_net": "1.34",
+          "medium_net": "-5.60",
+          "small_net": "-2.67"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002156",
+      "name": "通富微电",
+      "price": "75.87",
+      "change_pct": "+4.53%",
+      "amount": "115.11亿",
+      "turnover": "+10.26%",
+      "volume_ratio": "0.85",
+      "swing": "+8.50%",
+      "total_mv": "11514007.77亿",
+      "source_pool": "turnover",
+      "quick_score": 69.8,
+      "enriched": {
+        "real_time": {
+          "price": "75.87",
+          "open": "71.19",
+          "high": "75.97",
+          "low": "69.80",
+          "yestclose": "72.58",
+          "volume": "155699067",
+          "amount": "11510885991"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.55",
+          "main_ratio": "+4.82%",
+          "super_large_net": "4.22",
+          "large_net": "1.32",
+          "medium_net": "-0.56",
+          "small_net": "-4.99"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh603083",
+      "name": "剑桥科技",
+      "price": "254.87",
+      "change_pct": "+2.86%",
+      "amount": "58.98亿",
+      "turnover": "+8.50%",
+      "volume_ratio": "0.79",
+      "swing": "+7.09%",
+      "total_mv": "9385597.26亿",
+      "source_pool": "turnover",
+      "quick_score": 67.6,
+      "enriched": {
+        "real_time": {
+          "price": "254.87",
+          "open": "255.00",
+          "high": "256.36",
+          "low": "238.80",
+          "yestclose": "247.78",
+          "volume": "23425863",
+          "amount": "5898289359"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.10",
+          "main_ratio": "+8.64%",
+          "super_large_net": "2.87",
+          "large_net": "2.23",
+          "medium_net": "-3.14",
+          "small_net": "-1.96"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002851",
+      "name": "麦格米特",
+      "price": "167.18",
+      "change_pct": "+3.63%",
+      "amount": "68.57亿",
+      "turnover": "+8.96%",
+      "volume_ratio": "1.04",
+      "swing": "+7.10%",
+      "total_mv": "9726325.97亿",
+      "source_pool": "turnover",
+      "quick_score": 65.9,
+      "enriched": {
+        "real_time": {
+          "price": "167.18",
+          "open": "162.22",
+          "high": "171.66",
+          "low": "160.20",
+          "yestclose": "161.32",
+          "volume": "41051277",
+          "amount": "6857299062"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.64",
+          "main_ratio": "+3.85%",
+          "super_large_net": "1.92",
+          "large_net": "0.72",
+          "medium_net": "-1.13",
+          "small_net": "-1.51"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688008",
+      "name": "澜起科技",
+      "price": "309.90",
+      "change_pct": "+4.67%",
+      "amount": "272.85亿",
+      "turnover": "+7.84%",
+      "volume_ratio": "1.08",
+      "swing": "+7.81%",
+      "total_mv": "37875978.65亿",
+      "source_pool": "turnover",
+      "quick_score": 64.7,
+      "enriched": {
+        "real_time": {
+          "price": "309.90",
+          "open": "296.66",
+          "high": "313.13",
+          "low": "290.01",
+          "yestclose": "296.06",
+          "volume": "89911757",
+          "amount": "27285066121"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.29",
+          "main_ratio": "+3.77%",
+          "super_large_net": "5.88",
+          "large_net": "4.42",
+          "medium_net": "-9.71",
+          "small_net": "-0.59"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300620",
+      "name": "光库科技",
+      "price": "378.20",
+      "change_pct": "+3.56%",
+      "amount": "52.31亿",
+      "turnover": "+5.68%",
+      "volume_ratio": "0.93",
+      "swing": "+6.38%",
+      "total_mv": "9424008.21亿",
+      "source_pool": "turnover",
+      "quick_score": 64.1,
+      "enriched": {
+        "real_time": {
+          "price": "378.20",
+          "open": "364.53",
+          "high": "381.80",
+          "low": "358.50",
+          "yestclose": "365.20",
+          "volume": "14034072",
+          "amount": "5230759148"
+        },
+        "money_flow": {
+          "main_net_inflow": "4.86",
+          "main_ratio": "+9.29%",
+          "super_large_net": "3.17",
+          "large_net": "1.69",
+          "medium_net": "-0.46",
+          "small_net": "-4.40"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688521",
+      "name": "芯原股份",
+      "price": "371.14",
+      "change_pct": "+2.52%",
+      "amount": "90.70亿",
+      "turnover": "+4.74%",
+      "volume_ratio": "0.87",
+      "swing": "+7.07%",
+      "total_mv": "19518819.44亿",
+      "source_pool": "turnover",
+      "quick_score": 62.9,
+      "enriched": {
+        "real_time": {
+          "price": "371.14",
+          "open": "360.00",
+          "high": "375.67",
+          "low": "350.09",
+          "yestclose": "362.00",
+          "volume": "24924025",
+          "amount": "9069671048"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.15",
+          "main_ratio": "+3.47%",
+          "super_large_net": "1.91",
+          "large_net": "1.24",
+          "medium_net": "-2.96",
+          "small_net": "-0.19"
+        }
+      },
+      "overnight_score": 71.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300274",
+      "name": "阳光电源",
+      "price": "159.02",
+      "change_pct": "+2.17%",
+      "amount": "116.16亿",
+      "turnover": "+4.67%",
+      "volume_ratio": "1.03",
+      "swing": "+5.09%",
+      "total_mv": "32968208.06亿",
+      "source_pool": "turnover",
+      "quick_score": 60.5,
+      "enriched": {
+        "real_time": {
+          "price": "159.02",
+          "open": "154.99",
+          "high": "160.26",
+          "low": "152.34",
+          "yestclose": "155.64",
+          "volume": "74179204",
+          "amount": "11615970580"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.75",
+          "main_ratio": "+2.37%",
+          "super_large_net": "1.72",
+          "large_net": "1.03",
+          "medium_net": "-0.84",
+          "small_net": "-1.91"
+        }
+      },
+      "overnight_score": 71.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002008",
+      "name": "大族激光",
+      "price": "150.11",
+      "change_pct": "+6.31%",
+      "amount": "157.02亿",
+      "turnover": "+10.99%",
+      "volume_ratio": "0.94",
+      "swing": "+11.78%",
+      "total_mv": "15455376.76亿",
+      "source_pool": "turnover",
+      "quick_score": 65.7,
+      "enriched": {
+        "real_time": {
+          "price": "150.11",
+          "open": "144.01",
+          "high": "155.32",
+          "low": "138.68",
+          "yestclose": "141.20",
+          "volume": "105143110",
+          "amount": "15702255975"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.55",
+          "main_ratio": "+2.26%",
+          "super_large_net": "1.97",
+          "large_net": "1.58",
+          "medium_net": "-4.05",
+          "small_net": "0.49"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz000977",
+      "name": "浪潮信息",
+      "price": "70.00",
+      "change_pct": "+6.35%",
+      "amount": "77.09亿",
+      "turnover": "+7.62%",
+      "volume_ratio": "1.44",
+      "swing": "+8.89%",
+      "total_mv": "10279336.59亿",
+      "source_pool": "turnover",
+      "quick_score": 61.2,
+      "enriched": {
+        "real_time": {
+          "price": "70.00",
+          "open": "65.21",
+          "high": "70.68",
+          "low": "64.83",
+          "yestclose": "65.82",
+          "volume": "111815931",
+          "amount": "7708729049"
+        },
+        "money_flow": {
+          "main_net_inflow": "13.30",
+          "main_ratio": "+17.26%",
+          "super_large_net": "11.83",
+          "large_net": "1.47",
+          "medium_net": "-5.86",
+          "small_net": "-7.44"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh600105",
+      "name": "永鼎股份",
+      "price": "67.48",
+      "change_pct": "+6.94%",
+      "amount": "70.25亿",
+      "turnover": "+7.33%",
+      "volume_ratio": "0.76",
+      "swing": "+9.41%",
+      "total_mv": "9865540.92亿",
+      "source_pool": "turnover",
+      "quick_score": 61.2,
+      "enriched": {
+        "real_time": {
+          "price": "67.48",
+          "open": "63.81",
+          "high": "67.90",
+          "low": "61.96",
+          "yestclose": "63.10",
+          "volume": "107133337",
+          "amount": "7025450929"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.40",
+          "main_ratio": "+4.83%",
+          "super_large_net": "3.96",
+          "large_net": "-0.56",
+          "medium_net": "-0.45",
+          "small_net": "-2.95"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688981",
+      "name": "中芯国际",
+      "price": "158.82",
+      "change_pct": "+5.18%",
+      "amount": "166.80亿",
+      "turnover": "+5.34%",
+      "volume_ratio": "0.95",
+      "swing": "+7.06%",
+      "total_mv": "135961652.51亿",
+      "source_pool": "turnover",
+      "quick_score": 58.7,
+      "enriched": {
+        "real_time": {
+          "price": "158.82",
+          "open": "152.05",
+          "high": "160.66",
+          "low": "150.00",
+          "yestclose": "151.00",
+          "volume": "106679541",
+          "amount": "16679545014"
+        },
+        "money_flow": {
+          "main_net_inflow": "15.66",
+          "main_ratio": "+9.39%",
+          "super_large_net": "16.42",
+          "large_net": "-0.76",
+          "medium_net": "-8.95",
+          "small_net": "-6.70"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300059",
+      "name": "东方财富",
+      "price": "20.38",
+      "change_pct": "+1.39%",
+      "amount": "86.72亿",
+      "turnover": "+3.22%",
+      "volume_ratio": "0.56",
+      "swing": "+4.13%",
+      "total_mv": "32245643.35亿",
+      "source_pool": "turnover",
+      "quick_score": 48.5,
+      "enriched": {
+        "real_time": {
+          "price": "20.38",
+          "open": "19.95",
+          "high": "20.57",
+          "low": "19.74",
+          "yestclose": "20.10",
+          "volume": "430348289",
+          "amount": "8672212614"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.54",
+          "main_ratio": "+2.92%",
+          "super_large_net": "2.02",
+          "large_net": "0.51",
+          "medium_net": "-1.68",
+          "small_net": "-0.86"
+        }
+      },
+      "overnight_score": 66.5,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 65.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300308",
+      "name": "中际旭创",
+      "price": "1270.00",
+      "change_pct": "+4.10%",
+      "amount": "349.61亿",
+      "turnover": "+2.49%",
+      "volume_ratio": "0.85",
+      "swing": "+6.34%",
+      "total_mv": "141634799.41亿",
+      "source_pool": "turnover",
+      "quick_score": 60.1,
+      "enriched": {
+        "real_time": {
+          "price": "1270.00",
+          "open": "1223.01",
+          "high": "1295.60",
+          "low": "1218.21",
+          "yestclose": "1220.00",
+          "volume": "27678291",
+          "amount": "34960563603"
+        },
+        "money_flow": {
+          "main_net_inflow": "20.09",
+          "main_ratio": "+5.75%",
+          "super_large_net": "20.45",
+          "large_net": "-0.36",
+          "medium_net": "-20.09",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688041",
+      "name": "海光信息",
+      "price": "370.30",
+      "change_pct": "+4.36%",
+      "amount": "153.57亿",
+      "turnover": "+1.79%",
+      "volume_ratio": "0.91",
+      "swing": "+6.64%",
+      "total_mv": "86070239.51亿",
+      "source_pool": "turnover",
+      "quick_score": 59.2,
+      "enriched": {
+        "real_time": {
+          "price": "370.30",
+          "open": "360.20",
+          "high": "377.79",
+          "low": "354.24",
+          "yestclose": "354.84",
+          "volume": "41494368",
+          "amount": "15356900144"
+        },
+        "money_flow": {
+          "main_net_inflow": "13.81",
+          "main_ratio": "+8.99%",
+          "super_large_net": "12.49",
+          "large_net": "1.32",
+          "medium_net": "-13.46",
+          "small_net": "-0.35"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh601138",
+      "name": "工业富联",
+      "price": "72.15",
+      "change_pct": "+3.65%",
+      "amount": "117.24亿",
+      "turnover": "+0.83%",
+      "volume_ratio": "0.74",
+      "swing": "+5.43%",
+      "total_mv": "143175125.83亿",
+      "source_pool": "turnover",
+      "quick_score": 58.0,
+      "enriched": {
+        "real_time": {
+          "price": "72.15",
+          "open": "69.56",
+          "high": "72.96",
+          "low": "69.18",
+          "yestclose": "69.61",
+          "volume": "163770562",
+          "amount": "11723794622"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.23",
+          "main_ratio": "+8.73%",
+          "super_large_net": "8.89",
+          "large_net": "1.34",
+          "medium_net": "-5.18",
+          "small_net": "-5.05"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002371",
+      "name": "北方华创",
+      "price": "884.56",
+      "change_pct": "+2.83%",
+      "amount": "113.36亿",
+      "turnover": "+1.76%",
+      "volume_ratio": "1.02",
+      "swing": "+3.72%",
+      "total_mv": "64191563.88亿",
+      "source_pool": "turnover",
+      "quick_score": 56.8,
+      "enriched": {
+        "real_time": {
+          "price": "884.56",
+          "open": "890.00",
+          "high": "905.56",
+          "low": "873.53",
+          "yestclose": "860.19",
+          "volume": "12768745",
+          "amount": "11335700672"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.32",
+          "main_ratio": "+4.69%",
+          "super_large_net": "1.24",
+          "large_net": "4.08",
+          "medium_net": "-5.31",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002384",
+      "name": "东山精密",
+      "price": "262.35",
+      "change_pct": "+5.11%",
+      "amount": "161.98亿",
+      "turnover": "+4.51%",
+      "volume_ratio": "0.88",
+      "swing": "+8.40%",
+      "total_mv": "48052223.60亿",
+      "source_pool": "turnover",
+      "quick_score": 57.6,
+      "enriched": {
+        "real_time": {
+          "price": "262.35",
+          "open": "247.54",
+          "high": "268.50",
+          "low": "247.54",
+          "yestclose": "249.59",
+          "volume": "62579658",
+          "amount": "16198463635"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.28",
+          "main_ratio": "+6.35%",
+          "super_large_net": "8.36",
+          "large_net": "1.92",
+          "medium_net": "-5.30",
+          "small_net": "-4.98"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002050",
+      "name": "三花智控",
+      "price": "43.83",
+      "change_pct": "+6.20%",
+      "amount": "56.30亿",
+      "turnover": "+3.54%",
+      "volume_ratio": "1.28",
+      "swing": "+6.30%",
+      "total_mv": "18443725.08亿",
+      "source_pool": "turnover",
+      "quick_score": 55.3,
+      "enriched": {
+        "real_time": {
+          "price": "43.83",
+          "open": "42.01",
+          "high": "44.29",
+          "low": "41.69",
+          "yestclose": "41.27",
+          "volume": "130464531",
+          "amount": "5630490446"
+        },
+        "money_flow": {
+          "main_net_inflow": "7.62",
+          "main_ratio": "+13.54%",
+          "super_large_net": "6.29",
+          "large_net": "1.34",
+          "medium_net": "-3.93",
+          "small_net": "-3.69"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002916",
+      "name": "深南电路",
+      "price": "457.90",
+      "change_pct": "+5.47%",
+      "amount": "61.45亿",
+      "turnover": "+2.04%",
+      "volume_ratio": "1.02",
+      "swing": "+10.16%",
+      "total_mv": "31190618.39亿",
+      "source_pool": "turnover",
+      "quick_score": 52.1,
+      "enriched": {
+        "real_time": {
+          "price": "457.90",
+          "open": "430.46",
+          "high": "469.99",
+          "low": "425.87",
+          "yestclose": "434.16",
+          "volume": "13545225",
+          "amount": "6145301810"
+        },
+        "money_flow": {
+          "main_net_inflow": "7.62",
+          "main_ratio": "+12.40%",
+          "super_large_net": "6.20",
+          "large_net": "1.42",
+          "medium_net": "-7.62",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300390",
+      "name": "天华新能",
+      "price": "93.51",
+      "change_pct": "+7.58%",
+      "amount": "58.94亿",
+      "turnover": "+9.66%",
+      "volume_ratio": "1.02",
+      "swing": "+9.95%",
+      "total_mv": "7768350.62亿",
+      "source_pool": "turnover",
+      "quick_score": 49.2,
+      "enriched": {
+        "real_time": {
+          "price": "93.51",
+          "open": "88.35",
+          "high": "94.48",
+          "low": "85.83",
+          "yestclose": "86.92",
+          "volume": "64968813",
+          "amount": "5893856832"
+        },
+        "money_flow": {
+          "main_net_inflow": "4.88",
+          "main_ratio": "+8.28%",
+          "super_large_net": "3.34",
+          "large_net": "1.54",
+          "medium_net": "-2.67",
+          "small_net": "-2.21"
+        }
+      },
+      "overnight_score": 63.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002281",
+      "name": "光迅科技",
+      "price": "256.94",
+      "change_pct": "+8.90%",
+      "amount": "142.02亿",
+      "turnover": "+7.37%",
+      "volume_ratio": "1.15",
+      "swing": "+12.16%",
+      "total_mv": "21263456.09亿",
+      "source_pool": "turnover",
+      "quick_score": 47.0,
+      "enriched": {
+        "real_time": {
+          "price": "256.94",
+          "open": "237.11",
+          "high": "259.00",
+          "low": "230.30",
+          "yestclose": "235.94",
+          "volume": "57491503",
+          "amount": "14202331849"
+        },
+        "money_flow": {
+          "main_net_inflow": "15.09",
+          "main_ratio": "+10.63%",
+          "super_large_net": "13.00",
+          "large_net": "2.10",
+          "medium_net": "-6.12",
+          "small_net": "-8.97"
+        }
+      },
+      "overnight_score": 63.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh600030",
+      "name": "中信证券",
+      "price": "28.73",
+      "change_pct": "+0.84%",
+      "amount": "63.11亿",
+      "turnover": "+1.81%",
+      "volume_ratio": "0.69",
+      "swing": "+2.21%",
+      "total_mv": "42579431.04亿",
+      "source_pool": "turnover",
+      "quick_score": 46.8,
+      "enriched": {
+        "real_time": {
+          "price": "28.73",
+          "open": "28.33",
+          "high": "28.95",
+          "low": "28.32",
+          "yestclose": "28.49",
+          "volume": "220333438",
+          "amount": "6310883111"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.45",
+          "main_ratio": "+3.89%",
+          "super_large_net": "2.05",
+          "large_net": "0.41",
+          "medium_net": "-1.55",
+          "small_net": "-0.91"
+        }
+      },
+      "overnight_score": 61.5,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 65.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002475",
+      "name": "立讯精密",
+      "price": "70.40",
+      "change_pct": "+7.81%",
+      "amount": "170.02亿",
+      "turnover": "+3.36%",
+      "volume_ratio": "0.83",
+      "swing": "+9.62%",
+      "total_mv": "51520535.08亿",
+      "source_pool": "turnover",
+      "quick_score": 43.7,
+      "enriched": {
+        "real_time": {
+          "price": "70.40",
+          "open": "65.24",
+          "high": "70.88",
+          "low": "64.60",
+          "yestclose": "65.30",
+          "volume": "245170389",
+          "amount": "17001653980"
+        },
+        "money_flow": {
+          "main_net_inflow": "20.11",
+          "main_ratio": "+11.83%",
+          "super_large_net": "18.30",
+          "large_net": "1.81",
+          "medium_net": "-5.88",
+          "small_net": "-14.24"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300502",
+      "name": "新易盛",
+      "price": "607.00",
+      "change_pct": "+8.98%",
+      "amount": "345.27亿",
+      "turnover": "+4.66%",
+      "volume_ratio": "1.09",
+      "swing": "+10.25%",
+      "total_mv": "84631380.72亿",
+      "source_pool": "turnover",
+      "quick_score": 43.3,
+      "enriched": {
+        "real_time": {
+          "price": "607.00",
+          "open": "565.43",
+          "high": "612.86",
+          "low": "555.78",
+          "yestclose": "556.96",
+          "volume": "58442372",
+          "amount": "34527267520"
+        },
+        "money_flow": {
+          "main_net_inflow": "46.16",
+          "main_ratio": "+13.37%",
+          "super_large_net": "33.88",
+          "large_net": "12.28",
+          "medium_net": "-45.96",
+          "small_net": "-0.19"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002463",
+      "name": "沪电股份",
+      "price": "152.80",
+      "change_pct": "+8.32%",
+      "amount": "133.62亿",
+      "turnover": "+4.63%",
+      "volume_ratio": "1.06",
+      "swing": "+9.91%",
+      "total_mv": "29404274.85亿",
+      "source_pool": "turnover",
+      "quick_score": 43.1,
+      "enriched": {
+        "real_time": {
+          "price": "152.80",
+          "open": "141.10",
+          "high": "155.08",
+          "low": "141.10",
+          "yestclose": "141.06",
+          "volume": "88985081",
+          "amount": "13362035389"
+        },
+        "money_flow": {
+          "main_net_inflow": "16.62",
+          "main_ratio": "+12.44%",
+          "super_large_net": "13.97",
+          "large_net": "2.66",
+          "medium_net": "-9.49",
+          "small_net": "-7.13"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz000725",
+      "name": "京东方Ａ",
+      "price": "8.68",
+      "change_pct": "+9.18%",
+      "amount": "445.57亿",
+      "turnover": "+14.67%",
+      "volume_ratio": "1.37",
+      "swing": "+8.05%",
+      "total_mv": "32154476.76亿",
+      "source_pool": "turnover",
+      "quick_score": 57.2,
+      "enriched": {
+        "real_time": {
+          "price": "8.68",
+          "open": "8.15",
+          "high": "8.75",
+          "low": "8.11",
+          "yestclose": "7.95",
+          "volume": "5187899669",
+          "amount": "44556777597"
+        },
+        "money_flow": {
+          "main_net_inflow": "39.14",
+          "main_ratio": "+8.78%",
+          "super_large_net": "49.15",
+          "large_net": "-10.01",
+          "medium_net": "-27.48",
+          "small_net": "-11.66"
+        }
+      },
+      "overnight_score": 60.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 10.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    }
+  ],
+  "early_breakout": [
+    {
+      "code": "sh600460",
+      "name": "士兰微",
+      "price": "54.66",
+      "change_pct": "+3.94%",
+      "amount": "117.89亿",
+      "turnover": "+13.30%",
+      "volume_ratio": "1.14",
+      "swing": "+9.18%",
+      "total_mv": "9095816.70亿",
+      "source_pool": "turnover",
+      "quick_score": 71.8,
+      "enriched": {
+        "real_time": {
+          "price": "54.66",
+          "open": "53.50",
+          "high": "55.23",
+          "low": "50.40",
+          "yestclose": "52.59",
+          "volume": "221297303",
+          "amount": "11789477941"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz002129",
+      "name": "TCL中环",
+      "price": "12.02",
+      "change_pct": "+2.47%",
+      "amount": "55.74亿",
+      "turnover": "+11.71%",
+      "volume_ratio": "1.30",
+      "swing": "+6.65%",
+      "total_mv": "4859825.16亿",
+      "source_pool": "turnover",
+      "quick_score": 70.6,
+      "enriched": {
+        "real_time": {
+          "price": "12.02",
+          "open": "11.67",
+          "high": "12.12",
+          "low": "11.34",
+          "yestclose": "11.73",
+          "volume": "473253641",
+          "amount": "5574282981"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz000988",
+      "name": "华工科技",
+      "price": "184.61",
+      "change_pct": "+4.28%",
+      "amount": "197.22亿",
+      "turnover": "+10.85%",
+      "volume_ratio": "1.46",
+      "swing": "+8.26%",
+      "total_mv": "18562585.47亿",
+      "source_pool": "turnover",
+      "quick_score": 70.4,
+      "enriched": {
+        "real_time": {
+          "price": "184.61",
+          "open": "179.00",
+          "high": "187.66",
+          "low": "173.03",
+          "yestclose": "177.03",
+          "volume": "109049716",
+          "amount": "19722408183"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz300136",
+      "name": "信维通信",
+      "price": "119.25",
+      "change_pct": "+2.14%",
+      "amount": "98.38亿",
+      "turnover": "+10.13%",
+      "volume_ratio": "0.72",
+      "swing": "+6.01%",
+      "total_mv": "11538256.01亿",
+      "source_pool": "turnover",
+      "quick_score": 69.7,
+      "enriched": {
+        "real_time": {
+          "price": "119.25",
+          "open": "117.01",
+          "high": "120.77",
+          "low": "113.75",
+          "yestclose": "116.75",
+          "volume": "83613358",
+          "amount": "9838337615"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz002436",
+      "name": "兴森科技",
+      "price": "50.95",
+      "change_pct": "+3.98%",
+      "amount": "60.41亿",
+      "turnover": "+7.84%",
+      "volume_ratio": "0.74",
+      "swing": "+8.67%",
+      "total_mv": "8659836.80亿",
+      "source_pool": "turnover",
+      "quick_score": 66.8,
+      "enriched": {
+        "real_time": {
+          "price": "50.95",
+          "open": "49.00",
+          "high": "52.30",
+          "low": "48.05",
+          "yestclose": "49.00",
+          "volume": "119076305",
+          "amount": "6041060945"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sh600522",
+      "name": "中天科技",
+      "price": "60.68",
+      "change_pct": "+3.13%",
+      "amount": "150.70亿",
+      "turnover": "+7.38%",
+      "volume_ratio": "0.76",
+      "swing": "+5.86%",
+      "total_mv": "20709778.49亿",
+      "source_pool": "turnover",
+      "quick_score": 66.2,
+      "enriched": {
+        "real_time": {
+          "price": "60.68",
+          "open": "59.81",
+          "high": "61.50",
+          "low": "58.05",
+          "yestclose": "58.84",
+          "volume": "251737711",
+          "amount": "15070116615"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sh600498",
+      "name": "烽火通信",
+      "price": "73.60",
+      "change_pct": "+2.12%",
+      "amount": "62.27亿",
+      "turnover": "+6.74%",
+      "volume_ratio": "0.71",
+      "swing": "+5.34%",
+      "total_mv": "9996112.67亿",
+      "source_pool": "turnover",
+      "quick_score": 65.4,
+      "enriched": {
+        "real_time": {
+          "price": "73.60",
+          "open": "73.80",
+          "high": "74.05",
+          "low": "70.20",
+          "yestclose": "72.07",
+          "volume": "85740040",
+          "amount": "6226792649"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz300373",
+      "name": "扬杰科技",
+      "price": "157.23",
+      "change_pct": "+4.85%",
+      "amount": "52.69亿",
+      "turnover": "+6.43%",
+      "volume_ratio": "0.90",
+      "swing": "+11.76%",
+      "total_mv": "8543057.26亿",
+      "source_pool": "turnover",
+      "quick_score": 65.0,
+      "enriched": {
+        "real_time": {
+          "price": "157.23",
+          "open": "153.00",
+          "high": "159.88",
+          "low": "142.25",
+          "yestclose": "149.95",
+          "volume": "34878466",
+          "amount": "5268813220"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sh688126",
+      "name": "沪硅产业",
+      "price": "39.89",
+      "change_pct": "+2.28%",
+      "amount": "89.08亿",
+      "turnover": "+7.95%",
+      "volume_ratio": "1.03",
+      "swing": "+6.67%",
+      "total_mv": "13183738.31亿",
+      "source_pool": "turnover",
+      "quick_score": 64.6,
+      "enriched": {
+        "real_time": {
+          "price": "39.89",
+          "open": "38.90",
+          "high": "40.60",
+          "low": "38.00",
+          "yestclose": "39.00",
+          "volume": "225899052",
+          "amount": "8907741232"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sh688766",
+      "name": "普冉股份",
+      "price": "766.60",
+      "change_pct": "+3.99%",
+      "amount": "56.49亿",
+      "turnover": "+5.06%",
+      "volume_ratio": "0.83",
+      "swing": "+11.79%",
+      "total_mv": "11399614.37亿",
+      "source_pool": "turnover",
+      "quick_score": 63.3,
+      "enriched": {
+        "real_time": {
+          "price": "766.60",
+          "open": "721.50",
+          "high": "788.98",
+          "low": "702.10",
+          "yestclose": "737.20",
+          "volume": "7525844",
+          "amount": "5648975515"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    }
+  ],
+  "opportunity_pool": [
+    {
+      "code": "sz300223",
+      "name": "北京君正",
+      "price": "248.90",
+      "change_pct": "+2.83%",
+      "amount": "136.02亿",
+      "turnover": "+13.28%",
+      "volume_ratio": "1.04",
+      "swing": "+12.59%",
+      "total_mv": "12038406.09亿",
+      "source_pool": "turnover",
+      "quick_score": 71.3,
+      "enriched": {
+        "real_time": {
+          "price": "248.90",
+          "open": "230.00",
+          "high": "255.49",
+          "low": "225.01",
+          "yestclose": "242.05",
+          "volume": "56020303",
+          "amount": "13602375896"
+        },
+        "money_flow": {
+          "main_net_inflow": "8.27",
+          "main_ratio": "+6.08%",
+          "super_large_net": "6.93",
+          "large_net": "1.34",
+          "medium_net": "-5.60",
+          "small_net": "-2.67"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002156",
+      "name": "通富微电",
+      "price": "75.87",
+      "change_pct": "+4.53%",
+      "amount": "115.11亿",
+      "turnover": "+10.26%",
+      "volume_ratio": "0.85",
+      "swing": "+8.50%",
+      "total_mv": "11514007.77亿",
+      "source_pool": "turnover",
+      "quick_score": 69.8,
+      "enriched": {
+        "real_time": {
+          "price": "75.87",
+          "open": "71.19",
+          "high": "75.97",
+          "low": "69.80",
+          "yestclose": "72.58",
+          "volume": "155699067",
+          "amount": "11510885991"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.55",
+          "main_ratio": "+4.82%",
+          "super_large_net": "4.22",
+          "large_net": "1.32",
+          "medium_net": "-0.56",
+          "small_net": "-4.99"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh603083",
+      "name": "剑桥科技",
+      "price": "254.87",
+      "change_pct": "+2.86%",
+      "amount": "58.98亿",
+      "turnover": "+8.50%",
+      "volume_ratio": "0.79",
+      "swing": "+7.09%",
+      "total_mv": "9385597.26亿",
+      "source_pool": "turnover",
+      "quick_score": 67.6,
+      "enriched": {
+        "real_time": {
+          "price": "254.87",
+          "open": "255.00",
+          "high": "256.36",
+          "low": "238.80",
+          "yestclose": "247.78",
+          "volume": "23425863",
+          "amount": "5898289359"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.10",
+          "main_ratio": "+8.64%",
+          "super_large_net": "2.87",
+          "large_net": "2.23",
+          "medium_net": "-3.14",
+          "small_net": "-1.96"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002851",
+      "name": "麦格米特",
+      "price": "167.18",
+      "change_pct": "+3.63%",
+      "amount": "68.57亿",
+      "turnover": "+8.96%",
+      "volume_ratio": "1.04",
+      "swing": "+7.10%",
+      "total_mv": "9726325.97亿",
+      "source_pool": "turnover",
+      "quick_score": 65.9,
+      "enriched": {
+        "real_time": {
+          "price": "167.18",
+          "open": "162.22",
+          "high": "171.66",
+          "low": "160.20",
+          "yestclose": "161.32",
+          "volume": "41051277",
+          "amount": "6857299062"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.64",
+          "main_ratio": "+3.85%",
+          "super_large_net": "1.92",
+          "large_net": "0.72",
+          "medium_net": "-1.13",
+          "small_net": "-1.51"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688008",
+      "name": "澜起科技",
+      "price": "309.90",
+      "change_pct": "+4.67%",
+      "amount": "272.85亿",
+      "turnover": "+7.84%",
+      "volume_ratio": "1.08",
+      "swing": "+7.81%",
+      "total_mv": "37875978.65亿",
+      "source_pool": "turnover",
+      "quick_score": 64.7,
+      "enriched": {
+        "real_time": {
+          "price": "309.90",
+          "open": "296.66",
+          "high": "313.13",
+          "low": "290.01",
+          "yestclose": "296.06",
+          "volume": "89911757",
+          "amount": "27285066121"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.29",
+          "main_ratio": "+3.77%",
+          "super_large_net": "5.88",
+          "large_net": "4.42",
+          "medium_net": "-9.71",
+          "small_net": "-0.59"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300620",
+      "name": "光库科技",
+      "price": "378.20",
+      "change_pct": "+3.56%",
+      "amount": "52.31亿",
+      "turnover": "+5.68%",
+      "volume_ratio": "0.93",
+      "swing": "+6.38%",
+      "total_mv": "9424008.21亿",
+      "source_pool": "turnover",
+      "quick_score": 64.1,
+      "enriched": {
+        "real_time": {
+          "price": "378.20",
+          "open": "364.53",
+          "high": "381.80",
+          "low": "358.50",
+          "yestclose": "365.20",
+          "volume": "14034072",
+          "amount": "5230759148"
+        },
+        "money_flow": {
+          "main_net_inflow": "4.86",
+          "main_ratio": "+9.29%",
+          "super_large_net": "3.17",
+          "large_net": "1.69",
+          "medium_net": "-0.46",
+          "small_net": "-4.40"
+        }
+      },
+      "overnight_score": 73.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688521",
+      "name": "芯原股份",
+      "price": "371.14",
+      "change_pct": "+2.52%",
+      "amount": "90.70亿",
+      "turnover": "+4.74%",
+      "volume_ratio": "0.87",
+      "swing": "+7.07%",
+      "total_mv": "19518819.44亿",
+      "source_pool": "turnover",
+      "quick_score": 62.9,
+      "enriched": {
+        "real_time": {
+          "price": "371.14",
+          "open": "360.00",
+          "high": "375.67",
+          "low": "350.09",
+          "yestclose": "362.00",
+          "volume": "24924025",
+          "amount": "9069671048"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.15",
+          "main_ratio": "+3.47%",
+          "super_large_net": "1.91",
+          "large_net": "1.24",
+          "medium_net": "-2.96",
+          "small_net": "-0.19"
+        }
+      },
+      "overnight_score": 71.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300274",
+      "name": "阳光电源",
+      "price": "159.02",
+      "change_pct": "+2.17%",
+      "amount": "116.16亿",
+      "turnover": "+4.67%",
+      "volume_ratio": "1.03",
+      "swing": "+5.09%",
+      "total_mv": "32968208.06亿",
+      "source_pool": "turnover",
+      "quick_score": 60.5,
+      "enriched": {
+        "real_time": {
+          "price": "159.02",
+          "open": "154.99",
+          "high": "160.26",
+          "low": "152.34",
+          "yestclose": "155.64",
+          "volume": "74179204",
+          "amount": "11615970580"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.75",
+          "main_ratio": "+2.37%",
+          "super_large_net": "1.72",
+          "large_net": "1.03",
+          "medium_net": "-0.84",
+          "small_net": "-1.91"
+        }
+      },
+      "overnight_score": 71.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002008",
+      "name": "大族激光",
+      "price": "150.11",
+      "change_pct": "+6.31%",
+      "amount": "157.02亿",
+      "turnover": "+10.99%",
+      "volume_ratio": "0.94",
+      "swing": "+11.78%",
+      "total_mv": "15455376.76亿",
+      "source_pool": "turnover",
+      "quick_score": 65.7,
+      "enriched": {
+        "real_time": {
+          "price": "150.11",
+          "open": "144.01",
+          "high": "155.32",
+          "low": "138.68",
+          "yestclose": "141.20",
+          "volume": "105143110",
+          "amount": "15702255975"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.55",
+          "main_ratio": "+2.26%",
+          "super_large_net": "1.97",
+          "large_net": "1.58",
+          "medium_net": "-4.05",
+          "small_net": "0.49"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz000977",
+      "name": "浪潮信息",
+      "price": "70.00",
+      "change_pct": "+6.35%",
+      "amount": "77.09亿",
+      "turnover": "+7.62%",
+      "volume_ratio": "1.44",
+      "swing": "+8.89%",
+      "total_mv": "10279336.59亿",
+      "source_pool": "turnover",
+      "quick_score": 61.2,
+      "enriched": {
+        "real_time": {
+          "price": "70.00",
+          "open": "65.21",
+          "high": "70.68",
+          "low": "64.83",
+          "yestclose": "65.82",
+          "volume": "111815931",
+          "amount": "7708729049"
+        },
+        "money_flow": {
+          "main_net_inflow": "13.30",
+          "main_ratio": "+17.26%",
+          "super_large_net": "11.83",
+          "large_net": "1.47",
+          "medium_net": "-5.86",
+          "small_net": "-7.44"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh600105",
+      "name": "永鼎股份",
+      "price": "67.48",
+      "change_pct": "+6.94%",
+      "amount": "70.25亿",
+      "turnover": "+7.33%",
+      "volume_ratio": "0.76",
+      "swing": "+9.41%",
+      "total_mv": "9865540.92亿",
+      "source_pool": "turnover",
+      "quick_score": 61.2,
+      "enriched": {
+        "real_time": {
+          "price": "67.48",
+          "open": "63.81",
+          "high": "67.90",
+          "low": "61.96",
+          "yestclose": "63.10",
+          "volume": "107133337",
+          "amount": "7025450929"
+        },
+        "money_flow": {
+          "main_net_inflow": "3.40",
+          "main_ratio": "+4.83%",
+          "super_large_net": "3.96",
+          "large_net": "-0.56",
+          "medium_net": "-0.45",
+          "small_net": "-2.95"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688981",
+      "name": "中芯国际",
+      "price": "158.82",
+      "change_pct": "+5.18%",
+      "amount": "166.80亿",
+      "turnover": "+5.34%",
+      "volume_ratio": "0.95",
+      "swing": "+7.06%",
+      "total_mv": "135961652.51亿",
+      "source_pool": "turnover",
+      "quick_score": 58.7,
+      "enriched": {
+        "real_time": {
+          "price": "158.82",
+          "open": "152.05",
+          "high": "160.66",
+          "low": "150.00",
+          "yestclose": "151.00",
+          "volume": "106679541",
+          "amount": "16679545014"
+        },
+        "money_flow": {
+          "main_net_inflow": "15.66",
+          "main_ratio": "+9.39%",
+          "super_large_net": "16.42",
+          "large_net": "-0.76",
+          "medium_net": "-8.95",
+          "small_net": "-6.70"
+        }
+      },
+      "overnight_score": 67.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300059",
+      "name": "东方财富",
+      "price": "20.38",
+      "change_pct": "+1.39%",
+      "amount": "86.72亿",
+      "turnover": "+3.22%",
+      "volume_ratio": "0.56",
+      "swing": "+4.13%",
+      "total_mv": "32245643.35亿",
+      "source_pool": "turnover",
+      "quick_score": 48.5,
+      "enriched": {
+        "real_time": {
+          "price": "20.38",
+          "open": "19.95",
+          "high": "20.57",
+          "low": "19.74",
+          "yestclose": "20.10",
+          "volume": "430348289",
+          "amount": "8672212614"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.54",
+          "main_ratio": "+2.92%",
+          "super_large_net": "2.02",
+          "large_net": "0.51",
+          "medium_net": "-1.68",
+          "small_net": "-0.86"
+        }
+      },
+      "overnight_score": 66.5,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 65.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300308",
+      "name": "中际旭创",
+      "price": "1270.00",
+      "change_pct": "+4.10%",
+      "amount": "349.61亿",
+      "turnover": "+2.49%",
+      "volume_ratio": "0.85",
+      "swing": "+6.34%",
+      "total_mv": "141634799.41亿",
+      "source_pool": "turnover",
+      "quick_score": 60.1,
+      "enriched": {
+        "real_time": {
+          "price": "1270.00",
+          "open": "1223.01",
+          "high": "1295.60",
+          "low": "1218.21",
+          "yestclose": "1220.00",
+          "volume": "27678291",
+          "amount": "34960563603"
+        },
+        "money_flow": {
+          "main_net_inflow": "20.09",
+          "main_ratio": "+5.75%",
+          "super_large_net": "20.45",
+          "large_net": "-0.36",
+          "medium_net": "-20.09",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh688041",
+      "name": "海光信息",
+      "price": "370.30",
+      "change_pct": "+4.36%",
+      "amount": "153.57亿",
+      "turnover": "+1.79%",
+      "volume_ratio": "0.91",
+      "swing": "+6.64%",
+      "total_mv": "86070239.51亿",
+      "source_pool": "turnover",
+      "quick_score": 59.2,
+      "enriched": {
+        "real_time": {
+          "price": "370.30",
+          "open": "360.20",
+          "high": "377.79",
+          "low": "354.24",
+          "yestclose": "354.84",
+          "volume": "41494368",
+          "amount": "15356900144"
+        },
+        "money_flow": {
+          "main_net_inflow": "13.81",
+          "main_ratio": "+8.99%",
+          "super_large_net": "12.49",
+          "large_net": "1.32",
+          "medium_net": "-13.46",
+          "small_net": "-0.35"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh601138",
+      "name": "工业富联",
+      "price": "72.15",
+      "change_pct": "+3.65%",
+      "amount": "117.24亿",
+      "turnover": "+0.83%",
+      "volume_ratio": "0.74",
+      "swing": "+5.43%",
+      "total_mv": "143175125.83亿",
+      "source_pool": "turnover",
+      "quick_score": 58.0,
+      "enriched": {
+        "real_time": {
+          "price": "72.15",
+          "open": "69.56",
+          "high": "72.96",
+          "low": "69.18",
+          "yestclose": "69.61",
+          "volume": "163770562",
+          "amount": "11723794622"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.23",
+          "main_ratio": "+8.73%",
+          "super_large_net": "8.89",
+          "large_net": "1.34",
+          "medium_net": "-5.18",
+          "small_net": "-5.05"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002371",
+      "name": "北方华创",
+      "price": "884.56",
+      "change_pct": "+2.83%",
+      "amount": "113.36亿",
+      "turnover": "+1.76%",
+      "volume_ratio": "1.02",
+      "swing": "+3.72%",
+      "total_mv": "64191563.88亿",
+      "source_pool": "turnover",
+      "quick_score": 56.8,
+      "enriched": {
+        "real_time": {
+          "price": "884.56",
+          "open": "890.00",
+          "high": "905.56",
+          "low": "873.53",
+          "yestclose": "860.19",
+          "volume": "12768745",
+          "amount": "11335700672"
+        },
+        "money_flow": {
+          "main_net_inflow": "5.32",
+          "main_ratio": "+4.69%",
+          "super_large_net": "1.24",
+          "large_net": "4.08",
+          "medium_net": "-5.31",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 66.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002384",
+      "name": "东山精密",
+      "price": "262.35",
+      "change_pct": "+5.11%",
+      "amount": "161.98亿",
+      "turnover": "+4.51%",
+      "volume_ratio": "0.88",
+      "swing": "+8.40%",
+      "total_mv": "48052223.60亿",
+      "source_pool": "turnover",
+      "quick_score": 57.6,
+      "enriched": {
+        "real_time": {
+          "price": "262.35",
+          "open": "247.54",
+          "high": "268.50",
+          "low": "247.54",
+          "yestclose": "249.59",
+          "volume": "62579658",
+          "amount": "16198463635"
+        },
+        "money_flow": {
+          "main_net_inflow": "10.28",
+          "main_ratio": "+6.35%",
+          "super_large_net": "8.36",
+          "large_net": "1.92",
+          "medium_net": "-5.30",
+          "small_net": "-4.98"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002050",
+      "name": "三花智控",
+      "price": "43.83",
+      "change_pct": "+6.20%",
+      "amount": "56.30亿",
+      "turnover": "+3.54%",
+      "volume_ratio": "1.28",
+      "swing": "+6.30%",
+      "total_mv": "18443725.08亿",
+      "source_pool": "turnover",
+      "quick_score": 55.3,
+      "enriched": {
+        "real_time": {
+          "price": "43.83",
+          "open": "42.01",
+          "high": "44.29",
+          "low": "41.69",
+          "yestclose": "41.27",
+          "volume": "130464531",
+          "amount": "5630490446"
+        },
+        "money_flow": {
+          "main_net_inflow": "7.62",
+          "main_ratio": "+13.54%",
+          "super_large_net": "6.29",
+          "large_net": "1.34",
+          "medium_net": "-3.93",
+          "small_net": "-3.69"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002916",
+      "name": "深南电路",
+      "price": "457.90",
+      "change_pct": "+5.47%",
+      "amount": "61.45亿",
+      "turnover": "+2.04%",
+      "volume_ratio": "1.02",
+      "swing": "+10.16%",
+      "total_mv": "31190618.39亿",
+      "source_pool": "turnover",
+      "quick_score": 52.1,
+      "enriched": {
+        "real_time": {
+          "price": "457.90",
+          "open": "430.46",
+          "high": "469.99",
+          "low": "425.87",
+          "yestclose": "434.16",
+          "volume": "13545225",
+          "amount": "6145301810"
+        },
+        "money_flow": {
+          "main_net_inflow": "7.62",
+          "main_ratio": "+12.40%",
+          "super_large_net": "6.20",
+          "large_net": "1.42",
+          "medium_net": "-7.62",
+          "small_net": "-0.01"
+        }
+      },
+      "overnight_score": 65.0,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 55.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300390",
+      "name": "天华新能",
+      "price": "93.51",
+      "change_pct": "+7.58%",
+      "amount": "58.94亿",
+      "turnover": "+9.66%",
+      "volume_ratio": "1.02",
+      "swing": "+9.95%",
+      "total_mv": "7768350.62亿",
+      "source_pool": "turnover",
+      "quick_score": 49.2,
+      "enriched": {
+        "real_time": {
+          "price": "93.51",
+          "open": "88.35",
+          "high": "94.48",
+          "low": "85.83",
+          "yestclose": "86.92",
+          "volume": "64968813",
+          "amount": "5893856832"
+        },
+        "money_flow": {
+          "main_net_inflow": "4.88",
+          "main_ratio": "+8.28%",
+          "super_large_net": "3.34",
+          "large_net": "1.54",
+          "medium_net": "-2.67",
+          "small_net": "-2.21"
+        }
+      },
+      "overnight_score": 63.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002281",
+      "name": "光迅科技",
+      "price": "256.94",
+      "change_pct": "+8.90%",
+      "amount": "142.02亿",
+      "turnover": "+7.37%",
+      "volume_ratio": "1.15",
+      "swing": "+12.16%",
+      "total_mv": "21263456.09亿",
+      "source_pool": "turnover",
+      "quick_score": 47.0,
+      "enriched": {
+        "real_time": {
+          "price": "256.94",
+          "open": "237.11",
+          "high": "259.00",
+          "low": "230.30",
+          "yestclose": "235.94",
+          "volume": "57491503",
+          "amount": "14202331849"
+        },
+        "money_flow": {
+          "main_net_inflow": "15.09",
+          "main_ratio": "+10.63%",
+          "super_large_net": "13.00",
+          "large_net": "2.10",
+          "medium_net": "-6.12",
+          "small_net": "-8.97"
+        }
+      },
+      "overnight_score": 63.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh600030",
+      "name": "中信证券",
+      "price": "28.73",
+      "change_pct": "+0.84%",
+      "amount": "63.11亿",
+      "turnover": "+1.81%",
+      "volume_ratio": "0.69",
+      "swing": "+2.21%",
+      "total_mv": "42579431.04亿",
+      "source_pool": "turnover",
+      "quick_score": 46.8,
+      "enriched": {
+        "real_time": {
+          "price": "28.73",
+          "open": "28.33",
+          "high": "28.95",
+          "low": "28.32",
+          "yestclose": "28.49",
+          "volume": "220333438",
+          "amount": "6310883111"
+        },
+        "money_flow": {
+          "main_net_inflow": "2.45",
+          "main_ratio": "+3.89%",
+          "super_large_net": "2.05",
+          "large_net": "0.41",
+          "medium_net": "-1.55",
+          "small_net": "-0.91"
+        }
+      },
+      "overnight_score": 61.5,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 50.0,
+        "position_advantage": 65.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002475",
+      "name": "立讯精密",
+      "price": "70.40",
+      "change_pct": "+7.81%",
+      "amount": "170.02亿",
+      "turnover": "+3.36%",
+      "volume_ratio": "0.83",
+      "swing": "+9.62%",
+      "total_mv": "51520535.08亿",
+      "source_pool": "turnover",
+      "quick_score": 43.7,
+      "enriched": {
+        "real_time": {
+          "price": "70.40",
+          "open": "65.24",
+          "high": "70.88",
+          "low": "64.60",
+          "yestclose": "65.30",
+          "volume": "245170389",
+          "amount": "17001653980"
+        },
+        "money_flow": {
+          "main_net_inflow": "20.11",
+          "main_ratio": "+11.83%",
+          "super_large_net": "18.30",
+          "large_net": "1.81",
+          "medium_net": "-5.88",
+          "small_net": "-14.24"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz300502",
+      "name": "新易盛",
+      "price": "607.00",
+      "change_pct": "+8.98%",
+      "amount": "345.27亿",
+      "turnover": "+4.66%",
+      "volume_ratio": "1.09",
+      "swing": "+10.25%",
+      "total_mv": "84631380.72亿",
+      "source_pool": "turnover",
+      "quick_score": 43.3,
+      "enriched": {
+        "real_time": {
+          "price": "607.00",
+          "open": "565.43",
+          "high": "612.86",
+          "low": "555.78",
+          "yestclose": "556.96",
+          "volume": "58442372",
+          "amount": "34527267520"
+        },
+        "money_flow": {
+          "main_net_inflow": "46.16",
+          "main_ratio": "+13.37%",
+          "super_large_net": "33.88",
+          "large_net": "12.28",
+          "medium_net": "-45.96",
+          "small_net": "-0.19"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz002463",
+      "name": "沪电股份",
+      "price": "152.80",
+      "change_pct": "+8.32%",
+      "amount": "133.62亿",
+      "turnover": "+4.63%",
+      "volume_ratio": "1.06",
+      "swing": "+9.91%",
+      "total_mv": "29404274.85亿",
+      "source_pool": "turnover",
+      "quick_score": 43.1,
+      "enriched": {
+        "real_time": {
+          "price": "152.80",
+          "open": "141.10",
+          "high": "155.08",
+          "low": "141.10",
+          "yestclose": "141.06",
+          "volume": "88985081",
+          "amount": "13362035389"
+        },
+        "money_flow": {
+          "main_net_inflow": "16.62",
+          "main_ratio": "+12.44%",
+          "super_large_net": "13.97",
+          "large_net": "2.66",
+          "medium_net": "-9.49",
+          "small_net": "-7.13"
+        }
+      },
+      "overnight_score": 61.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 75.0,
+        "position_advantage": 30.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sz000725",
+      "name": "京东方Ａ",
+      "price": "8.68",
+      "change_pct": "+9.18%",
+      "amount": "445.57亿",
+      "turnover": "+14.67%",
+      "volume_ratio": "1.37",
+      "swing": "+8.05%",
+      "total_mv": "32154476.76亿",
+      "source_pool": "turnover",
+      "quick_score": 57.2,
+      "enriched": {
+        "real_time": {
+          "price": "8.68",
+          "open": "8.15",
+          "high": "8.75",
+          "low": "8.11",
+          "yestclose": "7.95",
+          "volume": "5187899669",
+          "amount": "44556777597"
+        },
+        "money_flow": {
+          "main_net_inflow": "39.14",
+          "main_ratio": "+8.78%",
+          "super_large_net": "49.15",
+          "large_net": "-10.01",
+          "medium_net": "-27.48",
+          "small_net": "-11.66"
+        }
+      },
+      "overnight_score": 60.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 95.0,
+        "tail_strength": 85.0,
+        "position_advantage": 10.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "B"
+    },
+    {
+      "code": "sh600460",
+      "name": "士兰微",
+      "price": "54.66",
+      "change_pct": "+3.94%",
+      "amount": "117.89亿",
+      "turnover": "+13.30%",
+      "volume_ratio": "1.14",
+      "swing": "+9.18%",
+      "total_mv": "9095816.70亿",
+      "source_pool": "turnover",
+      "quick_score": 71.8,
+      "enriched": {
+        "real_time": {
+          "price": "54.66",
+          "open": "53.50",
+          "high": "55.23",
+          "low": "50.40",
+          "yestclose": "52.59",
+          "volume": "221297303",
+          "amount": "11789477941"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz002129",
+      "name": "TCL中环",
+      "price": "12.02",
+      "change_pct": "+2.47%",
+      "amount": "55.74亿",
+      "turnover": "+11.71%",
+      "volume_ratio": "1.30",
+      "swing": "+6.65%",
+      "total_mv": "4859825.16亿",
+      "source_pool": "turnover",
+      "quick_score": 70.6,
+      "enriched": {
+        "real_time": {
+          "price": "12.02",
+          "open": "11.67",
+          "high": "12.12",
+          "low": "11.34",
+          "yestclose": "11.73",
+          "volume": "473253641",
+          "amount": "5574282981"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    },
+    {
+      "code": "sz000988",
+      "name": "华工科技",
+      "price": "184.61",
+      "change_pct": "+4.28%",
+      "amount": "197.22亿",
+      "turnover": "+10.85%",
+      "volume_ratio": "1.46",
+      "swing": "+8.26%",
+      "total_mv": "18562585.47亿",
+      "source_pool": "turnover",
+      "quick_score": 70.4,
+      "enriched": {
+        "real_time": {
+          "price": "184.61",
+          "open": "179.00",
+          "high": "187.66",
+          "low": "173.03",
+          "yestclose": "177.03",
+          "volume": "109049716",
+          "amount": "19722408183"
+        },
+        "money_flow": {
+          "main_net_inflow": "0.00",
+          "main_ratio": "-",
+          "super_large_net": "0.00",
+          "large_net": "0.00",
+          "medium_net": "0.00",
+          "small_net": "0.00"
+        }
+      },
+      "overnight_score": 59.2,
+      "score_breakdown": {
+        "theme_continuity": 60.0,
+        "capital_continuity": 40.0,
+        "tail_strength": 85.0,
+        "position_advantage": 95.0,
+        "risk_penalty": 0.0
+      },
+      "tier": "C"
+    }
+  ]
+}
