@@ -12,7 +12,6 @@ import requests
 from .base import BaseDataSource, RateLimitConfig
 from .utils import format_price, format_volume, format_amount, format_percent, to_yi
 
-
 LHB_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 RZYE_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 EASTMONEY_LIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
