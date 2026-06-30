@@ -5,6 +5,7 @@ from .sina import SinaDataSource
 from .tencent import TencentDataSource
 from .sohu import SohuDataSource
 from .eastmoney import EastMoneyDataSource, set_cookie_file
+from .intraday import EastMoneyIntradayDataSource
 from .utils import (
     format_price,
     format_volume,
@@ -23,6 +24,7 @@ __all__ = [
     "TencentDataSource",
     "SohuDataSource",
     "EastMoneyDataSource",
+    "EastMoneyIntradayDataSource",
     "set_cookie_file",
     "format_price",
     "format_volume",
