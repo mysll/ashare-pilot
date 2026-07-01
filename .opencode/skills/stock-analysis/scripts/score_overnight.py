@@ -37,6 +37,18 @@ WEIGHTS_V1_1 = {
     "consistency": 0.05,
 }
 
+WEIGHTS_V1_2 = {
+    "theme_continuity": 0.18,
+    "capital_continuity": 0.18,
+    "tail_strength": 0.14,
+    "position_advantage": 0.09,
+    "risk_penalty": 0.10,
+    "intensity": 0.09,
+    "conviction": 0.09,
+    "consistency": 0.05,
+    "trend_quality": 0.08,
+}
+
 
 def parse_float(val, default=0.0):
     if val is None or val == "-" or val == "":
@@ -208,6 +220,26 @@ def extract_consistency_raw(stock):
     return alignment * 0.6 + concentration * 0.4
 
 
+def extract_trend_quality_raw(stock):
+    """Trend quality from Bollinger zone + MA alignment + volume ratio.
+    1.0 = bullish healthy trend (upper_half + bullish MAs + vol_ratio>1.5).
+    """
+    tech = stock.get("technicals", {})
+    if not tech or tech.get("boll_zone") == "no_data":
+        return 0.5
+
+    boll_zone = tech.get("boll_zone", "below_mid")
+    ma_alignment = tech.get("ma_alignment", "mixed")
+    above_ma5 = tech.get("above_ma5", False)
+
+    boll_score = 1.0 if boll_zone == "upper_half" else (0.3 if boll_zone == "below_mid" else 0.0)
+    ma_score = 1.0 if (ma_alignment == "bullish" and above_ma5) else 0.3
+    vol_ratio = parse_float(stock.get("volume_ratio", "1.0"))
+    vol_score = 1.0 if vol_ratio > 1.5 else (0.5 if vol_ratio > 1.0 else 0.0)
+
+    return boll_score * 0.4 + ma_score * 0.4 + vol_score * 0.2
+
+
 def compute_confidences(stock, raw_values, all_raws_by_dim):
     """Compute confidence components for this stock."""
     enriched = stock.get("enriched", {})
@@ -261,10 +293,11 @@ def compute_scores(pool):
             "intensity": extract_intensity_raw(s),
             "conviction": extract_conviction_raw(s),
             "consistency": extract_consistency_raw(s),
+            "trend": extract_trend_quality_raw(s),
         }
 
     all_raws = {}
-    for dim in ["theme", "capital", "tail", "position", "risk", "intensity", "conviction", "consistency"]:
+    for dim in ["theme", "capital", "tail", "position", "risk", "intensity", "conviction", "consistency", "trend"]:
         all_raws[dim] = [raws[i][dim] for i in raws]
 
     scored = []
@@ -280,30 +313,34 @@ def compute_scores(pool):
         intensity_pct = percentile_rank(all_raws["intensity"], r["intensity"])
         conviction_pct = percentile_rank(all_raws["conviction"], r["conviction"])
         consistency_pct = percentile_rank(all_raws["consistency"], r["consistency"])
+        trend_pct = percentile_rank(all_raws["trend"], r["trend"])
 
+        W = WEIGHTS_V1_2
         overnight_score = round(
-            theme_pct * WEIGHTS_V1_1["theme_continuity"]
-            + capital_pct * WEIGHTS_V1_1["capital_continuity"]
-            + tail_pct * WEIGHTS_V1_1["tail_strength"]
-            + position_pct * WEIGHTS_V1_1["position_advantage"]
-            + intensity_pct * WEIGHTS_V1_1["intensity"]
-            + conviction_pct * WEIGHTS_V1_1["conviction"]
-            + consistency_pct * WEIGHTS_V1_1["consistency"]
-            - (100.0 - risk_pct) * WEIGHTS_V1_1["risk_penalty"],
+            theme_pct * W["theme_continuity"]
+            + capital_pct * W["capital_continuity"]
+            + tail_pct * W["tail_strength"]
+            + position_pct * W["position_advantage"]
+            + intensity_pct * W["intensity"]
+            + conviction_pct * W["conviction"]
+            + consistency_pct * W["consistency"]
+            + trend_pct * W["trend_quality"]
+            - (100.0 - risk_pct) * W["risk_penalty"],
             1,
         )
 
         overnight_score = max(overnight_score, 0.0)
 
         trace = {
-            "theme_continuity": {"raw": round(r["theme"], 3), "pct": theme_pct, "weight": WEIGHTS_V1_1["theme_continuity"], "contrib": round(theme_pct * WEIGHTS_V1_1["theme_continuity"], 1)},
-            "capital_continuity": {"raw": round(r["capital"], 3), "pct": capital_pct, "weight": WEIGHTS_V1_1["capital_continuity"], "contrib": round(capital_pct * WEIGHTS_V1_1["capital_continuity"], 1)},
-            "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": WEIGHTS_V1_1["tail_strength"], "contrib": round(tail_pct * WEIGHTS_V1_1["tail_strength"], 1)},
-            "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": WEIGHTS_V1_1["position_advantage"], "contrib": round(position_pct * WEIGHTS_V1_1["position_advantage"], 1)},
-            "risk_penalty": {"raw": round(r["risk"], 3), "pct": risk_pct, "weight": WEIGHTS_V1_1["risk_penalty"], "contrib": round((100.0 - risk_pct) * WEIGHTS_V1_1["risk_penalty"], 1)},
-            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct, "weight": WEIGHTS_V1_1["intensity"], "contrib": round(intensity_pct * WEIGHTS_V1_1["intensity"], 1)},
-            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct, "weight": WEIGHTS_V1_1["conviction"], "contrib": round(conviction_pct * WEIGHTS_V1_1["conviction"], 1)},
-            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct, "weight": WEIGHTS_V1_1["consistency"], "contrib": round(consistency_pct * WEIGHTS_V1_1["consistency"], 1)},
+            "theme_continuity": {"raw": round(r["theme"], 3), "pct": theme_pct, "weight": W["theme_continuity"], "contrib": round(theme_pct * W["theme_continuity"], 1)},
+            "capital_continuity": {"raw": round(r["capital"], 3), "pct": capital_pct, "weight": W["capital_continuity"], "contrib": round(capital_pct * W["capital_continuity"], 1)},
+            "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": W["tail_strength"], "contrib": round(tail_pct * W["tail_strength"], 1)},
+            "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": W["position_advantage"], "contrib": round(position_pct * W["position_advantage"], 1)},
+            "risk_penalty": {"raw": round(r["risk"], 3), "pct": risk_pct, "weight": W["risk_penalty"], "contrib": round((100.0 - risk_pct) * W["risk_penalty"], 1)},
+            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct, "weight": W["intensity"], "contrib": round(intensity_pct * W["intensity"], 1)},
+            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct, "weight": W["conviction"], "contrib": round(conviction_pct * W["conviction"], 1)},
+            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct, "weight": W["consistency"], "contrib": round(consistency_pct * W["consistency"], 1)},
+            "trend_quality": {"raw": round(r["trend"], 3), "pct": trend_pct, "weight": W["trend_quality"], "contrib": round(trend_pct * W["trend_quality"], 1)},
         }
 
         confidence = compute_confidences(stock, r, all_raws)
@@ -366,7 +403,7 @@ def main():
     if isinstance(data, list):
         pool = data
 
-    print(f"Scoring {len(pool)} stocks (V1.1 Percentile)...", file=sys.stderr)
+    print(f"Scoring {len(pool)} stocks (V1.2 TrendQuality)...", file=sys.stderr)
 
     scored = compute_scores(pool)
 
@@ -389,7 +426,7 @@ def main():
     unique_scores = len(set(round(s, 1) for s in scores))
 
     output = {
-        "weights_version": "V1.1_Percentile",
+        "weights_version": "V1.2_TrendQuality",
         "pool_size": pool_size,
         "scored_count": len(scored),
         "opportunity_pool_size": len(opportunity_pool),

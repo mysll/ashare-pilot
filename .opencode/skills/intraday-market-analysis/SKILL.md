@@ -21,7 +21,7 @@ Step 1 and Step 2 NEVER produce Direction or RiskSeverity. Step 3 is the sole Re
 [14:30 Trigger]
         │
         ▼
-Compute Phase        ←  run_pipeline.py (once, ~8s)
+Compute Phase        ←  run_pipeline.py (once, ~85s — Phase 0 prefetch ~80s)
         │
         ├→ market_breadth.json
         ├→ indices.json
@@ -61,9 +61,11 @@ The pipeline is designed to run at **14:30** (20-minute execution window before 
 
 ## Performance Constraints
 
-- Target wall-clock: Compute (8s) + Step 1 (LLM, ~3s) + Step 2 (LLM, ~3s) + Step 3 (LLM, ~5s) = **< 20s**
+- Target wall-clock: Compute (~95s first run / ~15s cached) + Step 1 (LLM, ~3s) + Step 2 (LLM, ~3s) + Step 3 (LLM, ~5s) = **< 110s first run**
+- **CRITICAL: `run_pipeline.py` is a time-consuming operation (~95s total first run). Phase 0 prefetches all ~5500 A-stocks (~80s). Phase 3.5 builds K-line cache (~10s first run, negligible cached). Set Bash timeout to at least 180s.**
 - `run_pipeline.py` fetches data for the Scan Pool (300-500 stocks) using push2 API batch calls (pz=6000), NOT per-stock queries
 - Compute Pool enrichment (80-150 stocks) uses Sina batch quote API + single East Money money flow page
+- Phase 3.5 (Technical Indicators): fetches daily K-line via Sina for MA5/10/20/60 + Bollinger Bands (20,2) — cached to `.cache/kline/`
 - All output files are markdown written directly by the LLM — do NOT write scripts to generate them
 
 ---
@@ -75,6 +77,8 @@ The pipeline is designed to run at **14:30** (20-minute execution window before 
 ```bash
 python .opencode/skills/intraday-market-scan/scripts/run_pipeline.py --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
 ```
+
+**TIMEOUT:** This command is time-consuming (~85s, Phase 0 prefetch ~80s). Set Bash timeout **≥ 180s**.
 
 This produces all JSON files under `intraday/{YYYY-MM-DD}/`.
 
@@ -245,6 +249,7 @@ Outputs:
 - All numeric data comes from Python compute layer; LLM never generates numbers
 - Step 1 and Step 2 NEVER produce Direction or RiskSeverity — Step 3 is the sole Reasoning authority
 - `run_pipeline.py` calls push2.eastmoney.com → requires `.cookie` file with valid `EASTMONEY_COOKIE`
+- **Timeout:** `run_pipeline.py`'s Phase 0 (all-stocks cache) is slow (~80s). Always use Bash timeout ≥ 180s. Cache is persisted to disk so subsequent same-day runs skip Phase 0.
 - Trading execution window: 14:50-14:57 (pipeline must complete before this)
 - Theme detection is bottom-up (stocks → themes), NOT top-down (news → themes)
 - Weights are V1 Rule Based — explicitly designed for future V2 calibration via backtesting

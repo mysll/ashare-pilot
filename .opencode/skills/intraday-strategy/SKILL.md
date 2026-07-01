@@ -92,11 +92,29 @@ Stocks in Compute Pool near threshold (score 42-44, tier D but close to C). Incl
 ### 7. Excluded Stocks
 Stocks that were in Compute Pool but scored < 45 with clear reason (e.g., "净流出", "涨幅>9%追高风险", "换手>25%").
 
-## Strategy Integration
+## Memory Integration
 
-If generating tomorrow's trading plan:
-- Read `memory/RULES.md` for active rules
-- Apply position sizing based on tier (A: observe, B: standard position, C: half position)
+### BEFORE generating
+
+Read full content of:
+- `memory/INTRADAY_RULES.md` — 尾盘/T+1 隔夜专属规则
+- `memory/SHARED_RULES.md` — 通用规则（两Agent共用）
+
+Apply rules via semantic matching in ReasoningTrace (see § ReasoningTrace).
+
+### AFTER generating
+
+Append entry to `memory/intraday/INDEX.md`:
+
+```
+| Date | Regime | Top Pick | Tier | Score | File |
+|------|:------:|---------|:----:|:----:|------|
+| 2026-07-01 | neutral | code(name) | B | 72 | [intraday_mapper](intraday/2026-07-01/intraday_mapper.md) |
+```
+
+### Position Sizing
+
+Apply size based on tier (A: observe, B: standard position, C: half position)
 - Set stop-loss based on ATR (from enriched data)
 - Note: buy execution window is 14:50-14:57
 
@@ -111,6 +129,16 @@ Alongside `intraday_mapper.md`, generate `overnight_strategy.md` with:
 3. **T+1 兑现计划** — 每只核心持仓如何退出（竞价条件 / 开盘策略 / 止损线）
 4. **Risk Control** — 整体风控、仓位上限、止损规则、板块分散
 5. **ReasoningTrace** — per-stock 方向推理路径 + 规则应用
+
+对每个 B-Tier 候选执行规则语义匹配，记录应用的规则编号：
+
+```
+| 代码 | 方向路径 | 规则应用 | Tier判定依据 |
+|------|----------|----------|-------------|
+| sz000977 | Score=82→A; capital=强→B; tail=位置高位→降1档; final=B | I01(Suitable→Watch); I05(>75→Suitable) | 主力强但位置偏高降级 |
+```
+
+规则应用字段格式：`{规则编号}({匹配结果})`，多个规则以 `;` 分隔。
 
 ## Stock Eligibility Filter (Strategy Generation Rule)
 
@@ -149,7 +177,7 @@ Excluded-board stocks:
 ### 应用优先级
 
 ```
-board-policy → 涨停封板 → score tiers → RULES.md 规则
+board-policy → 涨停封板 → score tiers → INTRADAY_RULES.md + SHARED_RULES.md 规则
 ```
 
 先剔除不可交易标的，剩余池中再做评分筛选与规则应用。

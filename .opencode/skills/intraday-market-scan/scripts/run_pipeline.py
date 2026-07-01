@@ -131,6 +131,15 @@ def main():
     ]
     results["enrich"] = run_cmd(enrich_cmd, "enrich")
 
+    # ── Phase 3.5: Technical Indicators ──
+    print("\n--- Phase 3.5: Technical Indicators ---")
+    tech_cmd = [
+        sys.executable, f"{script_base}/enrich_technicals.py",
+        str(out_dir / "compute_pool_enriched.json"),
+        "--json", "-o", str(out_dir / "compute_pool_enriched.json"),
+    ]
+    results["technicals"] = run_cmd(tech_cmd, "technicals")
+
     # ── Phase 4: Overnight Scoring ──
     print("\n--- Phase 4: Overnight Scoring ---")
     score_cmd = [

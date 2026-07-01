@@ -205,9 +205,8 @@ class EastMoneyIntradayDataSource(BaseDataSource):
             "turnover": format_percent(rec.get("turnover")),
             "volume_ratio": (
                 f"{float(rec.get('vol_ratio', 0)):.2f}"
-                if rec.get("vol_ratio") and rec.get("vol_ratio") != "-"
-                and str(rec.get("vol_ratio", "")).replace(".", "").replace("-", "").isdigit()
-                else "-"
+                if rec.get("vol_ratio") not in (None, "-", "")
+                else "0.00"
             ),
             "total_mv": (
                 format_amount(float(rec.get("total_mv", 0)) * 10000)
