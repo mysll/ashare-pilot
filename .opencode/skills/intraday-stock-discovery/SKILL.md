@@ -88,5 +88,6 @@ Also produce `intraday/{date}/theme_ranking.md`:
 - DO NOT compute overnight scores — Skill 3 does that
 - DO NOT output Direction, RiskSeverity, or buy/sell recommendations
 - Theme heat is purely statistical from stock count + stock performance, NEVER from news
-- The theme library is used for STATIC membership lookup only; live concept ranking from Skill 1 provides real-time data
+- The theme library is used for STATIC membership lookup only; live concept dashboard from Skill 1 (`concept_dashboard.json`) provides real-time multi-dimensional data
+- (Optional) Cross-reference Skill 1's Composite rank for validation: if a bottom-up theme ranks top-5 in both Skill 2 Heat and Skill 1 Composite, confidence is reinforced
 - This skill serves as a V1 handoff layer: structured JSON for Skill 3 to consume

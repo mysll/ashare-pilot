@@ -13,14 +13,42 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 
 from datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CONFIG_PATH = os.path.join(_PROJECT_ROOT, ".opencode", "config", "trading-scope.json")
 
-def build_scan_pool() -> list:
+
+def load_board_exclusions():
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+    excluded = set()
+    for prefix, rule in config.get("boards", {}).items():
+        if rule.get("exclude", False):
+            excluded.add(prefix.lower())
+    return excluded
+
+
+def is_excluded(code, excluded_prefixes):
+    if not code:
+        return False
+    code_lower = code.lower()
+    for prefix in excluded_prefixes:
+        if code_lower.startswith(prefix):
+            return True
+    return False
+
+
+def build_scan_pool(all_stocks: list = None) -> list:
     seen = set()
     pool = []
 
@@ -33,13 +61,13 @@ def build_scan_pool() -> list:
             s["source_pool"] = source_label
             pool.append(s)
 
-    limit_up = _ds.fetch_limit_up_pool(top=100)
+    limit_up = _ds.fetch_limit_up_pool(top=100, all_stocks=all_stocks)
     add_stocks(limit_up, "limit_up")
 
     turnover = _ds.fetch_turnover_ranking(top=200)
     add_stocks(turnover, "turnover")
 
-    all_gainers = _ds.fetch_scan_stocks(top=500)
+    all_gainers = _ds.fetch_scan_stocks(top=500, all_stocks=all_stocks)
     for s in all_gainers:
         change_str = s.get("change_pct", "0%")
         try:
@@ -52,6 +80,19 @@ def build_scan_pool() -> list:
                 add_stocks([s], "gain_range")
 
     return pool
+
+
+def apply_board_filter(pool, excluded_prefixes):
+    if not excluded_prefixes:
+        return pool, []
+    kept = []
+    removed = []
+    for s in pool:
+        if is_excluded(s.get("code", ""), excluded_prefixes):
+            removed.append(s)
+        else:
+            kept.append(s)
+    return kept, removed
 
 
 def compute_quick_score(pool: list) -> list:
@@ -121,13 +162,35 @@ def main():
         "--compute-pool-size", type=int, default=120,
         help="Compute Pool size (default: 120)",
     )
+    parser.add_argument(
+        "--no-board-filter", action="store_true",
+        help="Disable board exclusion filter (sh688/bj)",
+    )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
+    parser.add_argument("--cache-dir", metavar="DIR", help="Use cached all_stocks data from directory")
     args = parser.parse_args()
 
+    all_stocks = None
+    if args.cache_dir:
+        all_stocks = _ds.fetch_all_astocks(cache_dir=args.cache_dir)
+
     print("Building Scan Pool from multiple sources...", file=sys.stderr)
-    scan_pool = build_scan_pool()
+    scan_pool = build_scan_pool(all_stocks=all_stocks)
     print(f"Scan Pool: {len(scan_pool)} stocks", file=sys.stderr)
+
+    if not args.no_board_filter:
+        excluded_prefixes = load_board_exclusions()
+        if excluded_prefixes:
+            scan_pool, removed = apply_board_filter(scan_pool, excluded_prefixes)
+            prefix_str = ", ".join(sorted(excluded_prefixes))
+            print(f"Board filter ({prefix_str}): removed {len(removed)}, kept {len(scan_pool)}", file=sys.stderr)
+        else:
+            removed = []
+    else:
+        removed = []
+        excluded_prefixes = set()
+        print("Board filter disabled (--no-board-filter)", file=sys.stderr)
 
     print("Computing QuickScore...", file=sys.stderr)
     scored = compute_quick_score(scan_pool)
@@ -140,6 +203,12 @@ def main():
         "compute_pool_size": len(compute_pool),
         "compute_pool": compute_pool,
     }
+    if not args.no_board_filter and removed:
+        output["board_filtered"] = {
+            "prefixes": sorted(excluded_prefixes) if excluded_prefixes else [],
+            "removed_count": len(removed),
+            "removed_codes": [s.get("code") for s in removed],
+        }
 
     output_str = json.dumps(output, ensure_ascii=False, indent=2)
 

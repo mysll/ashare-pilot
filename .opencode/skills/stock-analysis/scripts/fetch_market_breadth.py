@@ -8,10 +8,12 @@ Usage:
     python fetch_market_breadth.py
     python fetch_market_breadth.py --json
     python fetch_market_breadth.py --json -o breadth.json
+    python fetch_market_breadth.py --cache-dir intraday/2026-06-30 --json
 """
 
 import argparse
 import json
+import os
 import sys
 
 from datasources import EastMoneyIntradayDataSource
@@ -26,9 +28,10 @@ def main():
     parser = argparse.ArgumentParser(description="Fetch market breadth data")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
+    parser.add_argument("--cache-dir", metavar="DIR", help="Use cached all_stocks data from directory")
     args = parser.parse_args()
 
-    result = _ds.fetch_market_breadth()
+    result = _ds.fetch_market_breadth(cache_dir=args.cache_dir)
 
     if args.json:
         output_str = json.dumps(result, ensure_ascii=False, indent=2)

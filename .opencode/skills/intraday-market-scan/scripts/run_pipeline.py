@@ -20,7 +20,13 @@ from datetime import datetime
 from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "stock-analysis" / "scripts"
+LOCAL_SCRIPTS_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+
+import sys as _sys
+_sys.path.insert(0, str(SCRIPTS_DIR))
+from datasources import EastMoneyIntradayDataSource
+_cache_ds = EastMoneyIntradayDataSource()
 
 
 def run_cmd(cmd: list, label: str = "") -> dict:
@@ -74,13 +80,20 @@ def main():
     print(f"Output dir: {out_dir}")
     total_start = time.time()
 
+    # ── Phase 0: Prefetch all-stocks cache (once, shared by all downstream) ──
+    print("\n--- Phase 0: Prefetch all-stocks cache ---")
+    t0 = time.time()
+    all_stocks = _cache_ds.fetch_all_astocks(cache_dir=str(out_dir))
+    print(f"  Cached {len(all_stocks)} stocks in {time.time() - t0:.1f}s")
+    cache_dir_arg = str(out_dir)
+
     # ── Phase 1: Market Scan (parallel-ready independent calls) ──
     print("\n--- Phase 1: Market Scan ---")
 
     results = {}
     tasks = [
         (
-            [sys.executable, f"{script_base}/fetch_market_breadth.py", "--json", "-o", str(out_dir / "market_breadth.json")],
+            [sys.executable, f"{script_base}/fetch_market_breadth.py", "--json", "-o", str(out_dir / "market_breadth.json"), "--cache-dir", cache_dir_arg],
             "breadth",
         ),
         (
@@ -88,7 +101,7 @@ def main():
             "indices",
         ),
         (
-            [sys.executable, f"{script_base}/fetch_concept_ranking.py", "--json", "--top", "20", "-o", str(out_dir / "concept_ranking.json")],
+            [sys.executable, f"{LOCAL_SCRIPTS_DIR}/build_concept_dashboard.py", "--json", "--top", "100", "-o", str(out_dir / "concept_dashboard.json"), "--cache-dir", cache_dir_arg],
             "concept",
         ),
         (
@@ -105,6 +118,7 @@ def main():
         sys.executable, f"{script_base}/build_scan_pool.py",
         "--compute-pool-size", str(args.compute_pool_size),
         "--json", "-o", str(out_dir / "scan_pool.json"),
+        "--cache-dir", cache_dir_arg,
     ]
     results["scan"] = run_cmd(scan_cmd, "scan")
 

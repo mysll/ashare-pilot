@@ -11,6 +11,7 @@ Usage:
 
 import argparse
 import json
+import os
 import sys
 import time
 
@@ -19,6 +20,33 @@ from datasources.eastmoney import set_cookie_file
 
 _sina = SinaDataSource()
 _eastmoney = EastMoneyDataSource()
+
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+CONFIG_PATH = os.path.join(_PROJECT_ROOT, ".opencode", "config", "trading-scope.json")
+
+
+def load_board_exclusions():
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return set()
+
+    excluded = set()
+    for prefix, rule in config.get("boards", {}).items():
+        if rule.get("exclude", False):
+            excluded.add(prefix.lower())
+    return excluded
+
+
+def is_excluded(code, excluded_prefixes):
+    if not code:
+        return False
+    code_lower = code.lower()
+    for prefix in excluded_prefixes:
+        if code_lower.startswith(prefix):
+            return True
+    return False
 
 
 def fetch_indicators_for_codes(codes: list) -> dict:
@@ -90,11 +118,31 @@ def main():
     parser = argparse.ArgumentParser(description="Enrich Compute Pool with indicators")
     parser.add_argument("input", help="Compute Pool JSON file from build_scan_pool.py")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
+    parser.add_argument(
+        "--no-board-filter", action="store_true",
+        help="Disable board exclusion filter (sh688/bj)",
+    )
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
     args = parser.parse_args()
 
     print(f"Loading Compute Pool from {args.input}...", file=sys.stderr)
     pool = load_compute_pool(args.input)
+
+    if not args.no_board_filter:
+        excluded_prefixes = load_board_exclusions()
+        if excluded_prefixes:
+            kept = []
+            removed = []
+            for s in pool:
+                if is_excluded(s.get("code", ""), excluded_prefixes):
+                    removed.append(s.get("code", "?"))
+                else:
+                    kept.append(s)
+            if removed:
+                prefix_str = ", ".join(sorted(excluded_prefixes))
+                print(f"Board filter ({prefix_str}): removed {len(removed)}, kept {len(kept)}", file=sys.stderr)
+                pool = kept
+
     codes = [s["code"] for s in pool if s.get("code")]
     print(f"Enriching {len(codes)} stocks...", file=sys.stderr)
 
@@ -132,6 +180,8 @@ def main():
         "enriched_time": time.strftime("%Y-%m-%d %H:%M:%S"),
         "compute_pool": pool,
     }
+    if not args.no_board_filter and load_board_exclusions():
+        output["board_filter_active"] = True
 
     output_str = json.dumps(output, ensure_ascii=False, indent=2)
 

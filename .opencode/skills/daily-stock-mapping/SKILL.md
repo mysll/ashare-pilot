@@ -18,7 +18,7 @@ Loaded by financial-news-mapper subagent when dispatched for pipeline stock-data
 
 ## Scope
 
-A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (`sh688*`, `bj*`) are **config-driven** — see `config/trading-scope.json` (§ Board Exclusion Policy). Default policy excludes both.
+A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (`sh688*`, `bj*`) are **config-driven** — see `.opencode/config/trading-scope.json` (§ Board Exclusion Policy). Default policy excludes both.
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
@@ -32,7 +32,7 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (
 |---------|-----|
 | Theme name not found in Theme Library | Discard. Theme Library is the only source. |
 | Stock entered pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable to one of 4 sources. |
-| Stock in `config/trading-scope.json` excluded boards entered pool | Remove. Board exclusion is config-driven, not hardcoded. |
+| Stock in `.opencode/config/trading-scope.json` excluded boards entered pool | Remove. Board exclusion is config-driven, not hardcoded. |
 | Wrote a Python/JS script to generate JSON intermediate file | Delete script. Write markdown directly. |
 | theme_stocks.md row missing `source_themes` column | Re-add. Downstream needs WHY a stock is in pool. |
 | mapper.md contains buy/stop/target recommendations | Remove. Strategy is Step 3 territory. |
@@ -251,7 +251,7 @@ The same stock may appear under multiple themes. Deduplicate by stock code:
 
 1. Merge `source_themes` list, keep the highest score across themes, record all theme associations
 
-2. **Board filter — config-driven** (read `config/trading-scope.json`):
+2. **Board filter — config-driven** (read `.opencode/config/trading-scope.json`):
    - 默认排除 `sh688*` (科创板 STAR) 和 `bj*` (北交所 BSE)
    - excluded 股票写入 `Removed Stocks` 节并标 `ExclusionSource=board-policy`
    - 不 silence-drop：	board-policy 排除的股要在 Excluded Stocks 列出（Step 3 / 配置审计需要）
@@ -286,7 +286,7 @@ Total unique stocks: 156 (deduplicated across themes)
 | 3 | sh600522 | 中天科技 | 81.8 | AI算力(81.8) | — | — | ✓ |
 | ... |
 
-Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source channels. Mkt? = from market_active query. Board filter: see `config/trading-scope.json`. Anchor 判定在 Structured Dataset Generation 阶段一次性查 RoleTags，本表不列 Anch? 临时代号。
+Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source channels. Mkt? = from market_active query. Board filter: see `.opencode/config/trading-scope.json`. Anchor 判定在 Structured Dataset Generation 阶段一次性查 RoleTags，本表不列 Anch? 临时代号。
 ```
 
 ### Constraints
@@ -297,7 +297,7 @@ Source Themes format: ThemeName(score). News?/LHB?/Mkt? = ✓ marks source chann
 - LHB and news-mentioned stocks are always kept; if they fail technical hard filters, flag for manual review instead of removal
 - Market-active stocks (`source: market_active`) are supplemental — they bypass theme library candidate ranking but NOT board/technical filters
 - Deduplication is mandatory before Technical Enrichment to avoid redundant API calls
-- Board filter（per `config/trading-scope.json`）is applied BEFORE Technical Enrichment — never fetch indicators for excluded boards
+- Board filter（per `.opencode/config/trading-scope.json`）is applied BEFORE Technical Enrichment — never fetch indicators for excluded boards
 - If a theme's post-filter hard-filter candidate count drops below 8, re-run pure stock supplement with `--top 20` for that theme — **最多 1 轮**，不可无限循环（P3-2）
 
 ---
@@ -845,7 +845,7 @@ Structured key-value table。Extract from news.md market overview + 融资 + 指
 | DominantThemes | string | themes.md top 2-3 | 不变 |
 | FinancingFlow | string | news / fetch_special | 不变 |
 | RiskFlags | string | news.md 宏观扫描 | 逗号分隔 token |
-| **BoardPolicy** | string | `config/trading-scope.json` | 反映实际排除策略，非硬编码 |
+| **BoardPolicy** | string | `.opencode/config/trading-scope.json` | 反映实际排除策略，非硬编码 |
 | **RegimeHint** | enum | **Step 3 Reasoning 评定**（不是 Step 2）| Step 2 不输出 RegimeHint。Step 3 据上证竞价 + 科创50 + 主题 heat 综合评定 |
 
 **RegimeHint 阈值**（参考，Step 3 Reasoning 在使用时评定）：
@@ -1000,7 +1000,7 @@ Extracted from theme_stocks.md `### Removed Stocks` 节。新增 `ExclusionSourc
 
 | ExclusionSource | Meaning |
 |-----------------|---------|
-| `board-policy` | `config/trading-scope.json` 驱动（sh688/bj） |
+| `board-policy` | `.opencode/config/trading-scope.json` 驱动（sh688/bj） |
 | `hard-filter` | liquidity < 3亿 / atr_pct > 8% |
 | `indicators-fetch-failed` | Phase 2 fetch 失败（P0-7） |
 | `soft-filter` | tech_score < 50 |
@@ -1010,7 +1010,7 @@ Extracted from theme_stocks.md `### Removed Stocks` 节。新增 `ExclusionSourc
 
 ### Board Exclusion Policy (V4-U 配置化)
 
-写入 `.opencode/skills/daily-stock-mapping/config/trading-scope.json`：
+写入 `.opencode/config/trading-scope.json`：
 
 ```json
 {

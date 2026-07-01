@@ -49,7 +49,7 @@ or recommend buy/sell.
 3. **Theme Library is the ONLY source** for theme-stock mappings. Never invent
    themes, concepts, or stocks.
 4. **A-shares only** (sh/sz prefix). Board exclusions per
-   `../daily-stock-mapping/config/trading-scope.json`.
+   `.opencode/config/trading-scope.json`.
 5. **All output in Chinese** (中文).
 
 ## Workflow

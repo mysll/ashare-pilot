@@ -48,7 +48,7 @@ Tiers: A (75+) = Leader Watch, B (60-74) = Premium Candidates, C (45-59) = Early
 Generate `intraday/{YYYY-MM-DD}/intraday_mapper.md` with 7 sections.
 
 ### 1. Market State
-Copy from Skill 1 output — indices, breadth, capital direction, top 5 active concepts.
+Copy from Skill 1 output — indices, breadth, capital direction, Theme Dashboard (top 10 by Composite rank).
 
 ### 2. Theme Ranking
 Copy from Skill 2 output — statistical theme ranking, top 10. Heat scores with breakdown.
@@ -112,10 +112,76 @@ Alongside `intraday_mapper.md`, generate `overnight_strategy.md` with:
 4. **Risk Control** — 整体风控、仓位上限、止损规则、板块分散
 5. **ReasoningTrace** — per-stock 方向推理路径 + 规则应用
 
+## Stock Eligibility Filter (Strategy Generation Rule)
+
+Before recommending any stock for **买入/持有** (not Watch), apply these filters:
+
+### Board Exclusion (config-driven)
+
+Read `.opencode/config/trading-scope.json`. Apply board exclusion.
+
+| Board Prefix | Default | Rule |
+|-------------|:-------:|------|
+| `sh688*` | **EXCLUDE** | 科创板 — account scope excluded |
+| `bj*` | **EXCLUDE** | 北交所 — account scope excluded |
+| `sh60*`, `sz00*`, `sz30*` | OK | 主板+创业板 — allowed |
+
+Excluded-board stocks:
+- **NEVER** appear in B-Tier buy recommendations
+- May appear in A-Tier (Leader Watch, marked as `board-policy` excluded)
+- Must be listed in Excluded Stocks table with `ExclusionSource=board-policy`
+
+### 涨停封板 Filter
+
+| Condition | Rule |
+|-----------|------|
+| `change_pct` ≥ 涨停阈值（主板10%, 科创/创业20%）AND 封板 | **不可尾盘买入** — 已封板无成交机会 |
+| Above + expected to open 涨停 next day | A-Tier (Leader Watch only) |
+| Above + expected to open near limit | A-Tier, note "涨停封死尾盘不可成交" |
+
+**Rationale**: 14:50-14:57 执行窗口内，涨停封死股票无人卖出，不存在成交机会。此类股票仅作为次日竞价的观察标的。
+
+涨停股票在 overnight_strategy.md 中：
+- ✅ 可放在 A-Tier Leader Watch（标注"涨停封板不可尾盘买入，明日竞价关注"）
+- ❌ 不可放在 B-Tier 核心持仓中建议尾盘买入
+- ❌ 不可给出 T+1 持仓意图为"隔夜持有"
+
+### 应用优先级
+
+```
+board-policy → 涨停封板 → score tiers → RULES.md 规则
+```
+
+先剔除不可交易标的，剩余池中再做评分筛选与规则应用。
+
+## Strategy Table — Direction & Position Rules
+
+### 方向枚举用法
+
+| 方向 | 含义 | 何时用 |
+|------|------|--------|
+| `持有偏多` | 尾盘买入，隔夜持有 | B-Tier + 非涨停 + 非排除板 + 主线≥4★ |
+| `持有` | 尾盘买入，基础仓位 | B-Tier + 非涨停 + 非排除板 |
+| `谨慎持有` | 减半仓，预设止损 | B-Tier + 有风险标记（高换手/弱主力/非核心主线） |
+| `观望` | 不买，明日观察 | A-Tier / 涨停封板 / 排除板 / 非主线降级 |
+
+### 交易策略枚举用法
+
+| 策略 | 含义 | 适用条件 |
+|------|------|----------|
+| `趋势跟随` | 追涨型，高开不加仓 | 涨幅3-7%，主力强，位置优势>80分位 |
+| `回调布局` | 等回踩买入 | 已大涨但未涨停，次日可能回踩MA5 |
+| `强势接力` | 涨停次日接力 | 涨停封板股 → **仅A-Tier观望，不尾盘买** |
+| `防御布局` | 低吸稳健型 | 低涨幅+低换手+大市值 |
+
 ## Constraints
 
 - This is the ONLY skill that outputs Direction, RiskSeverity, or Expected Premium
 - All scores come from `score_overnight.py` output; LLM does NOT compute scores
 - LLM role: interpret scores, write reasoning trace, generate natural-language strategy, query rules
 - Do NOT recalculate any numbers — trust the compute layer
+- When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)
+- **涨停封板股票 (seal_quality="封死") 不得出现在B-Tier尾盘买入推荐中**
+- **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per .opencode/config/trading-scope.json)**
+- Excluded-board 和涨停封板股票可出现在 A-Tier 观察区，但必须标注排除原因
 - Output language: 中文
