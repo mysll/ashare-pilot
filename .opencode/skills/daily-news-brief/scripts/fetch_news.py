@@ -315,6 +315,37 @@ def fetch_21jingji() -> list[dict[str, str]]:
     return items[:30]
 
 
+_SINA_IGNORE = {"股票", "新股", "港股", "美股", "基金", "期货", "外汇", "黄金", "债券",
+                 "理财", "银行", "保险", "信托", "专栏", "博客", "数据", "视频", "直播",
+                 "首页", "ESG", "医药", "会议", "免费试用", "买基金", "新浪财经APP",
+                 "手机版", "环球股指", "投研中心", "黑猫投诉", "收藏", "设为书签"}
+
+
+def fetch_sina() -> list[dict[str, str]]:
+    """新浪财经 — 综合财经新闻"""
+    resp = requests.get(
+        "https://finance.sina.com.cn/",
+        headers={"User-Agent": UA},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    resp.encoding = "utf-8"
+    items = []
+    seen = set()
+    pattern = r'<a[^>]+href=[\"\'](https?://finance\.sina\.com\.cn/[^\"\']+/\d{4}-\d{2}-\d{2}/doc-[^\"\']+\.shtml)[\"\'][^>]*>([^<]{10,})</a>'
+    for url, title in re.findall(pattern, resp.text):
+        title = re.sub(r'<[^>]+>', '', title).strip()
+        if not title or title in seen:
+            continue
+        seen.add(title)
+        items.append({
+            "title": title,
+            "url": url,
+            "source": "Sina Finance",
+        })
+    return items[:30]
+
+
 def fetch_all_news() -> dict[str, list[dict[str, str]]]:
     result = {}
     for name, fn in NEWS_SOURCES.items():
@@ -337,6 +368,7 @@ NEWS_SOURCES: dict[str, Any] = {
     "stcn": fetch_stcn,
     "yicai": fetch_yicai,
     "21jingji": fetch_21jingji,
+    "sina": fetch_sina,
 }
 
 

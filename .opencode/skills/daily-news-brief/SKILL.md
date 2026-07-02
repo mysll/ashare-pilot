@@ -36,6 +36,7 @@ By default, outputs Markdown format briefing to stdout.
 | stcn | Securities Times | Capital market & regulatory news |
 | yicai | Yicai (China Business News) | Comprehensive financial news |
 | 21jingji | 21st Century Business Herald | In-depth financial reporting |
+| sina | Sina Finance | Comprehensive financial news |
 
 ## Usage Examples
 
