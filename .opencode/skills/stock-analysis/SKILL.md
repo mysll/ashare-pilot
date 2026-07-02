@@ -173,12 +173,6 @@ python .opencode/lib/fetch/fetch_turnover_ranking.py --top 20 --json
 python .opencode/lib/fetch/fetch_market_breadth.py --json
 ```
 
-### North Bound Flow (北向资金)
-
-```bash
-python .opencode/lib/fetch/fetch_north_bound.py --json
-```
-
 ### Board Money Flow (板块资金流向)
 
 ```bash
@@ -212,7 +206,6 @@ python .opencode/lib/fetch/fetch_board_money_flow.py industry --top 20 --json
 | `fetch_limit_up_pool.py`   | Limit-up stock pool         | A stocks         |
 | `fetch_turnover_ranking.py`| Turnover rate ranking       | A stocks         |
 | `fetch_market_breadth.py`  | Market breadth statistics   | A stocks         |
-| `fetch_north_bound.py`     | North-bound capital flow    | A stocks         |
 | `fetch_board_money_flow.py`| Board-level money flow      | A stocks         |
 
 ## Data Source Classes (`.opencode/lib/datasources/`)
