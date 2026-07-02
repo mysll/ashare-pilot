@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch board-level money flow data from East Money.
 
 Supports concept board (概念板块) and industry sector (行业板块) money flow
@@ -18,7 +18,11 @@ import io
 import json
 import sys
 
-from datasources import EastMoneyDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyDataSource
 
 _ds = EastMoneyDataSource()
 

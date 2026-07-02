@@ -15,11 +15,11 @@ import json
 import sys
 from pathlib import Path
 
-_scripts_dir = Path(__file__).resolve().parent.parent.parent / "stock-analysis" / "scripts"
+_scripts_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / ".opencode"
 sys.path.insert(0, str(_scripts_dir))
 
 # Import is deferred to when actually fetching indicators
-# from fetch_stock import fetch_stock_list  # optionally inject open_pct
+# from lib.fetch.fetch_stock import fetch_stock_list  # optionally inject open_pct
 
 
 def _raw_val(raw, field):

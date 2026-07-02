@@ -10,13 +10,17 @@ Usage:
 """
 
 import argparse
+import concurrent.futures
 import json
 import os
 import sys
 import time
+from pathlib import Path
 
-from datasources import SinaDataSource, EastMoneyDataSource
-from datasources.eastmoney import set_cookie_file
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+
+from lib.datasources import SinaDataSource, EastMoneyDataSource
+from lib.datasources.eastmoney import set_cookie_file
 
 _sina = SinaDataSource()
 _eastmoney = EastMoneyDataSource()
@@ -49,8 +53,41 @@ def is_excluded(code, excluded_prefixes):
     return False
 
 
+def fetch_vwap_for_codes(codes: list) -> dict:
+    """Fetch intraday VWAP (分时均价线) via Sina per-stock K-line API.
+    
+    Extracts ma_price5 from the latest 5-min bar, which is the
+    cumulative average price (VWAP) for the day.
+    
+    Returns {code: vwap_float} dict. Returns 0.0 for failures.
+    """
+    vwap_map = {}
+    def _fetch_vwap(code):
+        try:
+            bars = _sina.fetch_intraday(code, scale=5, days=2)
+            if bars and isinstance(bars, list) and len(bars) > 0:
+                last = bars[-1]
+                vwap = last.get("ma_price5")
+                if vwap is not None:
+                    return code, float(vwap)
+        except Exception:
+            pass
+        return code, 0.0
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as exc:
+        futures = [exc.submit(_fetch_vwap, code) for code in codes]
+        for f in concurrent.futures.as_completed(futures):
+            try:
+                code, vwap = f.result()
+                vwap_map[code] = vwap
+            except Exception:
+                pass
+
+    return vwap_map
+
+
 def fetch_indicators_for_codes(codes: list) -> dict:
-    """Fetch real-time quotes and money flow for a batch of stock codes."""
+    """Fetch real-time quotes, VWAP and money flow for a batch of stock codes."""
     results = {}
 
     sina_results = {}
@@ -68,6 +105,12 @@ def fetch_indicators_for_codes(codes: list) -> dict:
                     "amount": r.get("amount", "0"),
                     "time": r.get("time"),
                 }
+    except Exception:
+        pass
+
+    vwap_map = {}
+    try:
+        vwap_map = fetch_vwap_for_codes(codes)
     except Exception:
         pass
 
@@ -91,6 +134,7 @@ def fetch_indicators_for_codes(codes: list) -> dict:
             "yestclose": entry.get("yestclose", "-"),
             "volume": entry.get("volume", "0"),
             "amount": entry.get("amount", "0"),
+            "vwap": vwap_map.get(code, 0.0),
             "main_net_inflow": mf.get("main_net_inflow", "0.00"),
             "main_ratio": mf.get("main_ratio", "-"),
             "super_large_net": mf.get("super_large_net", "0.00"),
@@ -161,6 +205,7 @@ def main():
                 "yestclose": enrich.get("yestclose", "-"),
                 "volume": enrich.get("volume", "0"),
                 "amount": enrich.get("amount", "0"),
+                "vwap": enrich.get("vwap", 0.0),
             },
             "money_flow": {
                 "main_net_inflow": enrich.get("main_net_inflow", "0.00"),

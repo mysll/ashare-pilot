@@ -1,4 +1,4 @@
----
+﻿---
 name: daily-strategy
 description: Generate daily trading strategy from V5 mapper.md. Used as Step 3 of daily-market-analysis pipeline. Step 3 is the REASONING layer — consumes Step 2 Computed Perception, produces Direction / RiskSeverity / 历史规则应用 / Buy/Stop/Target via structured ReasoningTrace.
 ---
@@ -46,14 +46,14 @@ Inputs:
   News:       predict/{date}/news.md        (仅 for Conditional Reread 单条回查)
 ```
 
-**If `pool_indicators.json` does not exist** — generate it with the Step 2 script (**NOT** `stock-analysis/scripts/fetch_indicators.py`):
+**If `pool_indicators.json` does not exist** — generate it with the Step 2 script (**NOT** `lib/fetch/fetch_indicators.py`):
 
 ```bash
 python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <code_1>,<code_2>,... --json -o predict/{date}/pool_indicators.json
 ```
 
 `fetch_pool_indicators.py` produces V5 nested format `[{code, raw_observation, computed_perception}, ...]`.
-Do **NOT** use `stock-analysis/scripts/fetch_indicators.py` — it outputs K-line time-series without `code` fields, incompatible with `compute_trade_profile.py`.
+Do **NOT** use `lib/fetch/fetch_indicators.py` — it outputs K-line time-series without `code` fields, incompatible with `compute_trade_profile.py`.
 
 1. Read `mapper.md` **Market State** — DominantThemes, BoardPolicy, FinancingFlow, RiskFlags
 2. Read `mapper.md` **Candidate Pool** — V5 prefix columns
@@ -249,7 +249,7 @@ Step 3 在严格条件下可异议 Step 2 perception 字段。**非默认行为�
 Fetch 3 index quotes in a single batch call (fast, ~3s):
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py sh000001,sz399001,sh000688 --json
+python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sh000688 --json
 ```
 
 | Index | Code | Purpose |

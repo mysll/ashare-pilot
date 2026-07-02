@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch north-bound capital flow (北向资金) from East Money.
 
 Shows Shanghai-HK Stock Connect and Shenzhen-HK Stock Connect net flows.
@@ -13,7 +13,11 @@ import argparse
 import json
 import sys
 
-from datasources import EastMoneyIntradayDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 

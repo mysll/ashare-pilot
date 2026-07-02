@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch real-time stock data from Chinese financial APIs.
 
 Supports: A stocks (sh/sz/bj), HK stocks, US stocks, and futures (nf_/hf_).
@@ -22,7 +22,11 @@ import re
 import sys
 from typing import Any
 
-from datasources import SinaDataSource, TencentDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import SinaDataSource, TencentDataSource
 
 
 _sina = SinaDataSource()

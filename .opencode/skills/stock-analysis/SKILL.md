@@ -14,29 +14,31 @@ description: >
 
 Fetch real-time and historical stock data from Chinese financial APIs.
 
+Scripts live in `.opencode/lib/fetch/` (shared) and the data source classes are in `.opencode/lib/datasources/`.
+
 ## Quick Start
 
 ### Real-time Data
 
 ```bash
-python scripts/fetch_stock.py sh000001,sz399001
-python scripts/fetch_stock.py hk00700,usr_nvda --json
-python scripts/fetch_stock.py sh600519 --csv -o output.csv   # Save as CSV
-python scripts/fetch_stock.py --search "茅台"
-python scripts/fetch_stock.py sh600519 -o output.txt           # Save to file
-python scripts/fetch_stock.py sh600519 --json -o output.json   # Save as JSON
+python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001
+python .opencode/lib/fetch/fetch_stock.py hk00700,usr_nvda --json
+python .opencode/lib/fetch/fetch_stock.py sh600519 --csv -o output.csv   # Save as CSV
+python .opencode/lib/fetch/fetch_stock.py --search "茅台"
+python .opencode/lib/fetch/fetch_stock.py sh600519 -o output.txt           # Save to file
+python .opencode/lib/fetch/fetch_stock.py sh600519 --json -o output.json   # Save as JSON
 ```
 
 ### Intraday K-line (Minute Data)
 
 ```bash
-python scripts/fetch_stock.py sh600519 --intraday              # Today's 5-min K-line
-python scripts/fetch_stock.py sh600519 --intraday --scale 1    # Today's 1-min K-line
-python scripts/fetch_stock.py sh600519 --intraday --scale 15   # Today's 15-min K-line
-python scripts/fetch_stock.py sh600519 --intraday --days 3     # Last 3 days, 5-min K-line
-python scripts/fetch_stock.py sh600519 --intraday --days 5 --scale 1  # Last 5 days, 1-min K-line
-python scripts/fetch_stock.py sh600519 --intraday --json       # JSON output
-python scripts/fetch_stock.py sh600519 --intraday --csv        # CSV output
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday              # Today's 5-min K-line
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --scale 1    # Today's 1-min K-line
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --scale 15   # Today's 15-min K-line
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --days 3     # Last 3 days, 5-min K-line
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --days 5 --scale 1  # Last 5 days, 1-min K-line
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --json       # JSON output
+python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --csv        # CSV output
 ```
 
 **Intraday Parameters:**
@@ -55,10 +57,10 @@ python scripts/fetch_stock.py sh600519 --intraday --csv        # CSV output
 ### All A Stocks (Bulk Data)
 
 ```bash
-python scripts/fetch_all_astocks.py                  # Summary output
-python scripts/fetch_all_astocks.py -o stocks.csv    # Save as CSV (default)
-python scripts/fetch_all_astocks.py -o stocks.json --json-output  # Save as JSON
-python scripts/fetch_all_astocks.py --json           # Print JSON to stdout
+python .opencode/lib/fetch/fetch_all_astocks.py                  # Summary output
+python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.csv    # Save as CSV (default)
+python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.json --json-output  # Save as JSON
+python .opencode/lib/fetch/fetch_all_astocks.py --json           # Print JSON to stdout
 ```
 
 Returns ~5500 A stocks with: code, name, price, yestclose, updown, percent, high, low, open, volume, amount, turnover, volume_ratio, swing, pe, pb, total_mv, float_mv, market, source.
@@ -66,28 +68,28 @@ Returns ~5500 A stocks with: code, name, price, yestclose, updown, percent, high
 ### Historical Data (A stocks only)
 
 ```bash
-python scripts/fetch_history.py sh600519                  # Last 3 months
-python scripts/fetch_history.py sz000001 --range 1m       # Last 1 month
-python scripts/fetch_history.py sh600519 --range 1y --json
-python scripts/fetch_history.py sh600519 --csv
-python scripts/fetch_history.py sh600519 --start 20260101 --end 20260331
-python scripts/fetch_history.py sh600519 -o output.txt    # Save to file
-python scripts/fetch_history.py sh600519 --json -o output.json   # Save as JSON
-python scripts/fetch_history.py sh600519 --csv -o output.csv     # Save as CSV
+python .opencode/lib/fetch/fetch_history.py sh600519                  # Last 3 months
+python .opencode/lib/fetch/fetch_history.py sz000001 --range 1m       # Last 1 month
+python .opencode/lib/fetch/fetch_history.py sh600519 --range 1y --json
+python .opencode/lib/fetch/fetch_history.py sh600519 --csv
+python .opencode/lib/fetch/fetch_history.py sh600519 --start 20260101 --end 20260331
+python .opencode/lib/fetch/fetch_history.py sh600519 -o output.txt    # Save to file
+python .opencode/lib/fetch/fetch_history.py sh600519 --json -o output.json   # Save as JSON
+python .opencode/lib/fetch/fetch_history.py sh600519 --csv -o output.csv     # Save as CSV
 ```
 
-### Technical Indicators (A stocks only) 
+### Technical Indicators (A stocks only)
 
 ```bash
-python scripts/fetch_indicators.py sh600519                  # Default indicators (SMA, MACD, RSI, Bollinger)
-python scripts/fetch_indicators.py sz000001 --range 6m       # Last 6 months
-python scripts/fetch_indicators.py sh600519 --indicators rsi,macd,close_50_sma
-python scripts/fetch_indicators.py sh600519 --json           # JSON output
-python scripts/fetch_indicators.py sh600519 --csv            # CSV output
-python scripts/fetch_indicators.py --list                    # List available indicators
-python scripts/fetch_indicators.py sh600519 -o output.txt    # Save to file
-python scripts/fetch_indicators.py sh600519 --json -o output.json   # Save as JSON
-python scripts/fetch_indicators.py sh600519 --csv -o output.csv     # Save as CSV
+python .opencode/lib/fetch/fetch_indicators.py sh600519                  # Default indicators (SMA, MACD, RSI, Bollinger)
+python .opencode/lib/fetch/fetch_indicators.py sz000001 --range 6m       # Last 6 months
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --indicators rsi,macd,close_50_sma
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --json           # JSON output
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --csv            # CSV output
+python .opencode/lib/fetch/fetch_indicators.py --list                    # List available indicators
+python .opencode/lib/fetch/fetch_indicators.py sh600519 -o output.txt    # Save to file
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --json -o output.json   # Save as JSON
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --csv -o output.csv     # Save as CSV
 ```
 
 **Available Indicators:**
@@ -109,45 +111,80 @@ python scripts/fetch_indicators.py sh600519 --csv -o output.csv     # Save as CS
 ### Dragon and Tiger List (龙虎榜)
 
 ```bash
-python scripts/fetch_special.py lhb                        # Latest data
-python scripts/fetch_special.py lhb --date 2026-03-31      # Specific date
-python scripts/fetch_special.py lhb --code 600519          # Specific stock
-python scripts/fetch_special.py lhb --json                 # JSON output
-python scripts/fetch_special.py lhb -o output.txt          # Save to file
-python scripts/fetch_special.py lhb --json -o output.json  # Save as JSON
+python .opencode/lib/fetch/fetch_special.py lhb                        # Latest data
+python .opencode/lib/fetch/fetch_special.py lhb --date 2026-03-31      # Specific date
+python .opencode/lib/fetch/fetch_special.py lhb --code 600519          # Specific stock
+python .opencode/lib/fetch/fetch_special.py lhb --json                 # JSON output
+python .opencode/lib/fetch/fetch_special.py lhb -o output.txt          # Save to file
+python .opencode/lib/fetch/fetch_special.py lhb --json -o output.json  # Save as JSON
 ```
 
 ### Margin Trading (融资融券)
 
 ```bash
-python scripts/fetch_special.py rzye                       # Market overview
-python scripts/fetch_special.py rzye --top 20              # Top 20 records
-python scripts/fetch_special.py rzye --json                # JSON output
-python scripts/fetch_special.py rzye -o output.txt         # Save to file
-python scripts/fetch_special.py rzye --json -o output.json # Save as JSON
+python .opencode/lib/fetch/fetch_special.py rzye                       # Market overview
+python .opencode/lib/fetch/fetch_special.py rzye --top 20              # Top 20 records
+python .opencode/lib/fetch/fetch_special.py rzye --json                # JSON output
+python .opencode/lib/fetch/fetch_special.py rzye -o output.txt         # Save to file
+python .opencode/lib/fetch/fetch_special.py rzye --json -o output.json # Save as JSON
 ```
 
 ### Money Flow (资金流向)
 
 ```bash
 # Industry money flow (行业资金流向)
-python scripts/fetch_money_flow.py                  # Top 50 industries (default)
-python scripts/fetch_money_flow.py --top 20         # Top 20 industries
-python scripts/fetch_money_flow.py --json           # JSON output
-python scripts/fetch_money_flow.py --csv            # CSV output
-python scripts/fetch_money_flow.py -o flow.csv      # Save as CSV
+python .opencode/lib/fetch/fetch_money_flow.py                  # Top 50 industries (default)
+python .opencode/lib/fetch/fetch_money_flow.py --top 20         # Top 20 industries
+python .opencode/lib/fetch/fetch_money_flow.py --json           # JSON output
+python .opencode/lib/fetch/fetch_money_flow.py --csv            # CSV output
+python .opencode/lib/fetch/fetch_money_flow.py -o flow.csv      # Save as CSV
 
 # Individual stock money flow (个股资金流向)
-python scripts/fetch_money_flow.py --stock          # Top 50 stocks (default)
-python scripts/fetch_money_flow.py --stock --top 20 # Top 20 stocks
-python scripts/fetch_money_flow.py --stock --json   # JSON output
-python scripts/fetch_money_flow.py --stock --csv    # CSV output
+python .opencode/lib/fetch/fetch_money_flow.py --stock          # Top 50 stocks (default)
+python .opencode/lib/fetch/fetch_money_flow.py --stock --top 20 # Top 20 stocks
+python .opencode/lib/fetch/fetch_money_flow.py --stock --json   # JSON output
+python .opencode/lib/fetch/fetch_money_flow.py --stock --csv    # CSV output
 
 # Use custom cookie file
-python scripts/fetch_money_flow.py --stock --cookie /path/to/.cookie
+python .opencode/lib/fetch/fetch_money_flow.py --stock --cookie /path/to/.cookie
 ```
 
-Returns capital flow data with: main net inflow (主力净流入), super large (超大单), large (大单), medium (中单), small (小单) orders.
+### Concept Ranking (概念板块排行)
+
+```bash
+python .opencode/lib/fetch/fetch_concept_ranking.py --top 20 --json
+```
+
+### Limit-Up Pool (涨停池)
+
+```bash
+python .opencode/lib/fetch/fetch_limit_up_pool.py --top 20 --json
+```
+
+### Turnover Ranking (换手率排行)
+
+```bash
+python .opencode/lib/fetch/fetch_turnover_ranking.py --top 20 --json
+```
+
+### Market Breadth (市场宽度)
+
+```bash
+python .opencode/lib/fetch/fetch_market_breadth.py --json
+```
+
+### North Bound Flow (北向资金)
+
+```bash
+python .opencode/lib/fetch/fetch_north_bound.py --json
+```
+
+### Board Money Flow (板块资金流向)
+
+```bash
+python .opencode/lib/fetch/fetch_board_money_flow.py concept --json
+python .opencode/lib/fetch/fetch_board_money_flow.py industry --top 20 --json
+```
 
 ## Stock Code Format
 
@@ -161,7 +198,7 @@ Returns capital flow data with: main net inflow (主力净流入), super large (
 | Domestic Future    | `nf_`  | `nf_IF0`   |
 | Oversea Future     | `hf_`  | `hf_OIL`   |
 
-## Scripts
+## Scripts (`.opencode/lib/fetch/`)
 
 | Script               | Purpose                          | Markets          |
 | -------------------- | -------------------------------- | ---------------- |
@@ -171,6 +208,28 @@ Returns capital flow data with: main net inflow (主力净流入), super large (
 | `fetch_indicators.py`| Technical indicators analysis    | A stocks (sh/sz) |
 | `fetch_special.py`   | 龙虎榜 & 融资融券                | A stocks         |
 | `fetch_money_flow.py`| Money flow (行业/个股资金流向) | All industries/stocks |
+| `fetch_concept_ranking.py` | Concept board ranking       | A stocks         |
+| `fetch_limit_up_pool.py`   | Limit-up stock pool         | A stocks         |
+| `fetch_turnover_ranking.py`| Turnover rate ranking       | A stocks         |
+| `fetch_market_breadth.py`  | Market breadth statistics   | A stocks         |
+| `fetch_north_bound.py`     | North-bound capital flow    | A stocks         |
+| `fetch_board_money_flow.py`| Board-level money flow      | A stocks         |
+
+## Data Source Classes (`.opencode/lib/datasources/`)
+
+| Class | Source |
+| ----- | ------ |
+| `SinaDataSource` | Sina Finance (A/US/futures real-time, intraday) |
+| `TencentDataSource` | Tencent Finance (HK stocks) |
+| `SohuDataSource` | Sohu Finance (historical daily K-line) |
+| `EastMoneyDataSource` | East Money (money flow, dragon/tiger, margin, board flow) |
+| `EastMoneyIntradayDataSource` | East Money (intraday ranking, concept ranking, breadth, etc.) |
+
+Import from any script:
+```python
+sys.path.insert(0, str(Path(__file__).resolve()...))  # point to .opencode/
+from lib.datasources import EastMoneyIntradayDataSource
+```
 
 ## Output Fields
 

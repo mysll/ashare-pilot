@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch Dragon and Tiger List (龙虎榜) and Margin Trading (融资融券) data from East Money.
 
 Usage:
@@ -18,7 +18,11 @@ import io
 import json
 import sys
 
-from datasources import EastMoneyDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyDataSource
 
 
 _eastmoney = EastMoneyDataSource()

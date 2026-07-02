@@ -9,11 +9,13 @@ description: Use when users request comprehensive intraday overnight alpha analy
 
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
-| Compute | Python | `run_pipeline.py` | market_breadth.json, indices.json, concept_ranking.json, north_bound.json, scan_pool.json, compute_pool_enriched.json, opportunity_pool.json |
+| Compute | Python | `run_intraday_pipeline.py` | market_breadth.json, indices.json, concept_dashboard.json, north_bound.json, scan_pool.json, compute_pool_enriched.json, theme_ranking.json, opportunity_pool.json (all under `.cache/intraday/{date}/`) |
 | Perception | Step 1+2 | general + general | market_state.md → theme_ranking.md |
 | Reasoning | Step 3 | trading-strategist | intraday_mapper.md + overnight_strategy.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace + T+1兑现计划) |
 
 Step 1 and Step 2 NEVER produce Direction or RiskSeverity. Step 3 is the sole Reasoning layer.
+
+**Path layout:** Intermediate JSON data → `.cache/intraday/{date}/`. Final markdown reports → `intraday/{date}/`.
 
 ## Workflow
 
@@ -21,26 +23,27 @@ Step 1 and Step 2 NEVER produce Direction or RiskSeverity. Step 3 is the sole Re
 [14:30 Trigger]
         │
         ▼
-Compute Phase        ←  run_pipeline.py (once, ~85s — Phase 0 prefetch ~80s)
-        │
+Compute Phase        ←  run_intraday_pipeline.py (once, ~85s — Phase 0 prefetch ~80s)
+        │               writes JSON → .cache/intraday/{date}/
         ├→ market_breadth.json
         ├→ indices.json
-        ├→ concept_ranking.json
+        ├→ concept_dashboard.json
         ├→ north_bound.json
         ├→ scan_pool.json
         ├→ compute_pool_enriched.json
+        ├→ theme_ranking.json
         └→ opportunity_pool.json
         │
         ▼
 Step 1 (Perception)  ←  general + intraday-market-scan
-        │               reads JSON → market_state.md
+        │               reads .cache JSON → intraday/{date}/market_state.md
         ▼
 Step 2 (Perception)  ←  general + intraday-stock-discovery
-        │               reads JSON → theme_ranking.md
+        │               reads .cache JSON → intraday/{date}/theme_ranking.md
         ▼
 Step 3 (Reasoning)   ←  trading-strategist + intraday-strategy
-                        reads JSON + market_state.md + theme_ranking.md
-                        → intraday_mapper.md (7-section) + overnight_strategy.md (明日交易计划)
+                        reads .cache JSON + market_state.md + theme_ranking.md
+                        → intraday/{date}/intraday_mapper.md (7-section) + overnight_strategy.md (明日交易计划)
 ```
 
 ## Execution Timing
@@ -62,8 +65,8 @@ The pipeline is designed to run at **14:30** (20-minute execution window before 
 ## Performance Constraints
 
 - Target wall-clock: Compute (~95s first run / ~15s cached) + Step 1 (LLM, ~3s) + Step 2 (LLM, ~3s) + Step 3 (LLM, ~5s) = **< 110s first run**
-- **CRITICAL: `run_pipeline.py` is a time-consuming operation (~95s total first run). Phase 0 prefetches all ~5500 A-stocks (~80s). Phase 3.5 builds K-line cache (~10s first run, negligible cached). Set Bash timeout to at least 180s.**
-- `run_pipeline.py` fetches data for the Scan Pool (300-500 stocks) using push2 API batch calls (pz=6000), NOT per-stock queries
+- **CRITICAL: `run_intraday_pipeline.py` is a time-consuming operation (~95s total first run). Phase 0 prefetches all ~5500 A-stocks (~80s). Phase 3.5 builds K-line cache (~10s first run, negligible cached). Set Bash timeout to at least 180s.**
+- `run_intraday_pipeline.py` fetches data for the Scan Pool (300-500 stocks) using push2 API batch calls (pz=6000), NOT per-stock queries
 - Compute Pool enrichment (80-150 stocks) uses Sina batch quote API + single East Money money flow page
 - Phase 3.5 (Technical Indicators): fetches daily K-line via Sina for MA5/10/20/60 + Bollinger Bands (20,2) — cached to `.cache/kline/`
 - All output files are markdown written directly by the LLM — do NOT write scripts to generate them
@@ -75,25 +78,32 @@ The pipeline is designed to run at **14:30** (20-minute execution window before 
 **Before dispatching any subagent**, run the compute phase once:
 
 ```bash
-python .opencode/skills/intraday-market-scan/scripts/run_pipeline.py --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
+python .opencode/scripts/run_intraday_pipeline.py --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
 ```
 
 **TIMEOUT:** This command is time-consuming (~85s, Phase 0 prefetch ~80s). Set Bash timeout **≥ 180s**.
 
-This produces all JSON files under `intraday/{YYYY-MM-DD}/`.
+This produces all JSON files under `.cache/intraday/{YYYY-MM-DD}/`.
 
 **CRITICAL:** Run this ONCE before Step 1. Do NOT re-run in each subagent. All steps read from the same JSON files.
 
 The output directory structure after compute:
 ```
-intraday/{date}/
+.cache/intraday/{date}/
 ├── market_breadth.json
 ├── indices.json
-├── concept_ranking.json
+├── concept_dashboard.json
 ├── north_bound.json
 ├── scan_pool.json              (Scan Pool: 300-500 stocks)
-├── compute_pool_enriched.json  (Compute Pool: 80-150 stocks with money_flow)
+├── compute_pool_enriched.json  (Compute Pool: 80-150 stocks with money_flow + technicals)
+├── theme_ranking.json          (Theme ranking: heat-scored theme list)
 └── opportunity_pool.json       (Opportunity Pool: 20-40 stocks scored)
+
+intraday/{date}/                (markdown reports, written by Steps 1-3)
+├── market_state.md
+├── theme_ranking.md
+├── intraday_mapper.md
+└── overnight_strategy.md
 ```
 
 ---
@@ -106,7 +116,7 @@ intraday/{date}/
 
 **Task:**
 
-- Read `intraday/{YYYY-MM-DD}/market_breadth.json`, `indices.json`, `concept_ranking.json`, `north_bound.json`
+- Read `.cache/intraday/{YYYY-MM-DD}/market_breadth.json`, `indices.json`, `concept_dashboard.json`, `north_bound.json`
 - Synthesize into a structured `market_state.md` covering: Market Strength, Market Breadth, Capital Direction, Active Concepts (top 10)
 - ALL numbers must come from the JSON files; LLM generates zero numeric values
 
@@ -118,10 +128,10 @@ Load skill `intraday-market-scan` and execute.
 Date: {YYYY-MM-DD}
 
 Inputs:
-- intraday/{YYYY-MM-DD}/market_breadth.json
-- intraday/{YYYY-MM-DD}/indices.json
-- intraday/{YYYY-MM-DD}/concept_ranking.json
-- intraday/{YYYY-MM-DD}/north_bound.json
+- .cache/intraday/{YYYY-MM-DD}/market_breadth.json
+- .cache/intraday/{YYYY-MM-DD}/indices.json
+- .cache/intraday/{YYYY-MM-DD}/concept_dashboard.json
+- .cache/intraday/{YYYY-MM-DD}/north_bound.json
 
 Output:
 - intraday/{YYYY-MM-DD}/market_state.md
@@ -143,7 +153,7 @@ Output:
 
 **Task:**
 
-- Read `intraday/{YYYY-MM-DD}/scan_pool.json` and `compute_pool_enriched.json`
+- Read `.cache/intraday/{YYYY-MM-DD}/scan_pool.json` and `compute_pool_enriched.json`
 - For stocks in the Compute Pool, query theme library for concept membership
 - Compute Theme Heat statistically (Breadth + Leader + Capital + Momentum + Continuation)
 - Generate `theme_ranking.md` with top 10-15 themes and their heat breakdown
@@ -156,8 +166,9 @@ Load skill `intraday-stock-discovery` and execute.
 Date: {YYYY-MM-DD}
 
 Inputs:
-- intraday/{YYYY-MM-DD}/scan_pool.json
-- intraday/{YYYY-MM-DD}/compute_pool_enriched.json
+- .cache/intraday/{YYYY-MM-DD}/scan_pool.json
+- .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json
+- .cache/intraday/{YYYY-MM-DD}/theme_ranking.json
 - intraday/{YYYY-MM-DD}/market_state.md (reference only)
 
 Output:
@@ -193,7 +204,7 @@ Load skill `intraday-strategy` and execute.
 Date: {YYYY-MM-DD}
 
 Inputs:
-- intraday/{YYYY-MM-DD}/opportunity_pool.json
+- .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
 - intraday/{YYYY-MM-DD}/market_state.md
 - intraday/{YYYY-MM-DD}/theme_ranking.md
 
@@ -212,13 +223,14 @@ Outputs:
 
 | File | Content | Layer / Step |
 |------|---------|-------------|
-| `intraday/{date}/market_breadth.json` | Raw market width data | Compute |
-| `intraday/{date}/indices.json` | Raw index quotes | Compute |
-| `intraday/{date}/concept_ranking.json` | Raw concept board ranking | Compute |
-| `intraday/{date}/north_bound.json` | Raw north-bound flow | Compute |
-| `intraday/{date}/scan_pool.json` | Scan Pool (300-500 stocks, basic data) | Compute |
-| `intraday/{date}/compute_pool_enriched.json` | Compute Pool (80-150 stocks, enriched with money flow) | Compute |
-| `intraday/{date}/opportunity_pool.json` | Scored Opportunity Pool (A/B/C tiers) | Compute |
+| `.cache/intraday/{date}/market_breadth.json` | Raw market width data | Compute |
+| `.cache/intraday/{date}/indices.json` | Raw index quotes | Compute |
+| `.cache/intraday/{date}/concept_dashboard.json` | Raw concept board ranking | Compute |
+| `.cache/intraday/{date}/north_bound.json` | Raw north-bound flow | Compute |
+| `.cache/intraday/{date}/scan_pool.json` | Scan Pool (300-500 stocks, basic data) | Compute |
+| `.cache/intraday/{date}/compute_pool_enriched.json` | Compute Pool (80-150 stocks, enriched with money flow + technicals) | Compute |
+| `.cache/intraday/{date}/theme_ranking.json` | Theme ranking (heat-scored, bottom-up from stocks) | Compute |
+| `.cache/intraday/{date}/opportunity_pool.json` | Scored Opportunity Pool (A/B/C tiers) | Compute |
 | `intraday/{date}/market_state.md` | Market strength, breadth, capital direction, top 10 concepts | Perception (Step 1) |
 | `intraday/{date}/theme_ranking.md` | Statistical theme ranking (bottom-up, stock-derived) | Perception (Step 2) |
 | `intraday/{date}/intraday_mapper.md` | 7-section: Market State, Theme Ranking, Opportunity Pool (A/B/C), Stock Details, Score Trace, Observation Pool, Excluded Stocks | Reasoning (Step 3) |
@@ -228,9 +240,9 @@ Outputs:
 
 | Layer | Step | Agent | Input | Output | Key constraint |
 |-------|------|-------|-------|--------|----------------|
-| Compute | — | bash (run_pipeline.py) | — | 7 JSON files | Run ONCE before all steps |
+| Compute | — | bash (run_intraday_pipeline.py) | — | 8 JSON files | Run ONCE before all steps |
 | Perception | 1 | general + intraday-market-scan | 4 JSON files | market_state.md | No Direction / RiskSeverity |
-| Perception | 2 | general + intraday-stock-discovery | 2 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
+| Perception | 2 | general + intraday-stock-discovery | 3 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
 | Reasoning | 3 | trading-strategist + intraday-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
 
 ## Common Usage
@@ -245,11 +257,11 @@ Outputs:
 - Each step depends on previous output
 - Directory: `intraday/{YYYY}-{MM}-{DD}/` (e.g., `intraday/2026-06-30/`)
 - All output in Chinese (中文)
-- **V1 architecture:** Compute (run_pipeline.py, once) → Perception (Steps 1-2, LLM reads JSON) → Reasoning (Step 3, LLM interprets scores)
+- **V1 architecture:** Compute (run_intraday_pipeline.py, once) → Perception (Steps 1-2, LLM reads JSON) → Reasoning (Step 3, LLM interprets scores)
 - All numeric data comes from Python compute layer; LLM never generates numbers
 - Step 1 and Step 2 NEVER produce Direction or RiskSeverity — Step 3 is the sole Reasoning authority
-- `run_pipeline.py` calls push2.eastmoney.com → requires `.cookie` file with valid `EASTMONEY_COOKIE`
-- **Timeout:** `run_pipeline.py`'s Phase 0 (all-stocks cache) is slow (~80s). Always use Bash timeout ≥ 180s. Cache is persisted to disk so subsequent same-day runs skip Phase 0.
+- `run_intraday_pipeline.py` calls push2.eastmoney.com → requires `.cookie` file with valid `EASTMONEY_COOKIE`
+- **Timeout:** `run_intraday_pipeline.py`'s Phase 0 (all-stocks cache) is slow (~80s). Always use Bash timeout ≥ 180s. Cache is persisted to disk so subsequent same-day runs skip Phase 0.
 - Trading execution window: 14:50-14:57 (pipeline must complete before this)
 - Theme detection is bottom-up (stocks → themes), NOT top-down (news → themes)
 - Weights are V1 Rule Based — explicitly designed for future V2 calibration via backtesting

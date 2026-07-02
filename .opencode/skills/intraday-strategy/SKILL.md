@@ -1,4 +1,4 @@
----
+﻿---
 name: intraday-strategy
 description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes enriched ComputePool + ThemeRanking, scores for tomorrow expected premium, outputs OpportunityPool with A/B/C tiers + intraday_mapper.md. This is the sole Reasoning layer.
 ---
@@ -24,7 +24,7 @@ Skill 3 → Overnight Scoring + intraday_mapper.md (THIS)
 ## Execute: Compute Overnight Scores
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/score_overnight.py .cache/intraday/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/opportunity_pool.json
+python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
 ```
 
 ### Scoring Dimensions (V1 Rule Based, Initial Weights)
@@ -33,8 +33,8 @@ python .opencode/skills/stock-analysis/scripts/score_overnight.py .cache/intrada
 |-----------|:------:|-----------------|
 | Theme Continuity | 30% | Is the stock in a hot theme? (limit_up > turnover > gain_range) |
 | Capital Continuity | 25% | Is main force capital flowing in? (超1亿=strong, 净流出=weak) |
-| Tail Strength | 20% | Price position within day range, healthy turnover (2-15%, near high) |
-| Position Advantage | 15% | Gain in sweet spot 2-5% (ideal); >9% or <0.5% penalized |
+| Tail Strength | 20% | Price position within day range, healthy turnover (5-12%, near high) |
+| Position Advantage | 15% | Gain in sweet spot 2-6% (ideal); >9% or <0.5% penalized |
 | Risk Deduction | -10% | High turnover >25%, near limit-up, consecutive gains |
 
 Score = Σ(dimension × weight) × 100, range 0-100.
@@ -174,10 +174,25 @@ Excluded-board stocks:
 - ❌ 不可放在 B-Tier 核心持仓中建议尾盘买入
 - ❌ 不可给出 T+1 持仓意图为"隔夜持有"
 
+### 持仓质量过滤器
+
+评分前按基础质量条件过滤：
+
+| 条件 | 阈值 | 规则 |
+|------|:------:|------|
+| 分时均价线 | 全天运行在均价线上方 | 价格始终 > VWAP，弱势股剔除 |
+| 换手率 | 5% ≤ 换手率 ≤ 12% | <5%无量无关注，>12%短期过热 |
+| 当天涨幅 | 2% ≤ 涨幅 ≤ 6% | <2%动能不足，>6%追高风险 |
+
+不满足任意条件的股票：
+- 标记为 `quality-filter` 排除
+- 放入 Excluded Stocks 表，注明 `ExclusionSource=quality-filter`
+- 不参与 overnight scoring
+
 ### 应用优先级
 
 ```
-board-policy → 涨停封板 → score tiers → INTRADAY_RULES.md + SHARED_RULES.md 规则
+board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADAY_RULES.md + SHARED_RULES.md 规则
 ```
 
 先剔除不可交易标的，剩余池中再做评分筛选与规则应用。
@@ -211,5 +226,6 @@ board-policy → 涨停封板 → score tiers → INTRADAY_RULES.md + SHARED_RUL
 - When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)
 - **涨停封板股票 (seal_quality="封死") 不得出现在B-Tier尾盘买入推荐中**
 - **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per .opencode/config/trading-scope.json)**
+- **不满足持仓质量过滤器（VWAP/换手率/涨幅）的股票不得参与评分**
 - Excluded-board 和涨停封板股票可出现在 A-Tier 观察区，但必须标注排除原因
 - Output language: 中文

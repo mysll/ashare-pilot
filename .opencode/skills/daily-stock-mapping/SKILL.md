@@ -1,4 +1,4 @@
----
+﻿---
 name: daily-stock-mapping
 description: Use when dispatched as Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.md, theme_stocks.md, mapper.md with theme-heat and composite-scored stock pool
 ---
@@ -208,8 +208,8 @@ Scan `news.md` for **explicitly mentioned A-share stocks** (codes or names). For
 
 ```bash
 # Batch resolve multiple stock names — use ; separator within quotes for multiple searches
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py --search "盛美上海" --json
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py --search "赛腾股份" --json
+python .opencode/lib/fetch/fetch_stock.py --search "盛美上海" --json
+python .opencode/lib/fetch/fetch_stock.py --search "赛腾股份" --json
 ```
 
 Run searches in parallel. Alternatively, use LLM knowledge for well-known codes (sh688012=中微公司, sh603986=兆易创新, etc.).
@@ -219,7 +219,7 @@ Run searches in parallel. Alternatively, use LLM knowledge for well-known codes 
 The Dragon & Tiger List (龙虎榜) captures stocks with abnormal price/volume moves (limit-up, limit-down, amplitude swing, turnover surge) — exactly the type of stock that may rank outside theme library top 30 but suddenly broke out.
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/fetch_special.py lhb --json
+python .opencode/lib/fetch/fetch_special.py lhb --json
 ```
 
 For each stock in the LHB list (~50 records):
@@ -313,7 +313,7 @@ Execute in 2 phases. Data reflects the **previous trading day** when running pre
 **Phase 1: Auction Snapshot & Call Auction Metrics (single batch call)**
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py <code_1>,<code_2>,...,<code_N> --json
+python .opencode/lib/fetch/fetch_stock.py <code_1>,<code_2>,...,<code_N> --json
 ```
 
 `fetch_stock.py` supports comma-separated multi-code queries. During call auction (9:15-9:25), returns live auction data. Combine ALL stocks from `theme_stocks.md` into ONE call.
@@ -535,10 +535,10 @@ Additional fetches in this stage:
 
 ```bash
 # Industry money flow (行业资金流向)
-python .opencode/skills/stock-analysis/scripts/fetch_money_flow.py --json
+python .opencode/lib/fetch/fetch_money_flow.py --json
 
 # Individual stock money flow (个股资金流向) — requires cookie
-python .opencode/skills/stock-analysis/scripts/fetch_money_flow.py --stock --json
+python .opencode/lib/fetch/fetch_money_flow.py --stock --json
 ```
 
 | Type | Usage |

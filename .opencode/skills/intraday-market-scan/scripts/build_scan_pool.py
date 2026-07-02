@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """Build Scan Pool from multiple sources and produce QuickScore.
 
 Pipeline:
     1. Fetch from 4 sources (limit-up, turnover, gain range, concept leads)
-    2. Merge + deduplicate → Scan Pool (300-500)
-    3. Compute QuickScore → top N → Compute Pool candidates (80-150)
+    2. Merge + deduplicate ?Scan Pool (300-500)
+    3. Compute QuickScore ?top N ?Compute Pool candidates (80-150)
 
 Usage:
     python build_scan_pool.py --json -o scan_pool.json
@@ -15,8 +16,11 @@ import argparse
 import json
 import os
 import sys
+from pathlib import Path
 
-from datasources import EastMoneyIntradayDataSource
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+
+from lib.datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 
@@ -116,7 +120,7 @@ def compute_quick_score(pool: list) -> list:
         except (ValueError, TypeError):
             tn = 0.0
 
-        vol_ratio_str = s.get("volume_ratio", "0")
+        vol_ratio_str = s.get("volume_ratio", "1.0")
         try:
             vr = float(vol_ratio_str)
         except (ValueError, TypeError):

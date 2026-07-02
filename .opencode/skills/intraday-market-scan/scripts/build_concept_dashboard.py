@@ -28,8 +28,8 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
 THEME_INDEX = PROJECT_ROOT / ".opencode" / "skills" / "theme-library" / "index"
 
-sys.path.insert(0, str(PROJECT_ROOT / ".opencode" / "skills" / "stock-analysis" / "scripts"))
-from datasources import EastMoneyIntradayDataSource
+sys.path.insert(0, str(PROJECT_ROOT / ".opencode"))
+from lib.datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 

@@ -1,4 +1,4 @@
----
+﻿---
 name: intraday-market-scan
 description: Use when dispatched at ~14:30 as the first step of intraday overnight analysis. Scans market breadth, indices, capital flows, concept rankings. Produces MarketState and ScanPool. NEVER outputs stock-level scoring or trading recommendations.
 ---
@@ -36,14 +36,18 @@ Skill 3: intraday-strategy
 Run these scripts in parallel (all independent calls):
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/fetch_market_breadth.py --json
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
+python .opencode/lib/fetch/fetch_market_breadth.py --json
+python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
 python .opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py --json --top 100
-python .opencode/skills/stock-analysis/scripts/fetch_north_bound.py --json
-python .opencode/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 120 --json
+python .opencode/lib/fetch/fetch_north_bound.py --json
+python .opencode/skills/intraday-market-scan/scripts/build_scan_pool.py --compute-pool-size 120 --json
 ```
 
-Save outputs to intermediate files under `.cache/intraday/`.
+Save intermediate JSON outputs under `.cache/intraday/{date}/`.
+
+> **Note:** In the normal pipeline these JSON files are already produced by
+> `run_intraday_pipeline.py` under `.cache/intraday/{date}/`. Only run the fetch
+> scripts above manually if the pipeline has NOT been run for this date.
 
 ## Output: MarketState
 
@@ -109,7 +113,7 @@ When describing the table in narrative, align description with the column:
 
 The `build_scan_pool.py` output (JSON) contains the Scan Pool (300-500 stocks, basic data only — NO MACD/RSI/ATR/Bollinger).
 
-Save to: `intraday/{date}/market_state.md` and `.cache/intraday/scan_pool.json`
+Save to: `intraday/{date}/market_state.md` (final report) and `.cache/intraday/{date}/scan_pool.json` (intermediate data)
 
 ## Constraints
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch historical stock daily K-line data (前复权).
 
 Supports: A stocks (sh/sz only).
@@ -16,11 +16,12 @@ import argparse
 import io
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
-from datasources import SohuDataSource, SinaDataSource
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-
+from lib.datasources import SohuDataSource, SinaDataSource
 _sohu = SohuDataSource()
 _sina = SinaDataSource()
 

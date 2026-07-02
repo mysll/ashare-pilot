@@ -20,10 +20,10 @@ import json
 import sys
 from pathlib import Path
 
-_scripts_dir = Path(__file__).resolve().parent.parent.parent / "stock-analysis" / "scripts"
+_scripts_dir = Path(__file__).resolve().parent.parent.parent.parent.parent / ".opencode"
 sys.path.insert(0, str(_scripts_dir))
-from fetch_history import fetch_history  # noqa: E402
-from fetch_indicators import calculate_indicators  # noqa: E402
+from lib.fetch.fetch_history import fetch_history  # noqa: E402
+from lib.fetch.fetch_indicators import calculate_indicators  # noqa: E402
 
 INDICATOR_LIST = [
     "rsi", "macd", "macdh", "close_50_sma",

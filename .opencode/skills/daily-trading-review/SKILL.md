@@ -1,4 +1,4 @@
----
+﻿---
 name: daily-trading-review
 description: Review today's trading predictions against actual market results. Compare strategy recommendations with real price movements, extract lessons, update rules, and write structured verification to memory. Trigger after market close or when user asks for 复盘/verification/review.
 ---
@@ -66,8 +66,8 @@ digraph workflow {
 
 **Note:** Use the stock-analysis skill scripts:
 ```
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py CODE1,CODE2,... --json
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py CODE --intraday --scale 5 --json
+python .opencode/lib/fetch/fetch_stock.py CODE1,CODE2,... --json
+python .opencode/lib/fetch/fetch_stock.py CODE --intraday --scale 5 --json
 ```
 
 ---

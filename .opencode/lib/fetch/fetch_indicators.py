@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Calculate technical indicators for stock data.
 
 Fetches historical K-line data and calculates technical indicators.
@@ -16,10 +16,12 @@ import argparse
 import csv
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
-# Import fetch_history from the same directory
-from fetch_history import fetch_history, to_csv
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.fetch.fetch_history import fetch_history, to_csv
 
 
 def calc_sma(data: list[float], period: int) -> list[float | None]:

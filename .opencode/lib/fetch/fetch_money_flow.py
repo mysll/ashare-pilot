@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch money flow data from East Money.
 
 Shows capital flow data - either industry-level or individual stocks.
@@ -18,7 +18,11 @@ import io
 import json
 import sys
 
-from datasources import EastMoneyDataSource, set_cookie_file
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyDataSource, set_cookie_file
 
 
 _eastmoney = EastMoneyDataSource()

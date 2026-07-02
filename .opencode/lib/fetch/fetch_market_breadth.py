@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch market breadth data from East Money.
 
 Shows: up/down/flat counts, limit-up/limit-down counts,
@@ -16,7 +16,11 @@ import json
 import os
 import sys
 
-from datasources import EastMoneyIntradayDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 

@@ -6,9 +6,13 @@ Runs at ~14:30:
     2. Stock Discovery → Enriched ComputePool + ThemeRanking
     3. Overnight Scoring → OpportunityPool
 
+Layout:
+    Intermediate JSON data → .cache/intraday/{date}/   (this script writes these)
+    Final markdown reports → intraday/{date}/          (written later by the LLM steps)
+
 Usage:
-    python run_pipeline.py --date 2026-06-30
-    python run_pipeline.py --date 2026-06-30 --output-dir intraday/2026-06-30
+    python run_intraday_pipeline.py --date 2026-06-30
+    python run_intraday_pipeline.py --date 2026-06-30 --data-dir .cache/intraday/2026-06-30
 """
 
 import argparse
@@ -19,13 +23,16 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / "stock-analysis" / "scripts"
-LOCAL_SCRIPTS_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+
+FETCH_DIR = PROJECT_ROOT / ".opencode" / "lib" / "fetch"
+MARKET_SCAN_DIR = PROJECT_ROOT / ".opencode" / "skills" / "intraday-market-scan" / "scripts"
+DISCOVERY_DIR = PROJECT_ROOT / ".opencode" / "skills" / "intraday-stock-discovery" / "scripts"
+STRATEGY_DIR = PROJECT_ROOT / ".opencode" / "skills" / "intraday-strategy" / "scripts"
 
 import sys as _sys
-_sys.path.insert(0, str(SCRIPTS_DIR))
-from datasources import EastMoneyIntradayDataSource
+_sys.path.insert(0, str(PROJECT_ROOT / ".opencode"))
+from lib.datasources import EastMoneyIntradayDataSource
 _cache_ds = EastMoneyIntradayDataSource()
 
 
@@ -60,7 +67,10 @@ def main():
 
     parser = argparse.ArgumentParser(description="Run intraday overnight alpha pipeline")
     parser.add_argument("--date", required=True, help="Date (YYYY-MM-DD)")
-    parser.add_argument("--output-dir", help="Output directory (default: intraday/{date})")
+    parser.add_argument(
+        "--data-dir",
+        help="Intermediate JSON data directory (default: .cache/intraday/{date})",
+    )
     parser.add_argument(
         "--compute-pool-size", type=int, default=120,
         help="Compute Pool size (default: 120)",
@@ -71,13 +81,17 @@ def main():
     )
     args = parser.parse_args()
 
-    out_dir = Path(args.output_dir) if args.output_dir else Path(f"intraday/{args.date}")
+    # Intermediate JSON data lives under .cache/; final md reports under intraday/.
+    out_dir = Path(args.data_dir) if args.data_dir else Path(f".cache/intraday/{args.date}")
     out_dir.mkdir(parents=True, exist_ok=True)
+    report_dir = Path(f"intraday/{args.date}")
+    report_dir.mkdir(parents=True, exist_ok=True)
 
-    script_base = str(SCRIPTS_DIR)
+    script_base = str(FETCH_DIR)
 
     print(f"=== Overnight Alpha Pipeline ({args.date}) ===")
-    print(f"Output dir: {out_dir}")
+    print(f"Data dir:   {out_dir}")
+    print(f"Report dir: {report_dir}")
     total_start = time.time()
 
     # ── Phase 0: Prefetch all-stocks cache (once, shared by all downstream) ──
@@ -101,7 +115,7 @@ def main():
             "indices",
         ),
         (
-            [sys.executable, f"{LOCAL_SCRIPTS_DIR}/build_concept_dashboard.py", "--json", "--top", "100", "-o", str(out_dir / "concept_dashboard.json"), "--cache-dir", cache_dir_arg],
+            [sys.executable, f"{MARKET_SCAN_DIR}/build_concept_dashboard.py", "--json", "--top", "100", "-o", str(out_dir / "concept_dashboard.json"), "--cache-dir", cache_dir_arg],
             "concept",
         ),
         (
@@ -115,7 +129,7 @@ def main():
     # ── Phase 2: Build Scan Pool ──
     print("\n--- Phase 2: Scan Pool Build ---")
     scan_cmd = [
-        sys.executable, f"{script_base}/build_scan_pool.py",
+        sys.executable, f"{MARKET_SCAN_DIR}/build_scan_pool.py",
         "--compute-pool-size", str(args.compute_pool_size),
         "--json", "-o", str(out_dir / "scan_pool.json"),
         "--cache-dir", cache_dir_arg,
@@ -125,7 +139,7 @@ def main():
     # ── Phase 3: Enrich Compute Pool ──
     print("\n--- Phase 3: Enrich Compute Pool ---")
     enrich_cmd = [
-        sys.executable, f"{script_base}/enrich_compute_pool.py",
+        sys.executable, f"{DISCOVERY_DIR}/enrich_compute_pool.py",
         str(out_dir / "scan_pool.json"),
         "--json", "-o", str(out_dir / "compute_pool_enriched.json"),
     ]
@@ -134,16 +148,26 @@ def main():
     # ── Phase 3.5: Technical Indicators ──
     print("\n--- Phase 3.5: Technical Indicators ---")
     tech_cmd = [
-        sys.executable, f"{script_base}/enrich_technicals.py",
+        sys.executable, f"{DISCOVERY_DIR}/enrich_technicals.py",
         str(out_dir / "compute_pool_enriched.json"),
         "--json", "-o", str(out_dir / "compute_pool_enriched.json"),
     ]
     results["technicals"] = run_cmd(tech_cmd, "technicals")
 
+    # ── Phase 3.6: Theme Ranking ──
+    print("\n--- Phase 3.6: Theme Ranking ---")
+    theme_cmd = [
+        sys.executable, f"{DISCOVERY_DIR}/compute_theme_ranking.py",
+        str(out_dir / "compute_pool_enriched.json"),
+        "--json", "--date", args.date,
+        "-o", str(out_dir / "theme_ranking.json"),
+    ]
+    results["theme"] = run_cmd(theme_cmd, "theme")
+
     # ── Phase 4: Overnight Scoring ──
     print("\n--- Phase 4: Overnight Scoring ---")
     score_cmd = [
-        sys.executable, f"{script_base}/score_overnight.py",
+        sys.executable, f"{STRATEGY_DIR}/score_overnight.py",
         str(out_dir / "compute_pool_enriched.json"),
         "--opportunity-pool-size", str(args.opportunity_size),
         "--json", "-o", str(out_dir / "opportunity_pool.json"),

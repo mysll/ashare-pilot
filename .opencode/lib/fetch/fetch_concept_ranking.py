@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch concept board real-time ranking from East Money.
 
 Usage:
@@ -14,7 +14,11 @@ import io
 import json
 import sys
 
-from datasources import EastMoneyIntradayDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import EastMoneyIntradayDataSource
 
 _ds = EastMoneyIntradayDataSource()
 

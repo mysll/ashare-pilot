@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Fetch all A stock real-time data from Chinese financial APIs.
 
 Supports two data sources:
@@ -19,7 +19,11 @@ import io
 import json
 import sys
 
-from datasources import SinaDataSource, EastMoneyDataSource
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from lib.datasources import SinaDataSource, EastMoneyDataSource
 
 
 _sina = SinaDataSource()

@@ -17,9 +17,12 @@ import json
 import math
 import sys
 import time
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from datasources import SinaDataSource
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent.parent))
+
+from lib.datasources import SinaDataSource
 
 
 _sina = SinaDataSource()

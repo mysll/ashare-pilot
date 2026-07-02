@@ -235,9 +235,65 @@ def extract_trend_quality_raw(stock):
     boll_score = 1.0 if boll_zone == "upper_half" else (0.3 if boll_zone == "below_mid" else 0.0)
     ma_score = 1.0 if (ma_alignment == "bullish" and above_ma5) else 0.3
     vol_ratio = parse_float(stock.get("volume_ratio", "1.0"))
-    vol_score = 1.0 if vol_ratio > 1.5 else (0.5 if vol_ratio > 1.0 else 0.0)
+    if vol_ratio == 0.0:
+        vol_score = 0.5
+    else:
+        vol_score = 1.0 if vol_ratio > 1.5 else (0.5 if vol_ratio > 1.0 else 0.0)
 
     return boll_score * 0.4 + ma_score * 0.4 + vol_score * 0.2
+
+
+def apply_quality_filter(pool):
+    """Filter stocks by basic quality criteria before scoring.
+    
+    Conditions:
+        1. Price > VWAP (intraday price above average cost line)
+        2. 5% <= turnover <= 12%
+        3. 2% <= change_pct <= 6%
+    
+    If VWAP data is unavailable (0), the VWAP check is skipped — the
+    stock passes through for scoring. A counter tracks how many were
+    skipped so the strategy output can note this.
+    
+    Returns (passed, filtered, vwap_missing_count) tuple.
+    """
+    passed = []
+    filtered = []
+    vwap_missing_count = 0
+    for s in pool:
+        enriched = s.get("enriched", {})
+        rt = enriched.get("real_time", {})
+        price = parse_float(rt.get("price", 0))
+        vwap = parse_float(rt.get("vwap", 0))
+        turnover = parse_float(s.get("turnover", "0%"))
+        change_pct = parse_float(s.get("change_pct", "0%"))
+        
+        reasons = []
+        
+        if vwap > 0:
+            if price <= vwap:
+                reasons.append("价格未站上均价线")
+        else:
+            vwap_missing_count += 1
+        
+        if turnover < 5.0:
+            reasons.append("换手率<5%")
+        elif turnover > 12.0:
+            reasons.append("换手率>12%")
+        
+        if change_pct < 2.0:
+            reasons.append("涨幅<2%")
+        elif change_pct > 6.0:
+            reasons.append("涨幅>6%")
+        
+        if reasons:
+            s["exclusion_source"] = "quality-filter"
+            s["exclusion_reason"] = "; ".join(reasons)
+            filtered.append(s)
+        else:
+            passed.append(s)
+    
+    return passed, filtered, vwap_missing_count
 
 
 def compute_confidences(stock, raw_values, all_raws_by_dim):
@@ -405,6 +461,12 @@ def main():
 
     print(f"Scoring {len(pool)} stocks (V1.2 TrendQuality)...", file=sys.stderr)
 
+    pool, quality_filtered, vwap_missing_count = apply_quality_filter(pool)
+    vwap_skip_note = ""
+    if vwap_missing_count > 0:
+        vwap_skip_note = f" (VWAP无数据跳过过滤: {vwap_missing_count}只)"
+    print(f"Quality filter: {len(pool)} passed, {len(quality_filtered)} filtered{vwap_skip_note}", file=sys.stderr)
+
     scored = compute_scores(pool)
 
     pool_size = len(scored)
@@ -429,6 +491,9 @@ def main():
         "weights_version": "V1.2_TrendQuality",
         "pool_size": pool_size,
         "scored_count": len(scored),
+        "quality_filtered_count": len(quality_filtered),
+        "vwap_missing_count": vwap_missing_count,
+        "quality_filtered": quality_filtered,
         "opportunity_pool_size": len(opportunity_pool),
         "score_stats": {
             "mean": mean_score,

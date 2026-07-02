@@ -185,7 +185,7 @@ class EastMoneyConceptSource:
                     except Exception:
                         pass
                 print(f"\n  Page {page} failed after retries. Cookie may have expired.", flush=True)
-                print(f"  Run: python .opencode/skills/stock-analysis/scripts/refresh_cookie.py --refresh", flush=True)
+                print(f"  Run: python .opencode/scripts/get_cookie.py", flush=True)
                 total_pages = (total + page_size - 1) // page_size if total else "?"
                 print(f"  Partial data: {len(results)} concepts fetched (page {page}/{total_pages}).", flush=True)
                 if resume and state_file:
@@ -287,7 +287,7 @@ class EastMoneyConceptSource:
             data = self._fetch_page_with_retry(url, headers, page_label=f"{concept_code}/p{page}")
             if not data or data.get("rc") != 0:
                 self._log(f"\n  {concept_code} page {page} failed after retries. Cookie may have expired.")
-                self._log(f"  Run: python .opencode/skills/stock-analysis/scripts/refresh_cookie.py --refresh")
+                self._log(f"  Run: python .opencode/scripts/get_cookie.py")
                 break
 
             diff = data.get("data", {}).get("diff", [])

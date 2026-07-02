@@ -43,21 +43,21 @@ memory/MEMORY.md         Memory system navigation
 
 ## Key Scripts
 
-All scripts under `.opencode/skills/` support `--json` (structured), `-o <file>`, and `--csv`.
+All scripts support `--json` (structured), `-o <file>`, and `--csv`. Fetch scripts are in `.opencode/lib/fetch/`.
 
 ```bash
 # Real-time quotes
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py sh600519,hk00700 --json
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py --search "茅台"
+python .opencode/lib/fetch/fetch_stock.py sh600519,hk00700 --json
+python .opencode/lib/fetch/fetch_stock.py --search "茅台"
 
 # Historical K-line & indicators (A stocks only, 前复权)
-python .opencode/skills/stock-analysis/scripts/fetch_history.py sh600519 --range 1y
-python .opencode/skills/stock-analysis/scripts/fetch_indicators.py sh600519 --indicators rsi,macd,boll
+python .opencode/lib/fetch/fetch_history.py sh600519 --range 1y
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --indicators rsi,macd,boll
 
 # Dragon & Tiger / Margin / Money Flow
-python .opencode/skills/stock-analysis/scripts/fetch_special.py lhb --json
-python .opencode/skills/stock-analysis/scripts/fetch_special.py rzye --top 20
-python .opencode/skills/stock-analysis/scripts/fetch_money_flow.py --json
+python .opencode/lib/fetch/fetch_special.py lhb --json
+python .opencode/lib/fetch/fetch_special.py rzye --top 20
+python .opencode/lib/fetch/fetch_money_flow.py --json
 
 # News
 python .opencode/skills/daily-news-brief/scripts/fetch_news.py
