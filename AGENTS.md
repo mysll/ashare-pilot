@@ -1,45 +1,66 @@
 # Trading Office Agents
 
-## Setup
+## Environment Setup
 
 ```bash
+# Required environment variable
+set PYTHONIOENCODING=utf-8
+
+# Python dependencies
 pip install -r .opencode/scripts/requirements.txt    # requests, websocket-client
 ```
 
-`.env` (not tracked in git — create it):
-```
-EASTMONEY_USERNAME=your_username
-EASTMONEY_PASSWORD=your_password
-EASTMONEY_COOKIE_BACKEND=file   # optional: skip auto-login fallback
-```
+**Prerequisites:**
+- Chrome browser installed (required for cookie extraction)
+- `.env` file (not tracked in git):
+  ```
+  EASTMONEY_USERNAME=your_username
+  EASTMONEY_PASSWORD=your_password
+  EASTMONEY_COOKIE_BACKEND=file   # optional: skip auto-login fallback
+  ```
 
-Cookie alternative (Windows-only, Chrome-profile extraction):
+**Cookie setup (Windows-only):**
 ```bash
-update_cookie.bat
+update_cookie.bat    # Opens Chrome for login/captcha verification
 ```
 
 ## Stock Code Prefixes
 
-| Market | Prefix | Example |
-|--------|--------|---------|
-| A Stock Shanghai | `sh` | `sh600519` |
-| A Stock Shenzhen | `sz` | `sz000001` |
-| A Stock Beijing | `bj` | `bj835185` |
-| HK Stock | `hk` | `hk00700` |
-| US Stock | `usr_` | `usr_nvda` |
-| Domestic Future | `nf_` | `nf_IF0` |
-| Oversea Future | `hf_` | `hf_OIL` |
+| Market | Prefix | Example | Scope |
+|--------|--------|---------|-------|
+| A Stock Shanghai | `sh` | `sh600519` | ✅ Active |
+| A Stock Shenzhen | `sz` | `sz000001` | ✅ Active |
+| A Stock Beijing | `bj` | `bj835185` | ❌ Excluded |
+| Shanghai STAR | `sh688` | `sh688981` | ❌ Excluded |
+| HK Stock | `hk` | `hk00700` | Daily pipeline excluded |
+| US Stock | `usr_` | `usr_nvda` | Daily pipeline excluded |
+| Domestic Future | `nf_` | `nf_IF0` | Daily pipeline excluded |
+| Oversea Future | `hf_` | `hf_OIL` | Daily pipeline excluded |
+
+**Trading scope:** Only `sh` and `sz` prefixes (excludes STAR board `sh688*` and BSE `bj*`). See `.opencode/config/trading-scope.json`.
 
 ## Directory Layout
 
 ```
 predict/{date}/          Daily pipeline outputs (news.md, themes.md, theme_stocks.md, mapper.md, strategy.md)
-memory/daily/{date}/     Verification & review (verification.md) — written post-market
-memory/RULES.md          Trading rules — MUST read before generating strategy
+intraday/{date}/         Intraday pipeline outputs (intraday_mapper.md)
+memory/daily/{date}/     Morning verification (verification.md)
+memory/intraday/{date}/  Intraday verification (intraday_verification.md)
+memory/RULES.md          Morning trading rules — MUST read before generating strategy
+memory/INTRADAY_RULES.md Intraday trading rules — MUST read before generating intraday strategy
+memory/SHARED_RULES.md   Shared rules (both agents)
 memory/PERFORMANCE.md    Cumulative performance & key dates
 memory/MEMORY.md         Memory system navigation
-.opencode/agents/        Custom subagent definitions (financial-news-analyst, financial-news-mapper, trading-strategist)
+.opencode/agents/        Custom subagent definitions (financial-news-analyst, financial-news-mapper, intraday-market-observer, trading-strategist)
 ```
+
+## Two-Agent System
+
+**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md`. Generates `predict/{date}/strategy.md`.
+
+**Intraday Agent (14:30 weekdays):** Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`. Generates `intraday/{date}/intraday_mapper.md`.
+
+Both agents write verification after market close: Morning → `memory/daily/{date}/verification.md`, Intraday → `memory/intraday/{date}/intraday_verification.md`. Rules are versioned with verification history.
 
 ## Key Scripts
 
@@ -91,12 +112,12 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 
 ## Memory & Rules System
 
-Before generating `strategy.md`, MUST read `memory/RULES.md` for active trading rules. After market close, verification goes to `memory/daily/{date}/verification.md`. New rule discoveries update `memory/RULES.md` with verification history.
+Before generating `strategy.md`, MUST read `memory/RULES.md` for active trading rules. Before generating `intraday_mapper.md`, MUST read `memory/INTRADAY_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, Intraday writes to `memory/intraday/{date}/intraday_verification.md`. New rule discoveries update the corresponding rules file with verification history.
 
 ## Automation
 
 ```bash
-auto.bat                        # Cron daemon (default: 9:19 weekday daily-market-analysis)
+auto.bat                        # Cron daemon (default: 9:20 weekday daily-market-analysis)
 python .opencode/scripts/cron-daemon.py --dry-run    # Check next run
 python .opencode/scripts/cron-daemon.py --once        # Run once immediately
 ```
