@@ -9,7 +9,7 @@ description: Use when users request comprehensive intraday overnight alpha analy
 
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
-| Compute | Python | `run_intraday_pipeline.py` | market_breadth.json, indices.json, concept_dashboard.json, north_bound.json, scan_pool.json, compute_pool_enriched.json, theme_ranking.json, opportunity_pool.json (all under `.cache/intraday/{date}/`) |
+| Compute | Python | `run_intraday_pipeline.py` | market_breadth.json, indices.json, concept_dashboard.json, scan_pool.json, compute_pool_enriched.json, theme_ranking.json, opportunity_pool.json (all under `.cache/intraday/{date}/`) |
 | Perception | Step 1+2 | general + general | market_state.md → theme_ranking.md |
 | Reasoning | Step 3 | trading-strategist | intraday_mapper.md + overnight_strategy.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace + T+1兑现计划) |
 
@@ -28,7 +28,6 @@ Compute Phase        ←  run_intraday_pipeline.py (once, ~85s — Phase 0 prefe
         ├→ market_breadth.json
         ├→ indices.json
         ├→ concept_dashboard.json
-        ├→ north_bound.json
         ├→ scan_pool.json
         ├→ compute_pool_enriched.json
         ├→ theme_ranking.json
@@ -55,7 +54,6 @@ The pipeline is designed to run at **14:30** (20-minute execution window before 
 | Market breadth (涨跌/涨停) | `fetch_market_breadth.py` (push2 API) | ✓ | Real-time, based on current price vs yesterday close |
 | Index quotes | `fetch_stock.py` (Sina) | ✓ | Real-time |
 | Concept ranking | `fetch_concept_ranking.py` (push2 API) | ✓ | Real-time |
-| North-bound capital | `fetch_north_bound.py` (push2 API) | ✓ | Real-time (may be empty pre-market) |
 | Stock money flow | `enrich_compute_pool.py` (East Money + Sina) | ✓ | Real-time stock-level flow |
 | Stock technical indicators | — | ✗ | No MACD/RSI/ATR in V1 (computed from close data only) |
 | Stock 5-min K-line | `fetch_stock.py --intraday` | ✓ | Available but NOT used in V1 pipeline |
@@ -93,7 +91,6 @@ The output directory structure after compute:
 ├── market_breadth.json
 ├── indices.json
 ├── concept_dashboard.json
-├── north_bound.json
 ├── scan_pool.json              (Scan Pool: 300-500 stocks)
 ├── compute_pool_enriched.json  (Compute Pool: 80-150 stocks with money_flow + technicals)
 ├── theme_ranking.json          (Theme ranking: heat-scored theme list)
@@ -116,7 +113,7 @@ intraday/{date}/                (markdown reports, written by Steps 1-3)
 
 **Task:**
 
-- Read `.cache/intraday/{YYYY-MM-DD}/market_breadth.json`, `indices.json`, `concept_dashboard.json`, `north_bound.json`
+- Read `.cache/intraday/{YYYY-MM-DD}/market_breadth.json`, `indices.json`, `concept_dashboard.json`
 - Synthesize into a structured `market_state.md` covering: Market Strength, Market Breadth, Capital Direction, Active Concepts (top 10)
 - ALL numbers must come from the JSON files; LLM generates zero numeric values
 
@@ -131,8 +128,6 @@ Inputs:
 - .cache/intraday/{YYYY-MM-DD}/market_breadth.json
 - .cache/intraday/{YYYY-MM-DD}/indices.json
 - .cache/intraday/{YYYY-MM-DD}/concept_dashboard.json
-- .cache/intraday/{YYYY-MM-DD}/north_bound.json
-
 Output:
 - intraday/{YYYY-MM-DD}/market_state.md
 ```
@@ -226,7 +221,6 @@ Outputs:
 | `.cache/intraday/{date}/market_breadth.json` | Raw market width data | Compute |
 | `.cache/intraday/{date}/indices.json` | Raw index quotes | Compute |
 | `.cache/intraday/{date}/concept_dashboard.json` | Raw concept board ranking | Compute |
-| `.cache/intraday/{date}/north_bound.json` | Raw north-bound flow | Compute |
 | `.cache/intraday/{date}/scan_pool.json` | Scan Pool (300-500 stocks, basic data) | Compute |
 | `.cache/intraday/{date}/compute_pool_enriched.json` | Compute Pool (80-150 stocks, enriched with money flow + technicals) | Compute |
 | `.cache/intraday/{date}/theme_ranking.json` | Theme ranking (heat-scored, bottom-up from stocks) | Compute |

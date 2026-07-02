@@ -39,7 +39,6 @@ Run these scripts in parallel (all independent calls):
 python .opencode/lib/fetch/fetch_market_breadth.py --json
 python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
 python .opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py --json --top 100
-python .opencode/lib/fetch/fetch_north_bound.py --json
 python .opencode/skills/intraday-market-scan/scripts/build_scan_pool.py --compute-pool-size 120 --json
 ```
 
@@ -73,10 +72,9 @@ Extract from `market_breadth.json`:
 ```
 
 ### Capital Direction
-Extract from `north_bound.json` and `concept_dashboard.json`:
+Extract from `concept_dashboard.json`:
 ```markdown
 ## Capital Direction
-- 北向资金净流入: {total_net}亿
 - 主力资金方向: (infer from concept_dashboard.json Capital ranking — mention the capital leader)
 ```
 **CRITICAL:** When you mention a concept in the narrative (e.g., "CPO概念净流入排名第一"),

@@ -10,7 +10,6 @@ Usage:
 """
 
 import argparse
-import concurrent.futures
 import json
 import os
 import sys
@@ -53,37 +52,21 @@ def is_excluded(code, excluded_prefixes):
     return False
 
 
-def fetch_vwap_for_codes(codes: list) -> dict:
-    """Fetch intraday VWAP (分时均价线) via Sina per-stock K-line API.
-    
-    Extracts ma_price5 from the latest 5-min bar, which is the
-    cumulative average price (VWAP) for the day.
-    
-    Returns {code: vwap_float} dict. Returns 0.0 for failures.
+def compute_vwap(amount, volume):
+    """True intraday VWAP = 成交额 / 成交量 (元/股).
+
+    NOT ma_price5 (which is a 25-min moving average of 5-min bar closes and
+    tracks price too closely to be a meaningful average-cost line).
+    Returns 0.0 when data is missing/unparsable.
     """
-    vwap_map = {}
-    def _fetch_vwap(code):
-        try:
-            bars = _sina.fetch_intraday(code, scale=5, days=2)
-            if bars and isinstance(bars, list) and len(bars) > 0:
-                last = bars[-1]
-                vwap = last.get("ma_price5")
-                if vwap is not None:
-                    return code, float(vwap)
-        except Exception:
-            pass
-        return code, 0.0
-
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as exc:
-        futures = [exc.submit(_fetch_vwap, code) for code in codes]
-        for f in concurrent.futures.as_completed(futures):
-            try:
-                code, vwap = f.result()
-                vwap_map[code] = vwap
-            except Exception:
-                pass
-
-    return vwap_map
+    try:
+        amt = float(str(amount).replace(",", ""))
+        vol = float(str(volume).replace(",", ""))
+    except (ValueError, TypeError):
+        return 0.0
+    if vol <= 0:
+        return 0.0
+    return round(amt / vol, 3)
 
 
 def fetch_indicators_for_codes(codes: list) -> dict:
@@ -109,10 +92,8 @@ def fetch_indicators_for_codes(codes: list) -> dict:
         pass
 
     vwap_map = {}
-    try:
-        vwap_map = fetch_vwap_for_codes(codes)
-    except Exception:
-        pass
+    for code, entry in sina_results.items():
+        vwap_map[code] = compute_vwap(entry.get("amount", "0"), entry.get("volume", "0"))
 
     try:
         all_money = _eastmoney.fetch_stock_money_flow(page_size=5000)

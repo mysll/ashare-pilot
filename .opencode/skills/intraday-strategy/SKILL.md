@@ -27,17 +27,21 @@ Skill 3 → Overnight Scoring + intraday_mapper.md (THIS)
 python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
 ```
 
-### Scoring Dimensions (V1 Rule Based, Initial Weights)
+### Scoring Dimensions (V1.2 Percentile-Based, 9-Dim)
 
 | Dimension | Weight | What it measures |
 |-----------|:------:|-----------------|
-| Theme Continuity | 30% | Is the stock in a hot theme? (limit_up > turnover > gain_range) |
-| Capital Continuity | 25% | Is main force capital flowing in? (超1亿=strong, 净流出=weak) |
-| Tail Strength | 20% | Price position within day range, healthy turnover (5-12%, near high) |
-| Position Advantage | 15% | Gain in sweet spot 2-6% (ideal); >9% or <0.5% penalized |
-| Risk Deduction | -10% | High turnover >25%, near limit-up, consecutive gains |
+| Theme Continuity | 18% | Bottom-up theme heat rank (leader/liquidity/momentum/breadth) |
+| Capital Continuity | 18% | Main force net inflow vs pool peers (percentile) |
+| Tail Strength | 14% | Price position within day range × volume ratio |
+| Position Advantage | 9% | Log-scaled gain with gaussian sweet spot (peak 3-5%) |
+| Risk Deduction | -10% | Soft penalty: high change%(≥9.5:+0.4,≥7:+0.2,≥5:+0.05), turnover(>25:+0.3,>15:+0.15,>10:+0.05), limit_up source(+0.15) |
+| Intensity | 9% | Capital efficiency: main_net_inflow / turnover (high inflow + low turnover = conviction) |
+| Conviction | 9% | Institutional ratio: super_large_net / \|main_net_inflow\| (>0.5 = institutions driving) |
+| Consistency | 5% | 4-tier capital directional alignment (1.0 = all tiers same direction) |
+| Trend Quality | 8% | Bollinger zone + MA alignment + volume ratio (upper_half + bullish MAs + vol>1.5 = 1.0) |
 
-Score = Σ(dimension × weight) × 100, range 0-100.
+Score = Σ(percentile_score × weight), range 0-100.
 
 Tiers: A (75+) = Leader Watch, B (60-74) = Premium Candidates, C (45-59) = Early Breakout, D (<45) = Drop.
 
@@ -68,7 +72,7 @@ Table per tier:
 
 ### 4. Stock Details
 For each B-tier stock (most important section):
-- Full score breakdown (5 dimensions)
+- Full score breakdown (9 dimensions)
 - Money flow: main/super_large/large/medium/small
 - Position analysis: price vs VWAP, within day range
 - QuickScore (from Skill 1)
@@ -77,10 +81,14 @@ For each B-tier stock (most important section):
 Show the formula with actual values:
 ```
 Stock [code] [name]:
-  Theme:        [x]/100 × 0.30 = [weighted]
-  Capital:      [x]/100 × 0.25 = [weighted]
-  Tail:         [x]/100 × 0.20 = [weighted]
-  Position:     [x]/100 × 0.15 = [weighted]
+  Theme:        [x]/100 × 0.18 = [weighted]
+  Capital:      [x]/100 × 0.18 = [weighted]
+  Tail:         [x]/100 × 0.14 = [weighted]
+  Position:     [x]/100 × 0.09 = [weighted]
+  Intensity:    [x]/100 × 0.09 = [weighted]
+  Conviction:   [x]/100 × 0.09 = [weighted]
+  Consistency:  [x]/100 × 0.05 = [weighted]
+  TrendQuality: [x]/100 × 0.08 = [weighted]
   Risk:        -[x]/100 × 0.10 = -[weighted]
   ─────────────────────────────────
   OVERNIGHT: [total]/100 — Tier [A/B/C]
@@ -176,18 +184,25 @@ Excluded-board stocks:
 
 ### 持仓质量过滤器
 
-评分前按基础质量条件过滤：
+评分前硬排除仅两种真正不合格的标的。涨幅/换手不再硬过滤——交给 `risk_penalty` 软扣分维度处理，避免"活跃日→空池"。
 
-| 条件 | 阈值 | 规则 |
-|------|:------:|------|
-| 分时均价线 | 全天运行在均价线上方 | 价格始终 > VWAP，弱势股剔除 |
-| 换手率 | 5% ≤ 换手率 ≤ 12% | <5%无量无关注，>12%短期过热 |
-| 当天涨幅 | 2% ≤ 涨幅 ≤ 6% | <2%动能不足，>6%追高风险 |
+| 条件 | 处理 |
+|------|------|
+| 无实时行情数据 (price ≤ 0) | 硬排除，不参与评分 |
+| 价格跌破 VWAP (price < vwap) | 硬排除（买方未控盘） |
+| VWAP 数据缺失 | 跳过检查，正常参与评分 |
+| 涨幅/换手偏高 | 不硬排除，通过 `risk_penalty` 软扣分 |
 
-不满足任意条件的股票：
-- 标记为 `quality-filter` 排除
-- 放入 Excluded Stocks 表，注明 `ExclusionSource=quality-filter`
-- 不参与 overnight scoring
+### 绝对质量地板
+
+percentile 排序是相对的（弱势日也能排出高分），入池需叠加独立绝对门槛：
+
+| 条件 | 阈值 |
+|------|:----:|
+| 主力净流入 | > 0 |
+| 趋势质量 (trend_quality raw) | ≥ 0.3 |
+
+未通过地板 → `floor_pass=false`，不计入 opportunity_pool。空池触发降级候选兜底，Reasoning 层标注 `pool_warning` 建议观望。
 
 ### 应用优先级
 
@@ -226,6 +241,6 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 - When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)
 - **涨停封板股票 (seal_quality="封死") 不得出现在B-Tier尾盘买入推荐中**
 - **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per .opencode/config/trading-scope.json)**
-- **不满足持仓质量过滤器（VWAP/换手率/涨幅）的股票不得参与评分**
+- **质量过滤器排除（无行情/跌破VWAP）的股票不得参与评分**
 - Excluded-board 和涨停封板股票可出现在 A-Tier 观察区，但必须标注排除原因
 - Output language: 中文

@@ -118,10 +118,6 @@ def main():
             [sys.executable, f"{MARKET_SCAN_DIR}/build_concept_dashboard.py", "--json", "--top", "100", "-o", str(out_dir / "concept_dashboard.json"), "--cache-dir", cache_dir_arg],
             "concept",
         ),
-        (
-            [sys.executable, f"{script_base}/fetch_north_bound.py", "--json", "-o", str(out_dir / "north_bound.json")],
-            "north",
-        ),
     ]
     for cmd, name in tasks:
         results[name] = run_cmd(cmd, name)

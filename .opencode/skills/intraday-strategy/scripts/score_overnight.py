@@ -244,17 +244,21 @@ def extract_trend_quality_raw(stock):
 
 
 def apply_quality_filter(pool):
-    """Filter stocks by basic quality criteria before scoring.
-    
-    Conditions:
-        1. Price > VWAP (intraday price above average cost line)
-        2. 5% <= turnover <= 12%
-        3. 2% <= change_pct <= 6%
-    
+    """Absolute eligibility floor — removes ONLY genuinely disqualifying stocks.
+
+    Hard exclusions (physically unsuitable for overnight holding):
+        1. No real-time data (price <= 0)
+        2. Price below intraday VWAP (buyers not in control at close)
+
+    The former 涨幅/换手 hard bands are REMOVED. Strong stocks (涨停/大涨,
+    high turnover) are no longer deleted outright — they flow through to
+    scoring where extract_risk_raw applies a graded soft penalty instead.
+    This prevents the "active day → empty pool" failure mode.
+
     If VWAP data is unavailable (0), the VWAP check is skipped — the
     stock passes through for scoring. A counter tracks how many were
     skipped so the strategy output can note this.
-    
+
     Returns (passed, filtered, vwap_missing_count) tuple.
     """
     passed = []
@@ -265,35 +269,75 @@ def apply_quality_filter(pool):
         rt = enriched.get("real_time", {})
         price = parse_float(rt.get("price", 0))
         vwap = parse_float(rt.get("vwap", 0))
-        turnover = parse_float(s.get("turnover", "0%"))
-        change_pct = parse_float(s.get("change_pct", "0%"))
-        
+
         reasons = []
-        
-        if vwap > 0:
-            if price <= vwap:
-                reasons.append("价格未站上均价线")
+
+        if price <= 0:
+            reasons.append("无实时行情数据")
+        elif vwap > 0:
+            if price < vwap:
+                reasons.append("价格跌破当日成交均价线")
         else:
             vwap_missing_count += 1
-        
-        if turnover < 5.0:
-            reasons.append("换手率<5%")
-        elif turnover > 12.0:
-            reasons.append("换手率>12%")
-        
-        if change_pct < 2.0:
-            reasons.append("涨幅<2%")
-        elif change_pct > 6.0:
-            reasons.append("涨幅>6%")
-        
+
         if reasons:
             s["exclusion_source"] = "quality-filter"
             s["exclusion_reason"] = "; ".join(reasons)
             filtered.append(s)
         else:
             passed.append(s)
-    
+
     return passed, filtered, vwap_missing_count
+
+
+# Absolute quality floor for opportunity-pool entry.
+# main_net_inflow (亿) must be net positive; trend_quality raw must clear this.
+FLOOR_MIN_INFLOW = 0.0
+FLOOR_MIN_TREND = 0.3
+
+
+def money_flow_available(pool):
+    """True if stock-level money flow data is present for this pool.
+
+    The East Money money-flow endpoint occasionally returns nothing (after
+    hours, cookie expiry, API change), leaving main_net_inflow == 0 for the
+    whole pool. In that case the inflow floor must be SKIPPED rather than
+    rejecting every stock — otherwise a data outage silently empties the pool.
+    """
+    nonzero = sum(
+        1 for s in pool
+        if parse_float(s.get("enriched", {}).get("money_flow", {}).get("main_net_inflow", "0")) != 0
+    )
+    return nonzero > 0
+
+
+def passes_absolute_floor(stock, check_inflow=True):
+    """Absolute quality gate, independent of percentile rank.
+
+    Percentile scoring is RELATIVE — on a weak day the 'best of the worst'
+    still ranks high and would emit a buy signal. This gate ensures a stock
+    has genuine standalone merit before entering the opportunity pool:
+        - main force capital is net positive (real money committed)
+        - trend quality is not in its worst state
+
+    When check_inflow is False (money-flow data unavailable pool-wide), the
+    inflow condition is skipped so a data outage does not empty the pool.
+
+    Returns (ok: bool, reason: str). reason is "" when ok.
+    """
+    enriched = stock.get("enriched", {})
+    mf = enriched.get("money_flow", {})
+    inflow = parse_float(mf.get("main_net_inflow", "0"))
+    trend_raw = extract_trend_quality_raw(stock)
+
+    reasons = []
+    if check_inflow and inflow <= FLOOR_MIN_INFLOW:
+        reasons.append("主力资金净流出")
+    if trend_raw < FLOOR_MIN_TREND:
+        reasons.append("趋势质量不达标")
+
+    return (not reasons), "; ".join(reasons)
+
 
 
 def compute_confidences(stock, raw_values, all_raws_by_dim):
@@ -474,11 +518,44 @@ def main():
     for s in scored:
         s["tier"] = classify_tier(s["overnight_score"], s["rank"], pool_size)
 
+    # Absolute quality floor: percentile rank is relative, so gate on
+    # standalone merit before a stock can enter the opportunity pool.
+    # If money-flow data is unavailable pool-wide, skip the inflow condition
+    # so a data outage does not silently empty the pool.
+    mf_available = money_flow_available(scored)
+    floor_rejected = []
+    for s in scored:
+        ok, reason = passes_absolute_floor(s, check_inflow=mf_available)
+        s["floor_pass"] = ok
+        if not ok:
+            s["floor_reason"] = reason
+            floor_rejected.append(s)
+
     opportunity_pool = [
-        s for s in scored if s["tier"] in ("A", "B", "C")
+        s for s in scored
+        if s["tier"] in ("A", "B", "C") and s.get("floor_pass", False)
     ][:args.opportunity_pool_size]
 
-    leader_watch = [s for s in scored if s["tier"] == "A"][:5]
+    # Empty-pool fallback: never silently return nothing. If the floor + tier
+    # gate cleared everyone, surface the top-ranked tier-A/B/C candidates with
+    # an explicit warning so the Reasoning layer can decide to stand aside.
+    pool_warning = ""
+    if not mf_available:
+        pool_warning = "主力资金流数据整体缺失，已跳过资金地板检查——评分可信度下降，Reasoning层需谨慎"
+    if not opportunity_pool:
+        tier_candidates = [s for s in scored if s["tier"] in ("A", "B", "C")]
+        if tier_candidates:
+            degrade_note = (
+                "绝对质量地板过滤后无合格标的；以下为降级候选(未通过地板)，"
+                "仅供参考，Reasoning层应倾向观望"
+            )
+            pool_warning = f"{pool_warning}；{degrade_note}" if pool_warning else degrade_note
+            opportunity_pool = [dict(s, degraded=True) for s in tier_candidates][:args.opportunity_pool_size]
+        else:
+            no_pool_note = "无任何A/B/C档标的，建议全部观望"
+            pool_warning = f"{pool_warning}；{no_pool_note}" if pool_warning else no_pool_note
+
+    leader_watch = [s for s in opportunity_pool if s["tier"] == "A"][:5]
     premium_candidates = [s for s in opportunity_pool if s["tier"] == "B"]
     early_breakout = [s for s in opportunity_pool if s["tier"] == "C"][:10]
 
@@ -493,6 +570,7 @@ def main():
         "scored_count": len(scored),
         "quality_filtered_count": len(quality_filtered),
         "vwap_missing_count": vwap_missing_count,
+        "money_flow_available": mf_available,
         "quality_filtered": quality_filtered,
         "opportunity_pool_size": len(opportunity_pool),
         "score_stats": {
@@ -504,6 +582,8 @@ def main():
         "leader_watch": leader_watch,
         "premium_candidates": premium_candidates,
         "early_breakout": early_breakout,
+        "floor_rejected_count": len(floor_rejected),
+        "pool_warning": pool_warning,
         "opportunity_pool": opportunity_pool,
     }
 
