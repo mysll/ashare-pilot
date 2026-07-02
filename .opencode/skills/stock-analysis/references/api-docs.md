@@ -172,17 +172,7 @@ GET https://proxy.finance.qq.com/ifzqgtimg/appstock/smartbox/search/get?q={keywo
 | 2     | name         | Stock name                   |
 | 3     | abbreviation | Name abbreviation            |
 
-## Sina Market Center API (Bulk A Stock Data)
-
-### Endpoint
-
-```
-GET https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData
-```
-
-**Note**: This API does NOT provide volume ratio (量比). The field is set to "-" in output.
-
-### Eastmoney API (Bulk A Stock Data - includes volume ratio)
+## Eastmoney push2 API (Bulk A Stock Data - includes volume ratio)
 
 **Endpoint**:
 ```
@@ -237,79 +227,6 @@ GET https://push2.eastmoney.com/api/qt/clist/get
 - Requires proper User-Agent header
 - Maximum 100 records per page regardless of `pz` parameter
 - May require ~55 pages for full A-stock list (~5500 stocks)
-
-## Sina Market Center API (Bulk A Stock Data)
-
-**Note**: This API does NOT provide volume ratio (量比). The field is set to "-" in output.
-
-### Endpoint
-
-```
-GET https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData
-```
-
-### Parameters
-
-| Param     | Description                      | Example        |
-| --------- | -------------------------------- | -------------- |
-| `page`    | Page number (starts from 1)      | `1`            |
-| `num`     | Number of records per page       | `80`           |
-| `sort`    | Sort field                       | `symbol`       |
-| `asc`     | Sort direction (0=desc, 1=asc)   | `1`            |
-| `node`    | Market node                      | `hs_a`         |
-
-### Headers
-
-- `User-Agent`: Browser-like UA string (required)
-- `Referer`: `https://vip.stock.finance.sina.com.cn/market_center/`
-
-### Response Format
-
-```json
-[
-  {
-    "symbol": "sh600519",
-    "code": "600519",
-    "name": "贵州茅台",
-    "trade": "1453.96",
-    "pricechange": "-6.53",
-    "changepercent": "-0.45",
-    ...
-  }
-]
-```
-
-### Fields
-
-| Field          | Description                |
-| -------------- | -------------------------- |
-| `symbol`       | Full code with market (sh/sz) |
-| `code`         | Stock code only            |
-| `name`         | Stock name                 |
-| `trade`        | Current price              |
-| `pricechange`  | Price change (涨跌额)      |
-| `changepercent`| Change percent (涨跌幅)    |
-| `settlement`   | Previous close (昨收)      |
-| `open`         | Opening price              |
-| `high`         | Day high                   |
-| `low`          | Day low                    |
-| `volume`       | Trading volume (lots)      |
-| `amount`       | Trading amount (元)        |
-| `turnoverratio`| Turnover rate (换手率)     |
-| `per`          | P/E ratio (市盈率)         |
-| `pb`           | P/B ratio (市净率)         |
-| `mktcap`       | Market cap (万)            |
-| `nmc`          | Float market cap (万)      |
-
-**Note**: Sina API does NOT provide volume ratio (量比) or swing (振幅).
-These fields are set to "-" in the output from `fetch_all_astocks.py`.
-
-### Notes
-
-- Returns ~5500 A stocks (sh/sz/bj combined)
-- Pagination: 80 records per page recommended
-- Fetch time: ~45 seconds for all data
-- Supports sorting by any field
 
 ## Sohu Finance API (Historical Daily K-line)
 
@@ -567,6 +484,205 @@ jQuery_callback({"rc":0,"rt":6,"svr":183119941,"lt":1,"full":1,"dlmkts":"","data
 - Returns ~5282 A stocks total
 - Monetary values in 元, convert to 亿 for display
 - Cookie may expire periodically; update when API returns empty data
+
+## East Money push2 Index Snapshot API (qt/stock/get)
+
+### Endpoint
+
+```
+GET https://push2.eastmoney.com/api/qt/stock/get
+```
+
+### Parameters
+
+| Param  | Description                        | Example                    |
+| ------ | ---------------------------------- | -------------------------- |
+| `ut`   | Token (required)                   | `fa5fd1943c7b386f172d6893dbfba10b` |
+| `fields` | Data fields                      | `f43,f46,f60,f113,f114,f115,f116` |
+| `secid`  | sec ID in `{market}.{code}` format | `1.000001` (Shanghai), `0.399001` (Shenzhen) |
+
+### Fields
+
+| Field | Description         |
+|-------|---------------------|
+| `f43` | Current price       |
+| `f46` | Open price          |
+| `f60` | Previous close      |
+| `f113`| Up count            |
+| `f114`| Down count          |
+| `f115`| Flat count          |
+| `f116`| Unknown             |
+
+### Usage
+
+Used by `EastMoneyIntradayDataSource` to fetch index snapshots for market breadth:
+- Shanghai Composite: secid=`1.000001`
+- Shenzhen Component: secid=`0.399001`
+
+Up/down/flat counts are summed across both indices. Limit-up/limit-down counts are derived from the full A-stock list fetched separately.
+
+## East Money North Bound Capital Flow API (qt/kamt.rt/get)
+
+### Endpoint
+
+```
+GET https://push2.eastmoney.com/api/qt/kamt.rt/get
+```
+
+### Parameters
+
+| Param      | Description    | Example                              |
+|------------|---------------|--------------------------------------|
+| `ktype`    | K-line type    | `1`                                  |
+| `pagesize` | Page size      | `1`                                  |
+| `pageindex`| Page index     | `1`                                  |
+| `ut`       | Token          | `fa5fd1943385f9554f5b7d918a9e`       |
+| `fields1`  | Fields group 1 | `f2,f4,f6`                           |
+| `fields2`  | Fields group 2 | `f2,f4,f6`                           |
+
+### Response Fields
+
+| Group | Field | Description |
+|-------|-------|-------------|
+| `s2n` (沪股通) | `f2` | Buy amount (元) |
+| `s2n` | `f4` | Sell amount (元) |
+| `s2n` | `f6` | Net amount (元) |
+| `n2s` (深股通) | `f2` | Buy amount (元) |
+| `n2s` | `f4` | Sell amount (元) |
+| `n2s` | `f6` | Net amount (元) |
+
+### Notes
+
+- Returns daily cumulative data
+- Values are in 元, convert to 亿 for display
+- Source: `EastMoneyIntradayDataSource.fetch_north_bound()`
+- Same headers as push2 stock money flow API
+
+## East Money DataAPI Board Money Flow (bkzj/getbkzj)
+
+### Endpoint
+
+```
+GET https://data.eastmoney.com/dataapi/bkzj/getbkzj
+```
+
+### Parameters
+
+| Param  | Description                              | Example                     |
+|--------|------------------------------------------|-----------------------------|
+| `key`  | Sort field (f62=主力净流入, f174=other)  | `f62`                       |
+| `code` | Board type filter (URL-encoded)          | `m:90+t:3` (concept), `m:90+t:2` (industry), `m:90+s:4` (all) |
+
+### Board Type Filter
+
+| Code         | Description        |
+|-------------|--------------------|
+| `m:90+t:3`  | Concept board      |
+| `m:90+t:2`  | Industry sector    |
+| `m:90+s:4`  | All boards         |
+
+### Headers
+
+- `User-Agent`: Browser-like UA string
+- `Referer`: `https://data.eastmoney.com/`
+
+### Response Fields
+
+| Field  | Description             |
+|--------|------------------------|
+| `f12`  | Board code              |
+| `f14`  | Board name              |
+| `f62`  | 主力净流入 (元)          |
+| `f174` | Unknown metric (default) |
+
+Source: `EastMoneyDataSource.fetch_board_money_flow_by_field()`.
+
+## East Money push2 Concept Ranking API
+
+### Endpoint
+
+```
+GET https://push2.eastmoney.com/api/qt/clist/get
+```
+
+Uses the same push2 endpoint as stock data, but with a different market filter `m:90+t:3` for concept boards.
+
+### Parameters
+
+| Param    | Description                | Example                              |
+|----------|----------------------------|--------------------------------------|
+| `pn`     | Page number                | `1`                                  |
+| `pz`     | Page size                  | `50`                                 |
+| `po`     | Sort order (1=desc)        | `1`                                  |
+| `np`     | No pagination flag         | `1`                                  |
+| `ut`     | Token                      | `fa5fd1943385f9554f5b7d918a9e`       |
+| `fltt`   | Float type                 | `2`                                  |
+| `invt`   | Investor type              | `2`                                  |
+| `fid`    | Sort field                 | `f3` (change %)                      |
+| `fs`     | Market filter              | `m:90+t:3`                           |
+| `fields` | Data fields                | `f2,f3,f4,f8,f12,f14,f20,f104,f105,f128,f136,f62` |
+
+### Response Fields
+
+| Field  | Description                |
+|--------|----------------------------|
+| `f12`  | Concept code               |
+| `f14`  | Concept name               |
+| `f2`   | Current value              |
+| `f3`   | Change percent             |
+| `f4`   | Change amount              |
+| `f8`   | Turnover rate              |
+| `f20`  | Total market value          |
+| `f62`  | 主力净流入 (元)             |
+| `f104` | Up count (上涨家数)         |
+| `f105` | Down count (下跌家数)       |
+| `f128` | Lead stock name (领涨股)    |
+| `f136` | Lead stock change (领涨股涨幅) |
+
+Source: `EastMoneyIntradayDataSource.fetch_concept_ranking()`.
+
+## East Money push2 Limit-Up / Limit-Down Pool API
+
+### Endpoint
+
+```
+GET https://push2.eastmoney.com/api/qt/clist/get
+```
+
+Uses the standard A-stock filter sorted by change percent to detect limit-up/limit-down stocks. Thresholds vary by board:
+
+| Board      | Threshold |
+|------------|-----------|
+| 北交所      | 29.5%     |
+| 创业板/科创板 | 19.5%    |
+| 沪/深主板   | 9.5%      |
+
+### Parameters
+
+Same as bulk A-stock API with:
+- `fid=f3` (sort by change percent)
+- `po=1` (descending for limit-up) or `po=0` (ascending for limit-down)
+- Standard A-stock filter `fs=m:0+t:6,m:0+t:13,m:0+t:80,m:1+t:2,m:1+t:23`
+
+Classification logic: `EastMoneyIntradayDataSource._classify_stock()` checks code prefix to determine board, then applies the corresponding threshold.
+
+Source: `EastMoneyIntradayDataSource.fetch_limit_up_pool()`, `fetch_limit_down_pool()`.
+
+## East Money push2 Turnover Ranking API
+
+### Endpoint
+
+```
+GET https://push2.eastmoney.com/api/qt/clist/get
+```
+
+### Parameters
+
+Same as bulk A-stock API with:
+- `fid=f6` (sort by turnover/amount)
+- Standard A-stock filter
+
+Source: `EastMoneyIntradayDataSource.fetch_turnover_ranking()`.
 
 ## Technical Indicators
 

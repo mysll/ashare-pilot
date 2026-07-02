@@ -61,7 +61,15 @@ python .opencode/lib/fetch/fetch_all_astocks.py                  # Summary outpu
 python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.csv    # Save as CSV (default)
 python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.json --json-output  # Save as JSON
 python .opencode/lib/fetch/fetch_all_astocks.py --json           # Print JSON to stdout
+python .opencode/lib/fetch/fetch_all_astocks.py --source sina    # Force Sina source
+python .opencode/lib/fetch/fetch_all_astocks.py --source eastmoney  # Eastmoney source (has volume_ratio)
 ```
+
+**Parameters:**
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `--source` | Data source: `eastmoney` (has volume_ratio) or `sina` (no volume_ratio) | `sina` |
+| `--json-output` | Save as JSON instead of CSV when using `-o` | - |
 
 Returns ~5500 A stocks with: code, name, price, yestclose, updown, percent, high, low, open, volume, amount, turnover, volume_ratio, swing, pe, pb, total_mv, float_mv, market, source.
 
@@ -171,6 +179,7 @@ python .opencode/lib/fetch/fetch_turnover_ranking.py --top 20 --json
 
 ```bash
 python .opencode/lib/fetch/fetch_market_breadth.py --json
+python .opencode/lib/fetch/fetch_market_breadth.py --cache-dir intraday/2026-06-30 --json
 ```
 
 ### Board Money Flow (板块资金流向)
@@ -245,6 +254,18 @@ Note: `float_shares` (流通股本, 股) only available for A stocks (sh/sz/bj);
 **Industry Money Flow**: `code`, `type`, `industry`, `net_inflow`(主力净流入,亿), `source`
 
 **Stock Money Flow**: `code`, `name`, `price`, `change_pct`, `main_net_inflow`(主力净流入,亿), `main_ratio`(主力净占比), `super_large_net`(超大单,亿), `super_large_ratio`, `large_net`(大单,亿), `large_ratio`, `medium_net`(中单,亿), `medium_ratio`, `small_net`(小单,亿), `small_ratio`, `source`
+
+**Concept Ranking**: `code`, `name`, `change_pct`, `change_amt`, `turnover`, `up_count`(上涨家数), `down_count`(下跌家数), `lead_stock`(领涨股), `lead_change`(领涨股涨幅), `net_inflow`(主力净流入,亿), `total_mv`(总市值)
+
+**Limit-Up Pool**: `code`, `name`, `price`, `change_pct`, `turnover`, `volume_ratio`, `amount`, `board`(板块), `total_mv`
+
+**Limit-Down Pool**: `code`, `name`, `price`, `change_pct`, `turnover`, `volume_ratio`, `amount`, `board`(板块), `total_mv`
+
+**Turnover Ranking**: `code`, `name`, `price`, `change_pct`, `amount`(成交额), `turnover`(换手率), `volume_ratio`, `total_mv`
+
+**Market Breadth**: `total`(总数), `up_count`(上涨), `down_count`(下跌), `flat_count`(平盘), `up_ratio`(上涨比例), `limit_up_count`(涨停), `limit_down_count`(跌停), `avg_change`(平均涨幅), `timestamp`, `source`
+
+**Board Money Flow (概念/行业板块资金流向)**: `code`, `name`, `value`(净流入,亿), `field`(排序字段), `board_type`(concept/industry), `source`
 
 ## Workflow
 
