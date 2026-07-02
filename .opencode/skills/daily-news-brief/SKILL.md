@@ -27,12 +27,15 @@ By default, outputs Markdown format briefing to stdout.
 
 | Source | Provider | Content Type |
 |--------|----------|--------------|
-| policy | People.cn Politics | Policy updates |
+| policy | People.cn Politics | Policy updates & political news |
 | hotspot | The Paper Hot News | Social highlights |
 | flash | CLS Telegraph | Real-time flashes |
 | finance | Eastmoney | Financial news |
 | macro | Wallstreet CN | Macro insights |
-| sentiment | Xueqi Hot Stocks | Market sentiment |
+| sentiment | Xueqiu Hot Stocks | Market sentiment |
+| stcn | Securities Times | Capital market & regulatory news |
+| yicai | Yicai (China Business News) | Comprehensive financial news |
+| 21jingji | 21st Century Business Herald | In-depth financial reporting |
 
 ## Usage Examples
 

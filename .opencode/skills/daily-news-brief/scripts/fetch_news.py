@@ -8,13 +8,48 @@ import re
 import sys
 import time
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from typing import Any
 
 import requests
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 TIMEOUT = 20
+
+_REMOVE_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+def _clean(d: dict[str, str]) -> dict[str, str]:
+    return {k: _REMOVE_CONTROL.sub("", v) if isinstance(v, str) else v for k, v in d.items()}
+
+
+_TODAY = date.today()
+_YESTERDAY = _TODAY - timedelta(days=1)
+
+_DATE_IN_TEXT = re.compile(r"(\d{1,2})月(\d{1,2})日")
+
+
+def _recent_text(summary: str) -> bool:
+    """Check if dates mentioned in the summary text are within the last 2 days."""
+    for m in _DATE_IN_TEXT.finditer(summary):
+        try:
+            d = date(_TODAY.year, int(m.group(1)), int(m.group(2)))
+        except ValueError:
+            continue
+        if d > _TODAY:
+            continue
+        if d < _YESTERDAY:
+            return False
+    return True
+
+
+def _recent_date(date_str: str) -> bool:
+    for fmt in ("%Y%m%d", "%Y-%m-%d", "%Y/%m%d"):
+        try:
+            d = datetime.strptime(date_str, fmt).date()
+            return d in (_TODAY, _YESTERDAY)
+        except ValueError:
+            continue
+    return False
 
 
 def _cls_sign(params: dict[str, str]) -> str:
@@ -88,11 +123,20 @@ def fetch_eastmoney() -> list[dict[str, str]]:
     data = resp.json()
     items = []
     for k in data.get("data", {}).get("fastNewsList", []):
+        st = k.get("showTime", "")
+        if st and not _recent_date(st[:10]):
+            continue
+        summary = k.get("summary", "")
+        if summary and not _recent_text(summary):
+            continue
+        url = k.get("url") or k.get("jumpUrl") or ""
+        code = k.get("code", "")
+        if not url and code:
+            url = f"https://finance.eastmoney.com/a/{code}.html"
         items.append({
             "title": k.get("title", ""),
-            "url": k.get("url", ""),
+            "url": url,
             "source": "Eastmoney",
-            "desc": k.get("summary", ""),
         })
     return items[:30]
 
@@ -118,36 +162,6 @@ def fetch_wallstreetcn() -> list[dict[str, str]]:
             "url": f"https://wallstreetcn.com/live/{k.get('id', '')}",
             "source": "Wallstreet CN",
         })
-    return items[:30]
-
-
-# ─── 深度层 ────────────────────────────────────────────────
-
-def fetch_jiemian() -> list[dict[str, str]]:
-    """界面新闻 — 商业报道"""
-    resp = requests.get(
-        "https://m.jiemian.com",
-        headers={"User-Agent": UA},
-        timeout=TIMEOUT,
-    )
-    resp.raise_for_status()
-    import re
-    items = []
-    # 匹配文章链接
-    pattern = r'<a[^>]+href="(https://m\.jiemian\.com/article/(\d+)\.html)"[^>]*>([^<]+)</a>'
-    matches = re.findall(pattern, resp.text)
-    seen = set()
-    for url, aid, title in matches:
-        if aid in seen:
-            continue
-        seen.add(aid)
-        title = title.strip()
-        if len(title) > 5:
-            items.append({
-                "title": title,
-                "url": url,
-                "source": "Jiemian",
-            })
     return items[:30]
 
 
@@ -182,11 +196,130 @@ def fetch_xueqiu() -> list[dict[str, str]]:
 
 
 
+# ─── 政策层 ────────────────────────────────────────────────
+
+def fetch_people_politics() -> list[dict[str, str]]:
+    """人民网 — 政治新闻（通过主站抓取）"""
+    resp = requests.get(
+        "http://www.people.com.cn/",
+        headers={"User-Agent": UA},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    resp.encoding = "utf-8"
+    items = []
+    seen = set()
+    pattern = r'<a[^>]*href=[\"\'](http://politics\.people\.com\.cn/n1/(\d{4})/(\d{4})/[^\"\']+)[\"\'][^>]*>([^<]{10,})</a>'
+    for url, year, mmdd, title in re.findall(pattern, resp.text):
+        title = title.strip()
+        if title in seen:
+            continue
+        seen.add(title)
+        date_str = f"{year}/{mmdd}"
+        if not _recent_date(date_str):
+            continue
+        items.append({
+            "title": title,
+            "url": url,
+            "source": "People.cn",
+        })
+    return items[:20]
+
+
+def fetch_stcn() -> list[dict[str, str]]:
+    """证券时报 — 资本市场新闻"""
+    resp = requests.get(
+        "https://www.stcn.com/",
+        headers={"User-Agent": UA},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    items = []
+    seen = set()
+    pattern = r'<a[^>]+href=[\"\'](/article/detail/\d+\.html)[\"\'][^>]*>([^<]{8,})</a>'
+    for url_path, title in re.findall(pattern, resp.text):
+        title = title.strip()
+        if title and title not in seen:
+            seen.add(title)
+            items.append({
+                "title": title,
+                "url": f"https://www.stcn.com{url_path}",
+                "source": "STCN",
+            })
+    return items[:30]
+
+
+def fetch_yicai() -> list[dict[str, str]]:
+    """第一财经 — 综合财经新闻"""
+    resp = requests.get(
+        "https://www.yicai.com/",
+        headers={"User-Agent": UA},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    items = []
+    seen = set()
+    for url_path in re.findall(r'href=[\"\'](/brief/\d+\.html)[\"\']', resp.text):
+        full_url = f"https://www.yicai.com{url_path}"
+        title_match = re.search(
+            rf'<a[^>]+href=[\"\']{re.escape(url_path)}[\"\'][^>]*>.*?<b>(.*?)</b>',
+            resp.text, re.DOTALL,
+        )
+        if title_match:
+            title = re.sub(r'<[^>]+>', '', title_match.group(1)).strip()[:80]
+            if title and title not in seen:
+                seen.add(title)
+                items.append({
+                    "title": title,
+                    "url": full_url,
+                    "source": "Yicai",
+                })
+    if not items:
+        pattern = r'<a[^>]+href=[\"\'](/news/\d+\.html)[\"\'][^>]*>([^<]{8,})</a>'
+        for url_path, title in re.findall(pattern, resp.text):
+            title = title.strip()
+            if title and title not in seen:
+                seen.add(title)
+                items.append({
+                    "title": title,
+                    "url": f"https://www.yicai.com{url_path}",
+                    "source": "Yicai",
+                })
+    return items[:30]
+
+
+def fetch_21jingji() -> list[dict[str, str]]:
+    """21世纪经济报道 — 深度财经"""
+    resp = requests.get(
+        "https://www.21jingji.com/",
+        headers={"User-Agent": UA},
+        timeout=TIMEOUT,
+    )
+    resp.raise_for_status()
+    resp.encoding = "utf-8"
+    items = []
+    seen = set()
+    pattern = r'<a[^>]+href=[\"\'](https?://m\.21jingji\.com/article/(\d{8})/[^\"\']+)[\"\'][^>]*title=[\"\']([^\"\']+)[\"\']'
+    for url, yyyymmdd, title in re.findall(pattern, resp.text):
+        title = title.strip()
+        if not title or title in seen:
+            continue
+        if not _recent_date(yyyymmdd):
+            continue
+        seen.add(title)
+        items.append({
+            "title": title,
+            "url": url,
+            "source": "21Jingji",
+        })
+    return items[:30]
+
+
 def fetch_all_news() -> dict[str, list[dict[str, str]]]:
     result = {}
     for name, fn in NEWS_SOURCES.items():
         try:
-            result[name] = fn()
+            result[name] = [_clean(it) for it in fn()]
         except Exception as e:
             print(f"[WARN] {name} failed: {e}", file=sys.stderr)
             result[name] = []
@@ -195,12 +328,15 @@ def fetch_all_news() -> dict[str, list[dict[str, str]]]:
 
 # News source registry
 NEWS_SOURCES: dict[str, Any] = {
+    "policy": fetch_people_politics,
     "hotspot": fetch_thepaper,
     "flash": fetch_cls,
     "finance": fetch_eastmoney,
     "macro": fetch_wallstreetcn,
     "sentiment": fetch_xueqiu,
-    "jiemian": fetch_jiemian,
+    "stcn": fetch_stcn,
+    "yicai": fetch_yicai,
+    "21jingji": fetch_21jingji,
 }
 
 
@@ -244,7 +380,7 @@ def main():
     news = {}
     for name, fn in sources.items():
         try:
-            news[name] = fn()
+            news[name] = [_clean(it) for it in fn()]
         except Exception as e:
             print(f"[WARN] {name} failed: {e}", file=sys.stderr)
             news[name] = []
