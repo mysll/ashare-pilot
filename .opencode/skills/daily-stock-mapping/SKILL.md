@@ -181,7 +181,7 @@ market_action (M) — **盘面动能**（主题当日真实价格/涨停/资金�
 
 **效果：**
 
-- LLM 可将该主题 `Final Heat = max(原Final, 62)`——**只够刚过线，不虚高**（催化是预期，不给高分）。
+- LLM 可将该主题 `Final Heat = max(原Final, 57)`——**只够刚过线，不虚高**（催化是预期，不给高分）。
 - **必打标记** `CATALYST(未价格确认)`，confidence 记 60（低于常规，标明是预期非确认）。
 - HeatTrace 注明 override，例：`M45/E80×1.0/N20/C45 Base52 →Cat62 [宇树IPO news#XX]`。
 
@@ -196,8 +196,8 @@ market_action (M) — **盘面动能**（主题当日真实价格/涨停/资金�
 
 Sort by `Final Heat DESC`.
 
-- **可交易池**：Keep `Final Heat >= 60`. Max 20 themes.（含 Catalyst Exception 提升至 62 的主题，带 `CATALYST` 标记）
-- **Watch Themes 观察区**：`45 <= Final Heat < 60` 且方向为**做多驱动**（emotion 方向系数 ×1.0 或 market_action >= 55）的近失主题，列入 themes.md 末尾 Watch Themes 区。**不进可交易池、不建仓、不进 Stock Pool Build**，仅供 Step 3 感知轮动线。恐慌/暴跌驱动的主题不入 Watch（方向不对，无观察价值）。
+- **可交易池**：Keep `Final Heat >= 55`. Max 20 themes.（含 Catalyst Exception 提升至 57 的主题，带 `CATALYST` 标记）
+- **Watch Themes 观察区**：`40 <= Final Heat < 55` 且方向为**做多驱动**（emotion 方向系数 ×1.0 或 market_action >= 50）的近失主题，列入 themes.md 末尾 Watch Themes 区。**不进可交易池、不建仓、不进 Stock Pool Build**，仅供 Step 3 感知轮动线。恐慌/暴跌驱动的主题不入 Watch（方向不对，无观察价值）。
 
 > **薄池说明**：方向门控会压低崩盘主题，可交易池可能变薄。因 Base Heat 由真实盘面动能驱动，真正走强的做多主题会自己过 60；Watch 只兜住次一档做多轮动线，既不会逼 Step 3 满仓做多，也不会清空可见性。Catalyst Exception 则专门补"盘前未动、今日点火"的高质量催化盲区。
 
@@ -216,7 +216,7 @@ Date: 2026-06-17
 | 2 | 半导体 | 78 | 88 | 82 | 85 | ×1.0 | 6 | 65 | +10 | 68 | 国产芯片, 先进封装 | 盘面强 + 国家战略 |
 | ... |
 
-## Watch Themes（Final 45-59, 做多驱动, 不进可交易池）
+## Watch Themes（Final 40-54, 做多驱动, 不进可交易池）
 
 | # | Theme | Final | Dir | MktAct | PolBonus | Reason |
 |---|-------|:-----:|:---:|:------:|:--------:|--------|
@@ -225,7 +225,7 @@ Date: 2026-06-17
 
 Columns: `MktAct` = market_action 盘面动能（Base 主导，45%）；`Emotion(raw)` = 门控前关注度原始分；`Dir` = 方向系数（×1.0/×0.8/×0.5）；`Capital` 无数据取 45；`PolBonus` = Policy Bonus(0~10)；`Base` = M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10。`Final = Base + PolBonus`。
 
-Final Heat < 60 排除出可交易池；45-59 且做多驱动入 Watch Themes 区（见上）。
+Final Heat < 55 排除出可交易池；40-54 且做多驱动入 Watch Themes 区（见上）。
 
 ### Constraints
 
@@ -955,7 +955,7 @@ V4-U `HeatTrace` 审计列（V5.4 结构 = Base 因子 + Policy Bonus）：
 | +Pol | Policy Bonus(0~10) |
 | =Final | `Base + Policy Bonus` |
 
-Sorted by Final DESC. All themes with Final >= 60（可交易池）。
+Sorted by Final DESC. All themes with Final >= 55（可交易池）。
 
 #### Section 3: Candidate Pool
 

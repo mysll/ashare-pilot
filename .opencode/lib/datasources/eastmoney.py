@@ -20,7 +20,7 @@ STOCK_MONEY_FLOW_URL = "https://push2.eastmoney.com/api/qt/clist/get"
 EASTMONEY_FIELDS = "f12,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21"
 STOCK_MONEY_FLOW_FIELDS = "f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124,f1,f13"
 
-COOKIE_FILE = Path(__file__).parent.parent.parent.parent.parent.parent / ".cookie"
+COOKIE_FILE = Path(__file__).parent.parent.parent.parent / ".cookie"
 
 # Custom cookie file path (can be set via --cookie argument)
 _custom_cookie_file: Path | None = None
