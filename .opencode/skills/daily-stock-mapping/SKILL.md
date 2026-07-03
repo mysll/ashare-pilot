@@ -87,73 +87,145 @@ Discard `confidence < 60`.
 
 ### Theme Heat
 
-Merge all news mapped to the same theme. Calculate `theme_heat` (0-100):
+Merge all news mapped to the same theme. Calculate `theme_heat` (0-100) as **Base Heat（日变信号）+ Policy Bonus（政策微调）**：
 
 ```
-theme_heat = policy × 0.40 + capital × 0.15 + emotion × 0.25 + news_count × 0.20
+Base Heat  = market_action × 0.45 + emotion × 0.30 + news_density × 0.15 + capital × 0.10
+Final Heat = Base Heat + Policy Bonus(0~10)
 ```
 
-| Component | Weight | Meaning |
+| Base 因子 | Weight | Meaning |
 |-----------|--------|---------|
-| policy | 40% | National/industrial policy, regulatory support |
-| capital | 15% | Capital activity, financing, institutional participation |
-| emotion | 25% | Market attention, media discussion, sentiment |
-| news_count | 20% | Number and density of related news (raw integer, normalized to 0-100 before weighting) |
+| market_action | 45% | 盘面动能：主题当日真实价格/涨停/资金方向（**最真实，市场投票**；方向内生涨→高跌→低） |
+| emotion | 30% | 舆情/关注度（**direction-gated**，见 rubric） |
+| news_density | 15% | 当日相关新闻条数密度（raw integer，归一化到 0-100 再加权） |
+| capital | 10% | 资金活动/融资/机构参与（**有数据则用，无则默认 45、影响有限**） |
 
-> **News double-counting decision (V4-U)**: theme_heat 公式保留 `news_count × 0.20`，新闻对 composite 的总有效权重约 26%（theme_heat 间接 + NewsImpact 直接 20%）。**依靠 NewsImpact 在 MajorEvent=Negative 时 cap=60 缓解叠加膨胀**，作为设计接受。日常权重重叠不改。
+**Policy Bonus（0~10，按政策级别加分，封顶 +10）:**
+
+| 政策等级 | Bonus | 判据 |
+|---------|:-----:|------|
+| 无 | +0 | 无政策角度 |
+| 地方政策 | +2 | 省/市级文件、地方试点 |
+| 部委 | +5 | 工信部/发改委/证监会等部委文件或表态点名主题 |
+| 国务院 | +8 | 国务院常务会/文件点名 |
+| 国家战略 | +10 | 写入国家战略/五年规划/顶层设计（如国产芯片自主可控） |
+
+> **V5.4 设计 rationale**：Policy 是**低频存量变量**（政策几周才出一次），而 heat 要**日频**排序（市场天天变）。旧版把 Policy 当 25%~40% 加权项，等于给有政策标签的主题天天托一个恒定底分——天天在涨的板块反而输给一个有政策头条的板块。改为：**Base Heat 100% 由日变信号（market_action/emotion/news/capital）构成**，Policy 降级为封顶 +10 的 bonus。政策能**放大**热度、当 tiebreaker，但**造不出**热度（Base 30 的死主题 +10 也才 40，仍冷；崩盘主题吃满国家战略 +10 也压不过方向门控）。
+>
+> **方向由 emotion 门控 + market_action 双轴承载**：崩盘主题两轴同降，Base 塌陷，Policy bonus 封顶救不回。
+
+> **News double-counting decision (V4-U → V5.4)**: news_density 权重降至 0.15，新闻对 composite 的总有效权重进一步下降。**依靠 NewsImpact 在 MajorEvent=Negative 时 cap=60 缓解叠加膨胀**，作为设计接受。
 
 **Theme heat sub-score rubric (LLM MUST follow)**
 
-Policy (P):
+Policy — **不再是 0-100 子分**，改为按上表 Policy Bonus(0~10) 加分。判级时只认**当天鲜活或明确点名主题**的政策；纯背景/存量政策按其国家层级仍给 bonus（封顶 10，因崩盘日 Base 太低救不回，可接受）。主题去留只看 `Final Heat`，不再因无政策丢弃主题。
+
+Capital (C) — 权重 10%，无数据取 45 default：
 
 | Score | Condition |
 |-------|-----------|
-| 90-100 | 国家/行业政策明确点名主题；监管文件、国务院、部委 |
-| 75-89 | 强政策代理（标准、补贴、试点区）无头条政策 |
-| 60-74 | 间接政策受益（供应链、本地化） |
-| <60 | 无政策角度 — discard theme |
-
-Capital (C):
-
-| Score | Condition |
-|-------|-----------|
-| 85-100 | 融资流入/北向/龙虎榜净买入与主题对齐（今日或昨日） |
+| 85-100 | 融资流入/龙虎榜净买入与主题对齐（今日或昨日） |
 | 65-84 | 板块成交放大、融资扩张 |
 | 45-64 | 中性 |
 | <45 | 流出或无资金信号 — 用 45 default |
 
-Emotion (E):
+Emotion (E) — **关注度 × 方向门控**：
+
+Step 1 — 关注度原始分 `E_raw`（媒体/注意力密度，无方向）：
 
 | Score | Condition |
 |-------|-----------|
-| 90-100 | ≥3 flash 项 + 热股榜 + 主题内涨停簇 |
+| 90-100 | ≥3 flash 项 + 热股榜 + 主题内涨停/跌停簇（高关注，方向另计） |
 | 75-89 | 2 条新闻 或 1 条重大头条 |
 | 60-74 | 仅语义匹配，媒体密度低 |
 | <60 | discard |
 
-**News count (N)** — 映射到主题的不同新闻条数原始计数（整数，显示截断至 20）。加权时按 `count / 20 × 100` 归一化到 0-100。
+Step 2 — 方向系数（与个股层 P3 方向修正 `change_pct<0 → ×0.5` 同源，SKILL.md § Market Sentiment）。据 news.md §五市场情绪热榜 / §三政策 / §商品涨跌 判定主题当日是"做多驱动"还是"恐慌/暴跌驱动"：
+
+| 主题当日方向 | 判据 | 系数 |
+|-------------|------|:---:|
+| 做多驱动 | 主题内涨停簇 / 板块领涨 / 资金净流入 / 正面头条催化 | ×1.0 |
+| 分歧中性 | 涨跌互现、无一致方向 | ×0.8 |
+| 恐慌暴跌驱动 | 板块暴跌 / 跌停簇 / 热榜因暴跌上榜 / MajorEvent=Negative 主导 / "崩·杀·爆仓·回避"语义 | ×0.5 |
+
+`emotion = E_raw × 方向系数`
+
+> **目的**：防止暴跌恐慌带来的高关注被误判为高做多热度（与个股层"放量阴跌 ×0.5"同源）。崩盘板块仍可因暴跌上热榜拿到高 `E_raw`，但方向系数把 emotion 门控至 ~0.5，避免其 theme_heat 冲顶垄断可交易池。
+
+market_action (M) — **盘面动能**（主题当日真实价格/涨停/资金方向，方向内生：涨→高、跌→低）。数据源：news.md 已含的盘面信号（§五市场情绪热榜、§商品涨跌、涨停/板块领涨领跌）；若 Stock Pool Build 阶段的 query_theme `market` 视图已取，用 `top_gainers` / `cross_rank_highlights` 佐证。
+
+| Score | Condition |
+|-------|-----------|
+| 85-100 | 主题内 ≥2 只涨停 / 板块领涨榜首 / top_gainers 簇（≥3 只 ≥5%） |
+| 65-84 | 有涨停 或 板块涨幅居前 / 多只 ≥3% / cross_rank 中军启动 |
+| 45-64 | 涨跌互现、板块平淡、无明显方向 |
+| 25-44 | 板块下跌、资金流出 |
+| <25 | 板块暴跌 / 跌停簇 / 恐慌杀跌 |
+
+**News density (N)** — 映射到主题的不同新闻条数原始计数（整数，显示截断至 10）。加权时按 `min(count, 10) / 10 × 100` 归一化到 0-100。
+
+### Catalyst Exception（高质量单条催化例外 — LLM 自主判定）
+
+`market_action` 盘前**向后看**，会漏掉靠今天新闻点火、但昨日未动的板块（典型：宇树科技IPO获批点燃机器人板块）。允许 LLM 对**单条高质量催化**做例外提升——但严格白名单 + 护栏，**宁缺毋滥**。
+
+**触发（三条须同时满足）：**
+
+1. 存在**当天鲜活**的单条催化，属于以下白名单之一：
+   - 行业龙头 / 首例 **IPO**（"XX第一股"、龙头登陆）
+   - 国家级政策/战略**首次**发布（存量政策不算，已由 Policy Bonus 覆盖）
+   - 龙头企业**重大产品发布 / 技术突破**（旗舰级、行业级）
+   - 国家级 / 远超预期规模的**重大订单/中标**
+2. 方向为**做多 / 中性**（催化标的若竞价杀跌 / 被抛售 → 不提升）
+3. 催化**单条、可点名、可追溯**到具体新闻（NewsLink 必填）
+
+**效果：**
+
+- LLM 可将该主题 `Final Heat = max(原Final, 62)`——**只够刚过线，不虚高**（催化是预期，不给高分）。
+- **必打标记** `CATALYST(未价格确认)`，confidence 记 60（低于常规，标明是预期非确认）。
+- HeatTrace 注明 override，例：`M45/E80×1.0/N20/C45 Base52 →Cat62 [宇树IPO news#XX]`。
+
+**护栏（MUST）：**
+
+- 每日**最多 2 个** Catalyst 例外（防 LLM 把利好都提升）。
+- 仅"首例 / 国家级 / 龙头旗舰"这类**高冲击**事件；routine 利好（普通中标、常规新品、二线公司发布）**不触发**。
+- 与 Policy Bonus **不叠加**——催化例外是 Final 的 floor（取 max），不是额外加分，避免双重膨胀。
+- 例外主题标记透传至 mapper → Step 3；**Step 3 须用"首根5分K线确认"入场**（放量拉升才建仓，高开低走则放弃），复用防御档规避"高开低走"陷阱。
 
 ### Rank & Filter
 
-Sort by `theme_heat DESC`. Keep `theme_heat >= 60`. Max 20 themes.
+Sort by `Final Heat DESC`.
+
+- **可交易池**：Keep `Final Heat >= 60`. Max 20 themes.（含 Catalyst Exception 提升至 62 的主题，带 `CATALYST` 标记）
+- **Watch Themes 观察区**：`45 <= Final Heat < 60` 且方向为**做多驱动**（emotion 方向系数 ×1.0 或 market_action >= 55）的近失主题，列入 themes.md 末尾 Watch Themes 区。**不进可交易池、不建仓、不进 Stock Pool Build**，仅供 Step 3 感知轮动线。恐慌/暴跌驱动的主题不入 Watch（方向不对，无观察价值）。
+
+> **薄池说明**：方向门控会压低崩盘主题，可交易池可能变薄。因 Base Heat 由真实盘面动能驱动，真正走强的做多主题会自己过 60；Watch 只兜住次一档做多轮动线，既不会逼 Step 3 满仓做多，也不会清空可见性。Catalyst Exception 则专门补"盘前未动、今日点火"的高质量催化盲区。
 
 ### Output Format
 
-Write as structured markdown table. One row per theme, sorted by `theme_heat DESC`.
+Write as structured markdown table. One row per theme, sorted by `Final Heat DESC`.
 
 ```markdown
 # Theme Extraction Results
 
 Date: 2026-06-17
 
-| # | Theme | Heat | Confidence | Policy | Capital | Emotion | News# | Matched Concepts | Reason |
-|---|-------|------|------------|--------|---------|---------|-------|-------------------|--------|
-| 1 | AI算力 | 92 | 95 | 85 | 70 | 95 | 8 | 东数西算, 数据中心 | Multiple AI infra news, strong market attention |
-| 2 | 半导体 | 78 | 88 | 80 | 65 | 85 | 6 | 国产芯片, 先进封装 | Policy support for domestic chips |
+| # | Theme | Final | Conf | MktAct | Emotion(raw) | Dir | News# | Capital | PolBonus | Base | Matched Concepts | Reason |
+|---|-------|:-----:|:----:|:------:|:------------:|:---:|:-----:|:-------:|:--------:|:----:|-------------------|--------|
+| 1 | AI算力 | 88 | 95 | 90 | 95 | ×1.0 | 8 | 70 | +5 | 83 | 东数西算, 数据中心 | AI infra news + 部委政策 |
+| 2 | 半导体 | 78 | 88 | 82 | 85 | ×1.0 | 6 | 65 | +10 | 68 | 国产芯片, 先进封装 | 盘面强 + 国家战略 |
 | ... |
 
-Themes with heat < 60 are excluded. Max 20 themes.
+## Watch Themes（Final 45-59, 做多驱动, 不进可交易池）
+
+| # | Theme | Final | Dir | MktAct | PolBonus | Reason |
+|---|-------|:-----:|:---:|:------:|:--------:|--------|
+| W1 | 有色金属 | 57 | ×1.0 | 70 | +0 | 钯金+4%/黄金+1% 商品涨价驱动，无政策 |
 ```
+
+Columns: `MktAct` = market_action 盘面动能（Base 主导，45%）；`Emotion(raw)` = 门控前关注度原始分；`Dir` = 方向系数（×1.0/×0.8/×0.5）；`Capital` 无数据取 45；`PolBonus` = Policy Bonus(0~10)；`Base` = M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10。`Final = Base + PolBonus`。
+
+Final Heat < 60 排除出可交易池；45-59 且做多驱动入 Watch Themes 区（见上）。
 
 ### Constraints
 
@@ -680,9 +752,13 @@ Pattern.*.confidence：LLM 按 rubric 命中清晰度标 0-100。无历史的 `h
 
 | 字段 | Confidence 公式 | 谁算 |
 |------|----------------|------|
-| `theme_heat.subscores.P/C/E` | LLM 按 rubric 命中等级：90(满档)/75(中等)/55(边缘) | LLM |
+| `theme_heat.subscores.M` | LLM 按 market_action rubric 命中清晰度 0-100 | LLM |
+| `theme_heat.subscores.E/C` | LLM 按 rubric 命中等级：90(满档)/75(中等)/55(边缘) | LLM |
 | `theme_heat.subscores.N` | `min(news_count/5, 1) × 100` | Python |
-| `theme_heat.value` | `min(P, C, E, N confidences)` | Python |
+| `theme_heat.policy_bonus` | 政策级别查表 0/2/5/8/10（无 confidence，确定性加分） | LLM |
+| `theme_heat.value` | `min(M, E, N, C confidences)`（Base 因子；policy_bonus 不参与 min） | Python |
+
+> **注**：Emotion 方向系数（×1.0/×0.8/×0.5）是 rubric 乘子，只作用于 emotion **value**，不改 emotion confidence（confidence 仍按关注度命中清晰度）。Policy 已从 Base 子分改为 Final Heat 的 bonus，不再有 P 子分 confidence。
 | `news_impact.value` | matrix cell weight × 100 ± adjustments | LLM |
 | `major_event.polarity` | Default Neutral=90；P/N by evidence strength (headline=90, body=70) | LLM |
 | `risk_type` | 100 (机器查表，固定) | Python |
@@ -859,24 +935,27 @@ Structured key-value table。Extract from news.md market overview + 融资 + 指
 
 #### Section 2: Theme Ranking
 
-V4-U 新增 `HeatTrace` 审计列：
+V4-U `HeatTrace` 审计列（V5.4 结构 = Base 因子 + Policy Bonus）：
 
 ```markdown
 ## Theme Ranking
 
-| Theme | Heat | Rank | HeatTrace |
-|-------|------|------|-----------|
-| 半导体 | 91 | 1 | P85/C70/E95/N8 |
+| Theme | Final | Rank | HeatTrace |
+|-------|:-----:|:----:|-----------|
+| 半导体 | 42 | 5 | M20/E85×0.5/N4/C45 Base32 +Pol10 =42 |
 ```
 
 | Token | 含义 |
 |-------|------|
-| P | policy 0-100 |
-| C | capital 0-100 |
-| E | emotion 0-100 |
-| N | news_count（整数，归一化前） |
+| M | market_action 盘面动能 0-100（权重 0.45，Base 主导） |
+| E | emotion：`{E_raw}×{方向系数}`，如 `E85×0.5`（门控后权重 0.30） |
+| N | news_density（整数，归一化前；归一化 `min(N,10)/10×100` 后权重 0.15） |
+| C | capital 0-100（权重 0.10，无数据取 45） |
+| Base | `M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10` |
+| +Pol | Policy Bonus(0~10) |
+| =Final | `Base + Policy Bonus` |
 
-Sorted by Heat DESC. All themes with Heat >= 60。
+Sorted by Final DESC. All themes with Final >= 60（可交易池）。
 
 #### Section 3: Candidate Pool
 
