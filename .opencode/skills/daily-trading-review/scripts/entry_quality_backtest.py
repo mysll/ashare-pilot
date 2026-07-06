@@ -5,6 +5,11 @@ Reads memory/daily/{date}/verification.md, finds the schema-locked
 「买入结果表」(see daily-trading-review SKILL §3a), computes entry-relative
 quality metrics from RAW prices, and aggregates by 策略 and by 首根K确认.
 
+It ALSO reports 踏空统计 (missed-entry), split into 踏空 (未触及但上涨) vs
+观望正确 (未触及且下跌) and stratified by market regime — because strong
+markets miss to the upside (真踏空) while weak markets "miss" to the downside
+(正确回避); averaging them together is meaningless.
+
 It is ALSO the format validator: a verification file whose buy table does not
 match the locked column signature is reported as a SCHEMA VIOLATION.
 
@@ -46,8 +51,12 @@ def parse_anchor(cell):
 def parse_file(fp):
     """Return (records, violations)."""
     with open(fp, encoding="utf-8") as f:
-        lines = f.read().splitlines()
+        text = f.read()
+    lines = text.splitlines()
     date = fp.split(os.sep)[-2]
+    # RegimeHint from the locked 市场环境 section (§4a). Default 'unknown'.
+    m = re.search(r"RegimeHint[:：]\s*([A-Za-z\-]+)", text)
+    regime = m.group(1).strip().lower() if m else "unknown"
     recs, violations = [], []
     # locate the buy table: a header row mentioning 代码 and 收盘 and 结果
     found_buy = False
@@ -68,7 +77,7 @@ def parse_file(fp):
                 if not re.match(r"(sh|sz)\d{6}", code): j += 1; continue
                 kind, anchor = parse_anchor(cells[idx["入场锚"]])
                 recs.append(dict(
-                    date=date, code=code, strat=cells[idx["策略"]],
+                    date=date, regime=regime, code=code, strat=cells[idx["策略"]],
                     anchor_kind=kind, anchor=anchor,
                     open=to_f(cells[idx["开盘"]]), low=to_f(cells[idx["最低"]]),
                     high=to_f(cells[idx["盘中最高"]]), close=to_f(cells[idx["收盘"]]),
@@ -107,6 +116,72 @@ def summarize(rows, label):
     if gbs:  print(f"   给回%  mean {st.mean(gbs):+6.2f}  median {st.median(gbs):+.2f}")
     print(f"   胜率(持收>0) {win:5.0f}%   击穿率(持收<=-1.5%) {brk:5.0f}%")
 
+
+# ── 踏空 (missed-entry) aggregation ────────────────────────────────
+# Missed entry = NOT filled. Split into two opposite outcomes so the two
+# never contaminate one average:
+#   踏空 (bad miss)  = 未触及 but the stock rose  → should have bought, didn't
+#   观望正确 (good)  = 未触及 and the stock fell   → correctly stayed out
+# Classification priority: use 结果 column keywords; fall back to close-vs-open
+# for legacy/unlabeled rows.
+def miss_class(r):
+    """Return '踏空' | '观望正确' | None(=filled, not a miss)."""
+    if r.get("filled"):
+        return None
+    res = r.get("result", "")
+    if "踏空" in res: return "踏空"
+    if "观望" in res or "回避" in res: return "观望正确"
+    # fallback: rose after we missed => 踏空; fell => 观望正确
+    o, c = r.get("open"), r.get("close")
+    if o and c is not None:
+        return "踏空" if c > o else "观望正确"
+    return None  # indeterminate (e.g. 暂不参与 with no prices) — excluded
+
+
+def missed_summary(rows, label):
+    """rows = all recommendations in a stratum (filled + missed)."""
+    total = len(rows)
+    filled = [r for r in rows if r.get("filled")]
+    missed = [r for r in rows if not r.get("filled")]
+    taku = [r for r in missed if miss_class(r) == "踏空"]
+    watch = [r for r in missed if miss_class(r) == "观望正确"]
+    indet = len(missed) - len(taku) - len(watch)
+    if total == 0:
+        print(f"\n== {label}: no rows"); return
+    fill_pct = len(filled) / total * 100
+    taku_pct = len(taku) / total * 100
+    watch_pct = len(watch) / total * 100
+    print(f"\n== {label}  (推荐 n={total})")
+    print(f"   触及率      {len(filled):>2}/{total} = {fill_pct:4.0f}%")
+    print(f"   踏空率      {len(taku):>2}/{total} = {taku_pct:4.0f}%   (未触及但上涨=该买没买到)")
+    print(f"   观望正确率  {len(watch):>2}/{total} = {watch_pct:4.0f}%   (未触及且下跌=正确回避)")
+    if indet:
+        print(f"   未分类      {indet:>2}/{total}         (暂不参与/无价格)")
+    # 踏空 magnitude: how much upside was missed (open->close of 踏空 names)
+    ups = [(r["close"] - r["open"]) / r["open"] * 100
+           for r in taku if r.get("open") and r.get("close") is not None]
+    if ups:
+        print(f"   踏空涨幅    mean {st.mean(ups):+.2f}%  median {st.median(ups):+.2f}%  max {max(ups):+.2f}%")
+
+
+def print_missed(all_recs):
+    print("\n" + "=" * 66)
+    print("踏空统计 (MISSED ENTRY) — 分市场 regime + 策略, 踏空 vs 观望正确不混淆")
+    print("=" * 66)
+    print("\n[ALL]")
+    missed_summary(all_recs, "全部")
+    # by regime — the key stratification (strong markets miss upward, weak miss downward)
+    regimes = sorted({r.get("regime", "unknown") for r in all_recs})
+    print("\n[BY REGIME]")
+    for rg in regimes:
+        missed_summary([r for r in all_recs if r.get("regime") == rg], f"regime={rg}")
+    # by strategy
+    print("\n[BY 策略]")
+    for s in ["趋势跟随", "回调布局", "强势接力", "防御布局"]:
+        sub = [r for r in all_recs if r["strat"] == s]
+        if sub: missed_summary(sub, f"策略={s}")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--since", help="only files with date >= YYYY-MM-DD")
@@ -143,6 +218,8 @@ def main():
     print("=" * 66)
     for c in ["企稳", "击穿"]:
         summarize([r for r in all_recs if r["confirm"] == c], f"首根K={c}")
+
+    print_missed(all_recs)
 
 if __name__ == "__main__":
     main()
