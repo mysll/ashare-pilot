@@ -62,7 +62,10 @@ Do **NOT** use `lib/fetch/fetch_indicators.py` — it outputs K-line time-series
 5. Read `memory/RULES.md` + `memory/SHARED_RULES.md` 全文 — LLM 语义匹配
 6. **Generate Trade Profiles** via `compute_trade_profile.py` — per-stock 交易策略 + 入场条件 (§ Trade Profile Generation)
 7. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
-8. Generate `predict/{date}/strategy.md` (含 **Trade Profile 表** + **ReasoningTrace** + **Market Context**)
+8. Generate both:
+   - `predict/{date}/strategy.md` — human-readable report
+   - `predict/{date}/strategy.json` — machine-readable strategy data for review/backtests
+9. Validate `strategy.json` with `validate_strategy_json.py`
 
 ---
 
@@ -420,6 +423,92 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 | Profile not validated against Pattern 5-dim | LLM must validate 交易策略 against pattern.* states. |
 | Step 3 hand-writes prices into Profile | **Violation**. Prices belong in Entry Plan only. |
 | Main Strategy table missing `锚点` or `不买条件` | Add both. Intraday operation guide depends on them. |
+
+---
+
+## Output: strategy.json (Machine-Readable)
+
+After writing `strategy.md`, write the same final Step 3 decisions to:
+
+```text
+predict/{date}/strategy.json
+```
+
+This JSON is consumed by daily review and backtests. Do not create ad-hoc conversion scripts from `strategy.md`; the LLM already has the final reasoning state, so emit JSON directly.
+
+### Required Schema
+
+```json
+{
+  "schema_version": "daily_strategy.v1",
+  "date": "YYYY-MM-DD",
+  "generated_at": "ISO-8601 timestamp",
+  "market": {
+    "regime_hint": "panic|weak|neutral|strong-sector",
+    "position_multiplier": 1.0,
+    "stop_atr_multiplier": 1.5,
+    "notes": "short market context"
+  },
+  "stocks": [
+    {
+      "code": "sz001309",
+      "name": "德明利",
+      "sector": "半导体",
+      "direction": "看多",
+      "rating": "5★",
+      "entry_profile": "趋势跟随",
+      "anchor": "MA5",
+      "entry_trigger": "回踩MA5确认",
+      "no_buy_condition": "跌破MA5后放量不能收回",
+      "position_budget": 0.02,
+      "horizon": "T+1",
+      "rules_applied": ["R68", "R37"],
+      "profile_trace": "趋势跟随→回踩MA5确认→R68一致",
+      "reasoning": {
+        "direction_path": "comp=79.8→看多; R68=MA5; final=看多",
+        "risk": "—",
+        "reread": "—",
+        "override": "—"
+      },
+      "profile": {
+        "playbook": "MOMENTUM",
+        "preferred_anchor": "MA5",
+        "chase_policy": "MA5_ONLY",
+        "entry_window": "OPEN",
+        "stop_policy": "ATR_1.5",
+        "time_horizon": "T+1",
+        "position_budget": 0.02,
+        "invalidation": "板块涨幅<2%或科创50回落",
+        "note": "R68 强势主线MA5基准",
+        "ref_ma20": 754.22,
+        "ref_ma10": null,
+        "ref_ma5": 899.81,
+        "ref_high20": 980.0,
+        "max_extension_atr": 2.5
+      }
+    }
+  ]
+}
+```
+
+### Field Rules
+
+- `stocks` must contain the same strategy stocks as the main table in `strategy.md`.
+- `entry_profile` values: `趋势跟随` / `回调布局` / `强势接力` / `防御布局` / `暂不参与`.
+- `anchor` values: `MA5` / `MA10` / `MA20` / `OPEN` / `VWAP` / `首根5min` / `FLEX` / `无` / `—`.
+- `position_budget` is decimal fraction (`0.02` = 2%); use `0` for `暂不参与`.
+- `profile` stores the Python default profile after LLM confirmation/override.
+- Do not include final `BuyLo` / `BuyHi` / `Stop` / `Target`; those belong to Entry Plan.
+
+### Validation
+
+Always validate after writing:
+
+```bash
+python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py predict/{date}/strategy.json
+```
+
+If validation fails, fix `strategy.json` before finishing Step 3. Do not generate temporary converter scripts.
 
 ---
 
