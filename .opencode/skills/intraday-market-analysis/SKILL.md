@@ -10,8 +10,8 @@ description: Use when users request comprehensive intraday overnight alpha analy
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
 | Compute | Python | `run_intraday_pipeline.py` | market_breadth.json, indices.json, concept_dashboard.json, scan_pool.json, compute_pool_enriched.json, theme_ranking.json, opportunity_pool.json (all under `.cache/intraday/{date}/`) |
-| Perception | Step 1+2 | general + general | market_state.md → theme_ranking.md |
-| Reasoning | Step 3 | trading-strategist | intraday_mapper.md + overnight_strategy.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace + T+1兑现计划) |
+| Perception | Step 1+2 | market-microstructure-analyst + equity-analyst | market_state.md → theme_ranking.md |
+| Reasoning | Step 3 | portfolio-manager | intraday_mapper.md + overnight_strategy.md (Direction / RiskSeverity / Expected Premium + ReasoningTrace + T+1兑现计划) |
 
 Step 1 and Step 2 NEVER produce Direction or RiskSeverity. Step 3 is the sole Reasoning layer.
 
@@ -34,13 +34,13 @@ Compute Phase        ←  run_intraday_pipeline.py (once, ~85s — Phase 0 prefe
         └→ opportunity_pool.json
         │
         ▼
-Step 1 (Perception)  ←  general + intraday-market-scan
+Step 1 (Perception)  ←  market-microstructure-analyst + intraday-market-scan
         │               reads .cache JSON → intraday/{date}/market_state.md
         ▼
-Step 2 (Perception)  ←  general + intraday-stock-discovery
+Step 2 (Perception)  ←  equity-analyst + intraday-stock-discovery
         │               reads .cache JSON → intraday/{date}/theme_ranking.md
         ▼
-Step 3 (Reasoning)   ←  trading-strategist + intraday-strategy
+Step 3 (Reasoning)   ←  portfolio-manager + intraday-strategy
                         reads .cache JSON + market_state.md + theme_ranking.md
                         → intraday/{date}/intraday_mapper.md (7-section) + overnight_strategy.md (明日交易计划)
 ```
@@ -107,7 +107,7 @@ intraday/{date}/                (markdown reports, written by Steps 1-3)
 
 ## Step 1: Market State (Perception Layer)
 
-**Agent:** `general`
+**Agent:** `market-microstructure-analyst`
 
 **Action:** Load skill `intraday-market-scan` and follow its workflow.
 
@@ -140,7 +140,7 @@ Output:
 
 ## Step 2: Stock Discovery (Perception Layer)
 
-**Agent:** `general`
+**Agent:** `equity-analyst`
 
 **Action:** Load skill `intraday-stock-discovery` and follow its workflow.
 
@@ -178,7 +178,7 @@ Output:
 
 ## Step 3: Overnight Strategy (Reasoning Layer)
 
-**Agent:** `trading-strategist`
+**Agent:** `portfolio-manager`
 
 **Action:** Load skill `intraday-strategy` (V1 Reasoning) and follow its workflow.
 
@@ -235,9 +235,9 @@ Outputs:
 | Layer | Step | Agent | Input | Output | Key constraint |
 |-------|------|-------|-------|--------|----------------|
 | Compute | — | bash (run_intraday_pipeline.py) | — | 8 JSON files | Run ONCE before all steps |
-| Perception | 1 | general + intraday-market-scan | 4 JSON files | market_state.md | No Direction / RiskSeverity |
-| Perception | 2 | general + intraday-stock-discovery | 3 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
-| Reasoning | 3 | trading-strategist + intraday-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
+| Perception | 1 | market-microstructure-analyst + intraday-market-scan | 4 JSON files | market_state.md | No Direction / RiskSeverity |
+| Perception | 2 | equity-analyst + intraday-stock-discovery | 3 JSON files + market_state.md | theme_ranking.md | No Direction / RiskSeverity; themes from stocks NOT news |
+| Reasoning | 3 | portfolio-manager + intraday-strategy | opportunity_pool.json + market_state.md + theme_ranking.md | intraday_mapper.md + overnight_strategy.md | Sole Reasoning authority; scores pre-computed by Python |
 
 ## Common Usage
 

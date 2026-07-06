@@ -10,8 +10,8 @@ description: Use when users request comprehensive daily financial market analysi
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
 | Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
-| Perception | Step 1+2 | financial-news-analyst + financial-news-mapper | news.md → themes.md → theme_stocks.md → mapper.md |
-| Reasoning | Step 3 | trading-strategist | strategy.md (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
+| Perception | Step 1+2 | macro-strategist + sector-analyst | news.md → themes.md → theme_stocks.md → mapper.md |
+| Reasoning | Step 3 | portfolio-manager | strategy.md (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
 
 Step 2 NEVER produces Direction or RiskSeverity (V5 Invariant 1). Step 3 is the sole Reasoning layer.
 
@@ -23,11 +23,11 @@ digraph workflow {
     node [shape=box];
 
     // Step 1
-    "Step 1: News Brief" [label="Step 1\nNews Brief\n(financial-news-analyst)", style=filled, fillcolor="#e6f3ff"];
+    "Step 1: News Brief" [label="Step 1\nNews Brief\n(macro-strategist)", style=filled, fillcolor="#e6f3ff"];
 
     // Step 2 subgraph → Perception Layer
     subgraph cluster_step2 {
-        label="Step 2: Perception\n(financial-news-mapper + daily-stock-mapping V5 skill)";
+        label="Step 2: Perception\n(sector-analyst + daily-stock-mapping V5 skill)";
         style=filled;
         fillcolor="#fff3e6";
         color="#cc9933";
@@ -40,7 +40,7 @@ digraph workflow {
     }
 
     // Step 3 → Reasoning Layer
-    "Step 3: Reasoning" [label="Step 3\nReasoning Layer\n(trading-strategist subagent\n+ daily-strategy V5 skill)\n\nDirection / RiskSeverity\nOverrideHint / ReasoningTrace", style=filled, fillcolor="#e6ffe6"];
+    "Step 3: Reasoning" [label="Step 3\nReasoning Layer\n(portfolio-manager subagent\n+ daily-strategy V5 skill)\n\nDirection / RiskSeverity\nOverrideHint / ReasoningTrace", style=filled, fillcolor="#e6ffe6"];
 
     // Compute Layer (left)
     subgraph cluster_compute {
@@ -156,7 +156,7 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 
 ## Step 1: News Briefing
 
-**Agent:** `financial-news-analyst`
+**Agent:** `macro-strategist`
 
 **Output:** `predict/{YYYY}-{MM}-{DD}/news.md`
 
@@ -170,7 +170,7 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 
 ## Step 2: Stock Data Mapping (Perception Layer)
 
-**Agent:** `financial-news-mapper`
+**Agent:** `sector-analyst`
 
 **Action:** Load skill `daily-stock-mapping` (V5 Perception) and follow its workflow.
 
@@ -200,7 +200,7 @@ Outputs:
 
 ## Step 3: Trading Strategy (Reasoning Layer)
 
-**Agent:** `trading-strategist`
+**Agent:** `portfolio-manager`
 
 **Action:** Load skill `daily-strategy` (V5 Reasoning) and follow its workflow.
 
@@ -240,9 +240,9 @@ Output:
 
 | Layer | Step | Agent | Input | Output | Key V5 constraint |
 |-------|------|-------|-------|--------|-------------------|
-| Perception | 1 | financial-news-analyst + daily-news-brief | — | news.md | — |
-| Perception | 2 | financial-news-mapper + daily-stock-mapping V5 | news.md | themes.md → theme_stocks.md → mapper.md | **No Direction / RiskSeverity** (Invariant 1) |
-| Reasoning | 3 | trading-strategist + daily-strategy V5 | mapper.md + RULES.md | strategy.md (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
+| Perception | 1 | macro-strategist + daily-news-brief | — | news.md | — |
+| Perception | 2 | sector-analyst + daily-stock-mapping V5 | news.md | themes.md → theme_stocks.md → mapper.md | **No Direction / RiskSeverity** (Invariant 1) |
+| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.md + RULES.md | strategy.md (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
 
 ## Common Usage
 

@@ -16,7 +16,7 @@ digraph workflow {
 
     "Step 1: Read Strategy" [label="Step 1\nRead Strategy\n(predict/{date}/strategy.md)", style=filled, fillcolor="#e6f3ff"];
     "Step 2: Fetch Actuals" [label="Step 2\nFetch Actual Prices\n(stock-analysis skill)", style=filled, fillcolor="#fff3e6"];
-    "Step 3: Compare & Analyze" [label="Step 3\nCompare & Analyze\n(trading-strategist)", style=filled, fillcolor="#e6ffe6"];
+    "Step 3: Compare & Analyze" [label="Step 3\nCompare & Analyze\n(performance-analyst)", style=filled, fillcolor="#e6ffe6"];
     "Step 4: Write Memory" [label="Step 4\nWrite to Memory\n(memory/daily/{date}/)", style=filled, fillcolor="#ffe6ff"];
 
     "predict/{date}/strategy.md" [shape=note];
@@ -74,9 +74,9 @@ python .opencode/lib/fetch/fetch_stock.py CODE --intraday --scale 5 --json
 
 ---
 
-### Step 3: Compare & Analyze (用trading-strategist复盘)
+### Step 3: Compare & Analyze (用performance-analyst复盘)
 
-**Agent:** `trading-strategist` (opus)
+**Agent:** `performance-analyst` (pro)
 
 **Task:** Perform detailed comparison between predictions and actual market results.
 
@@ -268,7 +268,7 @@ Actions per file:
 |------|--------|-------|--------|
 | 1 | Read Strategy | `predict/{date}/strategy.md` | Extracted predictions |
 | 2 | Fetch Actuals | Stock codes from strategy | Real-time/intraday prices |
-| 3 | trading-strategist analysis | Predictions + actuals | Full comparison report |
+| 3 | performance-analyst analysis | Predictions + actuals | Full comparison report |
 | 4 | Write Memory | Analysis report | `memory/daily/{date}/verification.md` + update INDEX.md/RULES.md/SHARED_RULES.md |
 
 ## Common Usage

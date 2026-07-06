@@ -5,7 +5,7 @@ description: Generate daily trading strategy from V5 mapper.md. Used as Step 3 o
 
 # Daily Strategy Generation (V5)
 
-Loaded by trading-strategist subagent when dispatched for pipeline strategy generation.
+Loaded by the `portfolio-manager` subagent when dispatched for pipeline strategy generation.
 
 ## V5 架构角色
 

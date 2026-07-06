@@ -16,7 +16,7 @@ digraph workflow {
 
     "Step 1: Read Strategy" [label="Step 1\nRead Intraday Strategy\n(intraday/{date}/overnight_strategy.md\n+ intraday_mapper.md)", style=filled, fillcolor="#e6f3ff"];
     "Step 2: Fetch Actuals" [label="Step 2\nFetch T+1 Prices\n(stock-analysis skill)", style=filled, fillcolor="#fff3e6"];
-    "Step 3: Compare & Analyze" [label="Step 3\nCompare & Analyze\n(trading-strategist)", style=filled, fillcolor="#e6ffe6"];
+    "Step 3: Compare & Analyze" [label="Step 3\nCompare & Analyze\n(performance-analyst)", style=filled, fillcolor="#e6ffe6"];
     "Step 4: Write Memory" [label="Step 4\nWrite to Memory\n(memory/intraday/{date}/)", style=filled, fillcolor="#ffe6ff"];
 
     "intraday/{date}/\novernight_strategy.md" [shape=note];
@@ -329,7 +329,7 @@ Spearman rank correlation: score rank vs actual return
 |------|--------|-------|--------|
 | 1 | Read Strategy | `intraday/{date}/overnight_strategy.md` + `intraday_mapper.md` | Extracted positions, rules, scores |
 | 2 | Fetch Actuals | Stock codes from strategy | T/T+1 price data |
-| 3 | trading-strategist analysis | Predictions + actuals | Full comparison report |
+| 3 | performance-analyst analysis | Predictions + actuals | Full comparison report |
 | 4 | Write Memory | Analysis report | `memory/intraday/{date}/intraday_verification.md` + INDEX/RULES updates |
 
 ## Common Usage

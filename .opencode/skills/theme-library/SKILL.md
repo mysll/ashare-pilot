@@ -227,8 +227,8 @@ Themes are defined in `scripts/theme_config.json`:
 
 Theme Library provides data for:
 - **daily-market-analysis**: Maps news to themes to stock pools
-- **financial-news-mapper**: Resolves news keywords to themes/concepts
-- **trading-strategist**: Identifies theme-level stock relationships
+- **sector-analyst**: Resolves news and industry evidence to themes/concepts
+- **portfolio-manager**: Consumes theme-level relationships during strategy reasoning
 
 ## Stock Weight System (Concept Rank)
 

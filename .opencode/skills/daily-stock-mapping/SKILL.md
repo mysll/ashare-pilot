@@ -5,7 +5,7 @@ description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produce
 
 # Daily Stock Mapping
 
-Loaded by the `financial-news-mapper` subagent as Step 2 of the daily-market-analysis pipeline.
+Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis pipeline.
 
 ## Stage I/O
 
