@@ -354,20 +354,23 @@ These are Intraday Entry Plan territory. Morning outputs **Trade Profile** — t
    - Step 3 评定的 RegimeHint
    - 市场状态 classification + 仓位系数 / 止损倍数 from Parameter Adjustment table
 
-2. **Strategy (10 stocks)** — Trade Profile table (V1.2)
+2. **Strategy (10 stocks)** — Trade Profile table (V1.3)
    ```markdown
-   | # | 代码 | 名称 | 板块 | 方向 | 评级 | 交易策略 | 入场条件 | 仓位 | 持仓 |
-   |---|------|------|------|:---:|:---:|----------|----------|:---:|:---:|
-   | 1 | sh603986 | 兆易创新 | 半导体 | 看多 | 5★ | 趋势跟随 | 开盘站稳MA5 | 2% | T+1 |
+   | # | 代码 | 名称 | 板块 | 方向 | 评级 | 交易策略 | 锚点 | 入场条件 | 不买条件 | 仓位 | 持仓 |
+   |---|------|------|------|:---:|:---:|----------|------|----------|----------|:---:|:---:|
+   | 1 | sh603986 | 兆易创新 | 半导体 | 看多 | 5★ | 趋势跟随 | MA5 | 开盘站稳MA5 | 高开低走/跌破VWAP | 2% | T+1 |
    ```
 
-   Columns: # / 代码(Code) / 名称(Name) / 板块(Sector) / 方向(Direction) / 评级(Rating) / 交易策略(Entry Profile) / 入场条件(Entry Trigger) / 仓位(PosBudget) / 持仓(Horizon)
+   Columns: # / 代码(Code) / 名称(Name) / 板块(Sector) / 方向(Direction) / 评级(Rating) / 交易策略(Entry Profile) / 锚点(Anchor) / 入场条件(Entry Trigger) / 不买条件(No-Buy Condition) / 仓位(PosBudget) / 持仓(Horizon)
 
    **方向枚举**: `看多` / `偏多` / `中性` / `看空`
    **交易策略枚举**: `趋势跟随` / `回调布局` / `强势接力` / `防御布局` / `暂不参与`
+   **锚点枚举**: `MA5` / `MA10` / `MA20` / `VWAP` / `首根5min` / `无`
    **入场条件**: 简短定性描述 如 `开盘站稳MA5` / `回踩MA20` / `竞价确认` / `首根K线确认`
+   **不买条件**: 给盘中操作 skill 使用的失效条件，必须简短可观察，如 `高开低走` / `跌破VWAP` / `首根5min放量阴线` / `板块跌出前排` / `距离锚点>1.5ATR`
    **持仓枚举**: `T+0` / `T+1` / `中期`
 
+   **V1.3 intent**: Morning strategy only defines trading intent and execution anchors. It does NOT decide the final intraday buy. `intraday-operation-guide` consumes `锚点 / 入场条件 / 不买条件` plus current intraday data to produce the human operation card.
 3. **Reasoning Trace** (V5 mandatory)
    ```markdown
    | 代码 | 方向路径 | 规则应用 | 感知覆写 | 回读触发 | Profile追溯 |
@@ -416,6 +419,7 @@ V5 Rating 是 Step 3 综合以下信号给的 1-5 ⭐：
 | `WATCH_ONLY` stock has position_budget > 0 | Fix. WATCH_ONLY = no position. |
 | Profile not validated against Pattern 5-dim | LLM must validate 交易策略 against pattern.* states. |
 | Step 3 hand-writes prices into Profile | **Violation**. Prices belong in Entry Plan only. |
+| Main Strategy table missing `锚点` or `不买条件` | Add both. Intraday operation guide depends on them. |
 
 ---
 
