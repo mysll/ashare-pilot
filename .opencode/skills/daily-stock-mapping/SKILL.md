@@ -87,7 +87,7 @@ Calculate `theme_heat` (0-100) as **Base Heat (daily signals) + Policy Bonus (fi
 
 ```
 Base Heat  = market_action × 0.45 + emotion × 0.30 + news_density × 0.15 + capital × 0.10
-Final Heat = Base Heat + Policy Bonus(0~10)
+Final Heat = Base Heat + PolicyBonus × PolicyPolarity
 ```
 
 | Base Factor | Weight | Meaning |
@@ -101,7 +101,16 @@ Policy is a **low-frequency stock variable** (policies change weekly/monthly) wh
 
 Direction is carried by the **emotion gate + market_action dual axis**: crash themes collapse on both, bullish themes rise on both, policy bonus alone cannot rescue.
 
-**Policy Bonus (0-10, capped):**
+**Policy Bonus (0-10, capped, polarity-gated):**
+
+```
+Final Heat = Base Heat + PolicyBonus × PolicyPolarity
+
+  PolicyPolarity:
+    Bullish for the theme (policy supports/boosts)  → +1.0  (full bonus)
+    Neutral / ambiguous / long-term background      → +0.5  (halved, default)
+    Bearish for the theme (policy suppresses/hurts) →  0.0  (zero — bearish policy must not inflate heat)
+```
 
 | Tier | Bonus | Criteria |
 |------|:-----:|----------|
@@ -111,11 +120,20 @@ Direction is carried by the **emotion gate + market_action dual axis**: crash th
 | State Council | +8 | State Council executive meeting / document naming the theme |
 | National Strategy | +10 | Written into national strategy / five-year plan (e.g., domestic chip independence) |
 
+**Polarity judgment (per-theme, from news.md):**
+- **Bullish (+1.0)**: Policy text contains language like "encourage / support / promote / subsidy / tax cut / relax / establish / pilot / development plan" → policy direction aligns with the theme's interests.
+- **Neutral (+0.5)**: Policy is a long-term / background / routine document (e.g., regulatory framework, industry standard) or text contains "standardize / improve / revise / adjust" with no clear directional impact → **default value**.
+- **Bearish (0.0)**: Policy text contains "tighten / cancel subsidy / tax increase / restrict / phase out / crackdown / inspection" → policy direction **suppresses** the theme. Must NOT award positive bonus.
+
+> **Hard constraint**: Polarity judgment for a theme must cite a specific news.md line (e.g., `finance#7`). A bearish policy receiving a non-zero bonus = direction bug — same class of error as the emotion direction gate treating panic as bullish. When uncertain about polarity, use `+0.5` (neutral) and annotate `polarity=uncertain`.
+>
+> **Polarity can differ across themes**: The same policy can have different directions for different themes — "restrict fuel vehicles" is bullish for New Energy Vehicles (+1.0) but bearish for traditional auto (0.0).
+
 ---
 
 ### Sub-score Rubrics (LLM MUST follow)
 
-**Policy:** No longer a 0-100 sub-score. Apply the Policy Bonus table above. Only count **fresh, same-day** policy that explicitly names the theme; stale/background policy still gets its tier bonus (capped at 10, which cannot rescue a crashed Base). Theme survival depends solely on `Final Heat`.
+**Policy:** No longer a 0-100 sub-score. Apply the Policy Bonus table above with **polarity gate** (bullish ×1.0 / neutral ×0.5 / bearish ×0.0). Only count **fresh, same-day** policy that explicitly names the theme; stale/background policy still gets its tier bonus → then through polarity gate. Polarity judgment must cite a specific news.md line. When uncertain, default to `+0.5` (neutral) and annotate `polarity=uncertain`. Theme survival depends solely on `Final Heat`.
 
 **Capital (C) — weight 10%, default 45 when no data:**
 
@@ -202,20 +220,20 @@ Sort by `Final Heat DESC`.
 
 Date: YYYY-MM-DD
 
-| # | Theme | Final | Conf | MktAct | Emotion(raw) | Dir | News# | Capital | PolBonus | Base | Matched Concepts | Reason |
-|---|-------|:-----:|:----:|:------:|:------------:|:---:|:-----:|:-------:|:--------:|:----:|-------------------|--------|
-| 1 | AI Compute | 88 | 95 | 90 | 95 | ×1.0 | 8 | 70 | +5 | 83 | Data Center, East-West Computing | AI infra news + ministry policy |
-| 2 | Semiconductor | 78 | 88 | 82 | 85 | ×1.0 | 6 | 65 | +10 | 68 | Domestic Chips, Advanced Packaging | Strong sector + national strategy |
+| # | Theme | Final | Conf | MktAct | Emotion(raw) | Dir | News# | Capital | PolBonus | PolDir | Base | Matched Concepts | Reason |
+|---|-------|:-----:|:----:|:------:|:------------:|:---:|:-----:|:-------:|:--------:|:---:|:----:|-------------------|--------|
+| 1 | AI Compute | 88 | 95 | 90 | 95 | ×1.0 | 8 | 70 | +5 | +1.0 | 83 | Data Center, East-West Computing | AI infra news + ministry policy |
+| 2 | Semiconductor | 78 | 88 | 82 | 85 | ×1.0 | 6 | 65 | +10 | +1.0 | 68 | Domestic Chips, Advanced Packaging | Strong sector + national strategy |
 | ... |
 
 ## Watch Themes (Final 40-54, bullish direction, non-tradeable)
 
-| # | Theme | Final | Dir | MktAct | PolBonus | Reason |
-|---|-------|:-----:|:---:|:------:|:--------:|--------|
-| W1 | Non-Ferrous Metals | 57 | ×1.0 | 70 | +0 | Palladium +4% / Gold +1% commodity-driven, no policy |
+| # | Theme | Final | Dir | MktAct | PolBonus | PolDir | Reason |
+|---|-------|:-----:|:---:|:------:|:--------:|:---:|--------|
+| W1 | Non-Ferrous Metals | 57 | ×1.0 | 70 | +0 | — | Palladium +4% / Gold +1% commodity-driven, no policy |
 ```
 
-Columns: `MktAct` = market_action (Base anchor, 45%); `Emotion(raw)` = pre-gate attention; `Dir` = direction coefficient (×1.0/×0.8/×0.5); `Capital` = 45 when no data; `PolBonus` = Policy Bonus (0-10); `Base` = M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10. `Final = Base + PolBonus`.
+Columns: `MktAct` = market_action (Base anchor, 45%); `Emotion(raw)` = pre-gate attention; `Dir` = direction coefficient (×1.0 / ×0.8 / ×0.5); `Capital` = 45 when no data; `PolBonus` = Policy Bonus raw (0-10, before polarity gate); `PolDir` = polarity coefficient (bull×1.0 / neut×0.5 / bear×0.0); `Base` = M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10. `Final = Base + PolBonus × PolDir`.
 
 Final Heat < 55 excluded from tradeable pool; 40-54 with bullish direction → Watch Themes.
 
@@ -587,7 +605,7 @@ All computed_perception fields must carry confidence:
 | `theme_heat.subscores.M` | LLM per market_action rubric hit clarity 0-100 | LLM |
 | `theme_heat.subscores.E/C` | LLM per rubric tier: 90(full)/75(mid)/55(edge) | LLM |
 | `theme_heat.subscores.N` | `min(news_count/5, 1) × 100` | Python |
-| `theme_heat.policy_bonus` | Tier lookup 0/2/5/8/10 (no confidence; deterministic) | LLM |
+| `theme_heat.policy_bonus` | Tier lookup 0/2/5/8/10 × PolDir (bull×1.0 / neut×0.5 / bear×0.0); deterministic, no confidence | LLM |
 | `theme_heat.value` | `min(M, E, N, C confidences)` (Base factors; policy_bonus excluded from min) | Python |
 | `news_impact.value` | Matrix cell weight × 100 ± adjustments | LLM |
 | `major_event.polarity` | Default Neutral=90; P/N by evidence strength | LLM |
@@ -722,7 +740,7 @@ Pure structured dataset. No prose. Sorted by `composite_score DESC`.
 
 | Theme | Final | Rank | HeatTrace |
 |-------|:-----:|:----:|-----------|
-| Semiconductor | 42 | 5 | M20/E85×0.5/N4/C45 Base32 +Pol10 =42 |
+| Semiconductor | 42 | 5 | M20/E85×0.5/N4/C45 Base32 +Pol10×0.0 =32 |
 ```
 
 | Token | Meaning |
@@ -732,8 +750,9 @@ Pure structured dataset. No prose. Sorted by `composite_score DESC`.
 | N | news_density, pre-normalization integer (weight 0.15) |
 | C | capital 0-100 (weight 0.10, default 45) |
 | Base | `M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10` |
-| +Pol | Policy Bonus (0-10) |
-| =Final | `Base + Policy Bonus` |
+| +Pol | Policy Bonus raw (0-10) |
+| ×PolDir | polarity coefficient (bull×1.0 / neut×0.5 / bear×0.0) |
+| =Final | `Base + PolBonus × PolDir` |
 
 Sorted by Final DESC. Final >= 55 = tradeable pool.
 

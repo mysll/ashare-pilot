@@ -62,6 +62,8 @@ digraph workflow {
 **For each stock, fetch:**
 - Today's closing price (or current price if during trading hours)
 - Intraday K-line data (5-min scale) to analyze open/high/low/close patterns
+- **开盘 / 最低 / 盘中最高 / 收盘** four raw prices (mandatory — populate the Schema-Locked table in 3a)
+- **首根5分K线形态** (09:35 first candle) relative to the entry anchor — needed to classify `首根K确认` (企稳/击穿/未触及)
 - Verify whether predictions hit buy zone, target price, or stop-loss
 
 **Note:** Use the stock-analysis skill scripts:
@@ -80,12 +82,29 @@ python .opencode/lib/fetch/fetch_stock.py CODE --intraday --scale 5 --json
 
 **Required analysis sections:**
 
-#### 3a. Buy Recommendation Results Table
+#### 3a. Buy Recommendation Results Table (Schema-Locked — 禁止增删列 / 改列名 / 改列序)
 
-| Stock | Rating | Direction | Buy Zone | Actual Close | Result | Return |
-|-------|--------|-----------|----------|-------------|--------|--------|
+> **为什么锁死**: 历史复盘表列名随日期漂移(有的缺最低、有的用名称当主键、买区用 en-dash),导致 `entry_quality_backtest.py` 无法确定性解析。本表列定义固定,所有价格取自 Step 2 的 5 分钟分时,单元格内**只放数值,不加括号/文字注释**。
 
-Results: **成功** (price stayed in/above buy zone, profit achieved), **部分成功** (hit buy zone but small profit/loss), **失败** (broke stop loss or never hit buy zone), **观望正确/踏空** (for hold recommendations)
+| # | 代码 | 名称 | 评级 | 策略 | 入场锚 | 开盘 | 最低 | 盘中最高 | 收盘 | 触及 | 首根K确认 | 利润给回% | 结果 |
+|---|------|------|:---:|------|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+
+**列规范(逐列强制)**:
+
+| 列 | 允许值 / 格式 | 说明 |
+|----|--------------|------|
+| `代码` | `sh`/`sz`+6位 | 机器主键。**禁止填名称**;bj/688 不入表 |
+| `策略` | `趋势跟随｜回调布局｜强势接力｜防御布局｜暂不参与` | 照抄 strategy.md「交易策略」列 |
+| `入场锚` | `类型:价格` | 类型∈`MA5｜MA20｜ZONE｜追入｜OPEN`;价格=买区上沿**单值**。例 `MA20:41.62`、`MA5:899.81`、`追入:66.06`。策略=暂不参与→填 `—` |
+| `开盘/最低/盘中最高/收盘` | 数值,2位小数 | 5分钟分时原始价,纯数字 |
+| `触及` | `是｜否` | 判据:`最低 ≤ 入场锚`(追入/OPEN 恒为 `是`) |
+| `首根K确认` **(NEW)** | `企稳｜击穿｜未触及` | 09:35 首根5分K相对入场锚:收在锚上/放量收复=`企稳`;跌破锚且缩量续跌=`击穿`;全天未到锚=`未触及` |
+| `利润给回%` **(NEW)** | 数值1位 或 `—` | 触及=是:`(盘中最高−收盘)/入场锚×100`;否则 `—`。**人读用,脚本以原始价重算为准** |
+| `结果` | `成功｜部分成功｜失败｜踏空｜观望正确` | 成功=触及且持收盈利;部分成功=触及但薄利/回吐;失败=击穿止损或触及后亏;踏空=未触及但上涨;观望正确=未触及且下跌 |
+
+> **派生指标不手填**: `MAE%`(入场后被套=`(最低−入场锚)/入场锚`)、`持收%`(=`(收盘−入场锚)/入场锚`)由 `.opencode/skills/daily-trading-review/scripts/entry_quality_backtest.py` 从上表**原始列自动计算**——避免手算错误(历史曾出现把买区解析成 8 位数的脏值)。
+>
+> **为何加 `首根K确认`**: 入场质量回测(2026-06~07)显示,回踩成交后中位 +4.25%/胜率 69%,锚本身有效;拖累质量的是"触即破"的击穿单(占成交 31%)。`首根K确认`把"站稳 vs 击穿"记为结构化字段,是未来验证"确认闸门"能否同时留赢家、滤输家的关键数据。
 
 For **5-star ratings**: Track cumulative success rate across history.
 
@@ -159,13 +178,24 @@ memory/
 ```markdown
 # 验证复盘 {YYYY}-{MM}-{DD}
 
+## 市场环境
+- RegimeHint: {panic|weak|neutral|strong-sector}
+- 上证 {close}({pct}%) / 科创50 {close}({pct}%)
+
 ## 结果
 
-**买入成功率**: X/Y = XX%
+**买入触及率**: X/Y = XX%
+**触及后胜率(持收>入场)**: X/Y = XX%
 **5星成功率**: X/Y = XX% (累计第N次验证)
 **观望正确率**: X/Y = XX%
 
-...
+## 买入结果表 (Schema-Locked — 见 skill §3a,列不可改)
+
+| # | 代码 | 名称 | 评级 | 策略 | 入场锚 | 开盘 | 最低 | 盘中最高 | 收盘 | 触及 | 首根K确认 | 利润给回% | 结果 |
+|---|------|------|:---:|------|--------|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| 1 | sz001309 | 德明利 | 5★ | 趋势跟随 | MA5:899.81 | 881.91 | 875.00 | 940.00 | 921.00 | 是 | 企稳 | 2.1 | 成功 |
+
+> 价格取自 5 分钟分时;单元格纯数值。MAE%/持收% 由 entry_quality_backtest.py 自动计算,不手填。
 
 ## 关键教训
 
@@ -175,19 +205,19 @@ memory/
 
 **How to apply**: ...
 
-...
-
 ## 规则触发记录
 
 | 规则编号 | 规则名称 | 触发标的 | 结果 | 累计验证次数 |
 |----------|----------|----------|------|:----------:|
 
-...
-
 ## 次日策略调整
 
 ...
 ```
+
+> **格式契约**: 「买入结果表」的列名/列序/枚举值**必须**与 skill §3a 完全一致。新增分析(超预验证、观望复盘等)放在该表**之后**的独立小节,不得改动该表结构。运行结束后可跑
+> `python .opencode/skills/daily-trading-review/scripts/entry_quality_backtest.py`
+> 确认本文件可被确定性解析(报错=格式违约,需修正)。
 
 #### 4b. Update daily/INDEX.md
 
