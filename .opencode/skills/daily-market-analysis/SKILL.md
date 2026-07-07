@@ -176,6 +176,18 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 
 **V5 note:** Step 2 is the Perception Layer per V5 Invariant 1. It produces `mapper.md` as a structured perception dataset (7 sections) with per-field confidence. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
 
+After the Step 2 agent writes `mapper.md`, it MUST run the Strategy Inputs
+injection/validation script:
+
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/inject_strategy_inputs.py --date {YYYY-MM-DD}
+```
+
+If the script prints `VALIDATION_FAILED_REGENERATE_MAPPER`, the Step 2 agent
+must regenerate the reported mapper/Candidate Pool alignment and rerun the
+script. Do not advance to Step 3 with an unvalidated `Strategy Inputs` table;
+this is an LLM regeneration loop, not a hard pipeline block.
+
 **Prompt (exact format, MUST NOT deviate):**
 
 ```
