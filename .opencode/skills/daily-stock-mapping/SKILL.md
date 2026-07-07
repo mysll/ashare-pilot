@@ -1,6 +1,6 @@
 ---
 name: daily-stock-mapping
-description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.md, theme_stocks.md, mapper.md with theme-heat scoring and composite-scored stock pool.
+description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.md, theme_stocks.md, mapper.annotations.json, validated mapper.json, mapper.strategy_view.json, and rendered mapper.md.
 ---
 
 # Daily Stock Mapping
@@ -14,7 +14,7 @@ Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis p
 | Theme Extraction | news.md | themes.md |
 | Stock Pool Build | themes.md | theme_stocks.md |
 | Technical Enrichment | theme_stocks.md | theme_stocks.md (enriched in-place) |
-| Structured Dataset | theme_stocks.md (enriched) | mapper.md (7 sections) |
+| Structured Dataset | theme_stocks.md (enriched) | mapper.annotations.json -> mapper.json -> mapper.strategy_view.json -> mapper.md |
 
 ## Scope
 
@@ -22,7 +22,9 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
-**Format Rule:** All intermediate files are markdown. Write them directly — do NOT write scripts to generate JSON. The LLM is the author, not a code generator.
+**Phase 3 JSON contract rule:** Step 2 LLM writes `predict/{date}/mapper.annotations.json` only for LLM-owned perception fields. Scripts build `mapper.base.json`, merge/validate `mapper.json`, project `mapper.strategy_view.json` for Step 3 reading, then render `mapper.md`. `mapper.json` is the full machine contract; `mapper.strategy_view.json` is the Step 3 reading contract; `mapper.md` is report-only.
+
+**Format Rule:** The LLM authors perception annotations, not full machine artifacts. Scripts own validated JSON assembly and Markdown rendering.
 
 **Layer Boundary (V5):** This skill is **perception only** — classification, detection, and pattern recognition. Python scripts produce `raw_observation` + `computed_perception` per stock (each field with `{value, confidence, trace}`). **Direction / RiskSeverity / OverrideHint are Step 3 (Reasoning) territory.** Step 2 NEVER produces Direction, buy/stop/target, or strategic judgment.
 
@@ -30,10 +32,11 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (
 
 | Symptom | Fix |
 |---------|-----|
+| Skipped `mapper.annotations.json` or `mapper.json` | Generate annotations, then run annotation validation, JSON build, and mapper validation before Step 3. |
 | Theme name not in Theme Library | Discard. Theme Library is the only source. |
 | Stock in pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable. |
 | Stock from excluded boards (sh688/bj) entered pool | Remove per trading-scope.json. |
-| Wrote a Python/JS script to generate JSON intermediate | Delete script. Write markdown directly. |
+| LLM hand-wrote the complete `mapper.json` or `mapper.md` report | Regenerate through the mapper JSON scripts; LLM should provide perception annotations, not own the full file/report contract. |
 | theme_stocks.md row missing `source_themes` column | Re-add. Downstream needs stock provenance. |
 | mapper.md contains buy/stop/target recommendations | Remove. Strategy is Step 3 territory. |
 | Step 2 produces Direction / RiskSeverity / OverrideHint | Violation (V5 Invariant 1). Step 2 is Perception only. |
@@ -41,7 +44,7 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (
 | Candidate Pool row missing `CompositeTrace` or confidence | Re-add. V5 audit trail is mandatory. |
 | `risk_flags` contains liquidity tokens | Remove. Liquidity hard-filter is handled separately. |
 | Stock with `fetch_failed: true` enters Candidate Pool | Move to Observation Pool, reason=`Indicators_Fetch_Failed`. |
-| `Strategy Inputs` numeric values differ from `pool_indicators.json` | Run `inject_strategy_inputs.py`; if validation still fails, regenerate mapper/Candidate Pool and rerun. |
+| `Strategy Inputs` numeric values differ from `pool_indicators.json` | Fix base inputs or annotations, then rerun `build_mapper_base.py`, `build_mapper_json.py`, and `validate_mapper_json.py`. |
 
 ---
 
@@ -489,7 +492,7 @@ Removed stocks (failed hard filters): list with reason + ExclusionSource.
 
 ## Structured Dataset Generation
 
-**Objective:** Aggregate all data into `mapper.md` as a machine-consumable decision dataset. No prose, no recommendations, no derived levels.
+**Objective:** Aggregate all data into `mapper.annotations.json`, then use scripts to assemble validated `mapper.json`, project `mapper.strategy_view.json`, and render report-only `mapper.md`. No recommendations or derived trade levels in Step 2.
 
 ### Data Sources
 
@@ -647,7 +650,7 @@ When uncertain, use `None`.
 
 ### NewsImpact Rubric (per-stock, 0-100)
 
-Two-dimensional lookup. LLM selects ONE cell; may interpolate ±5 and note in Score Trace.
+Two-dimensional lookup. LLM selects ONE cell; may interpolate ±5 and explain in `mapper.annotations.json` trace.
 
 **Relevance (rows):**
 
@@ -716,85 +719,78 @@ Write to Candidate Pool `RoleTags` column, comma-separated. Use `—` if none.
 
 ---
 
-## Output: mapper.md (7 Sections)
+## Output: mapper.annotations.json -> mapper.json -> mapper.strategy_view.json -> mapper.md
 
-Pure structured dataset. No prose. Sorted by `composite_score DESC`.
+`mapper.annotations.json` is the only LLM-authored machine artifact in this stage. `mapper.json` is assembled and validated by scripts. `mapper.strategy_view.json` is projected from `mapper.json` for Step 3. `mapper.md` is rendered from `mapper.json` for human review.
 
-### Section 1: Market State
+### LLM Output Contract: mapper.annotations.json
 
-```markdown
-## Market State
+Write:
 
-| Field | Value |
-|-------|-------|
-| DominantThemes | Semiconductor(91), AI Compute(80) |
-| FinancingFlow | +61.31 net buy |
-| RiskFlags | RMBWeakness, APACPressure |
-| BoardPolicy | sh688=exclude, bj=exclude |
-| RegimeHint | (Step 3 Reasoning territory) |
+```text
+predict/{date}/mapper.annotations.json
 ```
 
-### Section 2: Theme Ranking
+Required shape:
 
-```markdown
-## Theme Ranking
-
-| Theme | Final | Rank | HeatTrace |
-|-------|:-----:|:----:|-----------|
-| Semiconductor | 42 | 5 | M20/E85×0.5/N4/C45 Base32 +Pol10×0.0 =32 |
+```json
+{
+  "schema_version": "daily_mapper_annotations.v1",
+  "date": "YYYY-MM-DD",
+  "themes": [
+    {
+      "name": "ThemeName",
+      "emotion": {"value": 85, "confidence": 80, "evidence": "flash#1", "trace": "why"},
+      "policy_polarity": {"value": "neutral", "confidence": 70, "evidence": null, "trace": "why"},
+      "catalyst_exception": null
+    }
+  ],
+  "stocks": [
+    {
+      "code": "sz000001",
+      "news_relevance": {"r": "R2", "p": "P2", "confidence": 80, "evidence": "flash#2", "trace": "why"},
+      "major_event": {"polarity": "none", "confidence": 90, "evidence": null, "trace": "why"},
+      "pattern": {
+        "heat": {"state": "RISING", "confidence": 80, "trace": "why"},
+        "leader": {"state": "STABLE", "confidence": 80, "trace": "why"},
+        "auction": {"state": "NEUTRAL", "confidence": 100, "trace": "why"},
+        "rotation": {"state": "SECONDARY", "confidence": 70, "trace": "why"},
+        "volume": {"state": "NORMAL", "confidence": 80, "trace": "why"}
+      },
+      "anomaly": null,
+      "news_link": "flash#2"
+    }
+  ]
+}
 ```
 
-| Token | Meaning |
-|-------|---------|
-| M | market_action 0-100 (weight 0.45) |
-| E | emotion: `{E_raw}×{direction_coeff}` (weight 0.30) |
-| N | news_density, pre-normalization integer (weight 0.15) |
-| C | capital 0-100 (weight 0.10, default 45) |
-| Base | `M×0.45+(E_raw×Dir)×0.30+N×0.15+C×0.10` |
-| +Pol | Policy Bonus raw (0-10) |
-| ×PolDir | polarity coefficient (bull×1.0 / neut×0.5 / bear×0.0) |
-| =Final | `Base + PolBonus × PolDir` |
+Do not write `mapper.json` or `mapper.md` by hand.
 
-Sorted by Final DESC. Final >= 55 = tradeable pool.
-
-### Section 3: Candidate Pool
-
-All stocks with Composite Score >= 55. Sort by Composite DESC.
-
-```markdown
-## Candidate Pool
-
-| Code | Name | comp.value | comp.conf | tech.value | tech.conf | th_heat.value | news_imp.value | maj_ev.pol | risk_type.value | pattern.heat | pattern.leader | pattern.auct | auc.value | anomaly | NewsLink | RoleTags |
-|------|------|-----------|-----------|------------|----------|--------------|---------------|-----------|----------------|-------------|---------------|-------------|---------|---------|----------|----------|
-```
-
-### Section 4: Strategy Inputs
-
-**ALL** Candidate Pool stocks covered — no truncation.
-
-**Mandatory injection step:** The LLM may write a placeholder table, but the final
-`Strategy Inputs` table MUST be generated by script from
-`predict/{date}/pool_indicators.json`. Do not hand-copy or infer these numeric
-fields in final mapper output.
-
-After writing `mapper.md`, run:
+After writing `mapper.annotations.json`, run:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/inject_strategy_inputs.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/render_mapper_md.py --date {YYYY-MM-DD}
 ```
 
-The script replaces `Strategy Inputs` with values from `pool_indicators.json`
-and validates the result. If output contains
-`VALIDATION_FAILED_REGENERATE_MAPPER`, do **not** proceed to Step 3 yet: fix or
-regenerate the mapper section named in the report, then rerun the script. This
-is a regeneration loop, not a hard pipeline block.
+`build_mapper_base.py` reads the enriched `theme_stocks.md` for deterministic `Observation Pool` and `Excluded Stocks` rows. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. `render_mapper_md.py` renders the human report from `mapper.json`. If annotation validation fails, fix `mapper.annotations.json`. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with an invalid `mapper.json`.
 
-```markdown
-## Strategy Inputs
+### Rendered Report Reference
 
-| Code | Price | PriceSource | MA20 | MA5 | ATR | ATR% | High20 | Low20 |
-|------|-------|-------------|------|-----|-----|------|--------|-------|
-```
+The following fields appear in rendered `mapper.md`, but the LLM must not author these Markdown sections by hand. They are generated from `mapper.json`.
+
+| Rendered Section | Source |
+|------------------|--------|
+| Market State | `mapper.json.market_state` |
+| Theme Ranking | `mapper.json.themes` |
+| Candidate Pool | `mapper.json.candidate_pool[*].scores`, `major_event`, `risk_type`, `pattern`, `news_link`, `role_tags` |
+| Strategy Inputs | `mapper.json.candidate_pool[*].strategy_inputs` from `pool_indicators.json` |
+| Observation Pool | `mapper.json.observation_pool` from enriched `theme_stocks.md` |
+| Excluded Stocks | `mapper.json.excluded_stocks` from enriched `theme_stocks.md` |
 
 | Column | Source | Notes |
 |--------|--------|-------|
@@ -807,52 +803,14 @@ is a regeneration loop, not a hard pipeline block.
 
 Validation rules:
 
-- Every Candidate Pool code must appear exactly once in `Strategy Inputs`.
+- Every Candidate Pool code must have exactly one `strategy_inputs` object in `mapper.json`.
 - `Price`, `MA20`, `MA5`, `ATR`, `ATR%`, `High20`, and `Low20` must match
   `raw_observation.*.value` from `pool_indicators.json`.
-- If `pool_indicators.json` has a numeric value, `mapper.md` must not output
-  `—` for that field.
+- If `pool_indicators.json` has a numeric value, `mapper.json` and
+  `mapper.strategy_view.json` must not output `null` for that field.
 - `PriceSource` is `PrevClose` when sourced from `pool_indicators.json`.
-- Any mismatch report means the LLM should regenerate the mapper/Candidate Pool
-  alignment and rerun the injection script before Step 3 consumes the mapper.
-
-### Section 5: Score Trace
-
-```markdown
-## Score Trace
-
-| Code | CompositeTrace | PerceptionTrace |
-|------|----------------|-----------------|
-| sh603986 | T91×0.3+N88×0.2+A92.5×0.2+Tech78.5×0.2+MF50×0.1=86.7 | R4×P3=95→88; factors=6/6 conf=100 |
-```
-
-- `CompositeTrace`: weighted terms → rounded result (mandatory for Composite ≥ 70, optional otherwise)
-- `PerceptionTrace`: sub-score derivation path
-- `DirectionPath`: **blank column** — Direction is Step 3 output, not mapper.md
-
-### Section 6: Observation Pool
-
-All stocks with Composite < 55. Full list.
-
-```markdown
-## Observation Pool
-
-| Code | Name | Composite | Theme | Reason | Anomaly |
-|------|------|-----------|-------|--------|---------|
-```
-
-Reasons: `BelowThreshold`, `TechnicalRisk`, `WeakTheme`, `Indicators_Fetch_Failed`, `IndicatorsMissing`.
-
-### Section 7: Excluded Stocks
-
-```markdown
-## Excluded Stocks
-
-| Code | Name | ExclusionReason | ExclusionSource |
-|------|------|-----------------|-----------------|
-| sh688256 | Cambricon | STAR board not tradeable | board-policy |
-| sz300975 | Shangluo | atr_pct=9.0% > 8% | hard-filter |
-```
+- Any mismatch report means the LLM should fix annotations or deterministic base
+  inputs, then rerun the mapper JSON build/validation sequence before Step 3.
 
 | ExclusionSource | Meaning |
 |-----------------|---------|
@@ -901,6 +859,8 @@ Step 3 **MUST NOT**:
 
 ## Step 2 → Step 3 Data Contract
 
-The **Strategy Inputs** table in mapper.md is authoritative for: Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 only after `inject_strategy_inputs.py` has been run and does not report `VALIDATION_FAILED_REGENERATE_MAPPER`.
+The **`candidate_pool[*].strategy_inputs` fields in mapper.json** are authoritative for: Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 after `validate_mapper_json.py` passes. Step 3 normally reads their projection at `mapper.strategy_view.json:candidates[*].strategy_inputs`.
 
-**Default: no re-fetch.** Step 3 loads Strategy Inputs and proceeds. Re-fetch from API only if: field is missing (N/A, null, empty), field is invalid (negative, zero where nonsensical), or stale data detected.
+**Default: no re-fetch.** Step 3 loads `mapper.strategy_view.json` Strategy Inputs and proceeds. Re-fetch from API only if: field is missing (N/A, null, empty), field is invalid (negative, zero where nonsensical), or stale data detected.
+
+Phase 3 contract: `predict/{date}/mapper.annotations.json` is the LLM perception input, `predict/{date}/mapper.json` is the validated full machine contract, `predict/{date}/mapper.strategy_view.json` is the Step 3 reading contract, and `predict/{date}/mapper.md` is report-only.

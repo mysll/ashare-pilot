@@ -10,8 +10,8 @@ description: Use when users request comprehensive daily financial market analysi
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
 | Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
-| Perception | Step 1+2 | macro-strategist + sector-analyst | news.md → themes.md → theme_stocks.md → mapper.md |
-| Reasoning | Step 3 | portfolio-manager | strategy.md (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
+| Perception | Step 1+2 | macro-strategist + sector-analyst | news.md → themes.md → theme_stocks.md → mapper.annotations.json → mapper.json → mapper.strategy_view.json |
+| Reasoning | Step 3 | portfolio-manager | strategy.md + strategy.json (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
 
 Step 2 NEVER produces Direction or RiskSeverity (V5 Invariant 1). Step 3 is the sole Reasoning layer.
 
@@ -78,8 +78,11 @@ digraph workflow {
         "news.md" [shape=note, style=filled, fillcolor="#fffdeb"];
         "themes.md" [shape=note, style=filled, fillcolor="#fffdeb"];
         "theme_stocks.md\n(enriched)" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "mapper.md\n(V5 7-section)" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "strategy.md\n(+ReasoningTrace)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "mapper.annotations.json" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "mapper.json\n(full contract)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "mapper.strategy_view.json\n(Step 3 input)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "mapper.md\n(report only)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "strategy.md + strategy.json\n(+ReasoningTrace)" [shape=note, style=filled, fillcolor="#fffdeb"];
     }
 
     // Main pipeline flow
@@ -93,8 +96,11 @@ digraph workflow {
     "Step 1: News Brief" -> "news.md";
     "2.1 Theme Extraction" -> "themes.md";
     "2.3 Technical Enrichment\n(Python V5 nested schema)" -> "theme_stocks.md\n(enriched)";
-    "2.4 Structured Dataset" -> "mapper.md\n(V5 7-section)";
-    "Step 3: Reasoning" -> "strategy.md\n(+ReasoningTrace)";
+    "2.4 Structured Dataset" -> "mapper.annotations.json";
+    "2.4 Structured Dataset" -> "mapper.json\n(full contract)";
+    "2.4 Structured Dataset" -> "mapper.strategy_view.json\n(Step 3 input)";
+    "2.4 Structured Dataset" -> "mapper.md\n(report only)";
+    "Step 3: Reasoning" -> "strategy.md + strategy.json\n(+ReasoningTrace)";
 
     // Skill feeds
     "daily-news-brief" -> "Step 1: News Brief";
@@ -114,7 +120,7 @@ digraph workflow {
     "themes.md" -> "2.2 Stock Pool Build" [style=dashed];
     "theme_stocks.md\n(enriched)" -> "2.4 Structured Dataset" [style=dashed];
     "news.md" -> "2.1 Theme Extraction" [style=dashed];
-    "mapper.md\n(V5 7-section)" -> "Step 3: Reasoning" [style=dashed];
+    "mapper.strategy_view.json\n(Step 3 input)" -> "Step 3: Reasoning" [style=dashed];
 
     // V5 architecture annotation
     { rank=same; "2.1 Theme Extraction" "2.2 Stock Pool Build" "2.3 Technical Enrichment\n(Python V5 nested schema)" "2.4 Structured Dataset" }
@@ -174,19 +180,18 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 
 **Action:** Load skill `daily-stock-mapping` (V5 Perception) and follow its workflow.
 
-**V5 note:** Step 2 is the Perception Layer per V5 Invariant 1. It produces `mapper.md` as a structured perception dataset (7 sections) with per-field confidence. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
+**V5 note:** Step 2 is the Perception Layer per V5 Invariant 1. It produces `mapper.annotations.json` and validated `mapper.json`, then renders `mapper.md` as a report. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
 
-After the Step 2 agent writes `mapper.md`, it MUST run the Strategy Inputs
-injection/validation script:
+Then Step 2 MUST validate annotations, build/validate `mapper.json`, and render `mapper.md`:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/inject_strategy_inputs.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/render_mapper_md.py --date {YYYY-MM-DD}
 ```
-
-If the script prints `VALIDATION_FAILED_REGENERATE_MAPPER`, the Step 2 agent
-must regenerate the reported mapper/Candidate Pool alignment and rerun the
-script. Do not advance to Step 3 with an unvalidated `Strategy Inputs` table;
-this is an LLM regeneration loop, not a hard pipeline block.
 
 **Prompt (exact format, MUST NOT deviate):**
 
@@ -201,12 +206,15 @@ Inputs:
 Outputs:
 - predict/{YYYY-MM-DD}/themes.md
 - predict/{YYYY-MM-DD}/theme_stocks.md (enriched in-place)
+- predict/{YYYY-MM-DD}/mapper.annotations.json
+- predict/{YYYY-MM-DD}/mapper.json
+- predict/{YYYY-MM-DD}/mapper.strategy_view.json
 - predict/{YYYY-MM-DD}/mapper.md
 ```
 
 **CRITICAL:** Do NOT inline any file content, scoring formulas, filter rules, or analysis. Keep the prompt clean.
 
-**Output:** `predict/{YYYY}-{MM}-{DD}/mapper.md`
+**Outputs:** `mapper.annotations.json`, `mapper.json`, `mapper.strategy_view.json`, and rendered `mapper.md`
 
 ---
 
@@ -216,7 +224,9 @@ Outputs:
 
 **Action:** Load skill `daily-strategy` (V5 Reasoning) and follow its workflow.
 
-**V5 note:** Step 3 is the sole Reasoning Layer. It consumes V5 `mapper.md` computed perceptions (value + confidence + trace) and produces Direction、RiskSeverity、OverrideHint application、ReasoningTrace and strategy. Conditional Reread via NewsLink pointers only — never full news.md scan.
+**Phase 3 JSON-first note:** Step 3 consumes `mapper.strategy_view.json` by default. `mapper.json` remains the full source contract; `mapper.md` is report-only and legacy fallback only.
+
+**V5 note:** Step 3 is the sole Reasoning Layer. It consumes V5 JSON computed perceptions (value + confidence + pattern + strategy inputs) and produces Direction、RiskSeverity、OverrideHint application、ReasoningTrace and strategy. Conditional Reread via NewsLink pointers only — never full news.md scan.
 
 **Prompt (exact format, MUST NOT deviate):**
 
@@ -226,10 +236,12 @@ Load skill `daily-strategy` and execute.
 Date: {YYYY-MM-DD}
 
 Inputs:
-- predict/{YYYY-MM-DD}/mapper.md
+- predict/{YYYY-MM-DD}/mapper.strategy_view.json
+- predict/{YYYY-MM-DD}/mapper.json
 
 Output:
 - predict/{YYYY-MM-DD}/strategy.md
+- predict/{YYYY-MM-DD}/strategy.json
 ```
 
 **CRITICAL:** Do NOT inline any file content, data summaries, stock tables, rules, formulas, or analysis. Keep the prompt clean.
@@ -245,7 +257,11 @@ Output:
 | `predict/{date}/news.md` | News briefing, market overview, key events | Perception (Step 1) |
 | `predict/{date}/themes.md` | Matched themes with heat/confidence sub-scores | Perception (Step 2.1) |
 | `predict/{date}/theme_stocks.md` | Deduplicated stock pool with technicals + Pattern 5-dim states | Perception (Step 2.2-2.3) |
-| `predict/{date}/mapper.md` | V5 7-section perception dataset: Market State, Theme Ranking, Candidate Pool (prefix columns with confidence), Strategy Inputs, Score Trace, Observation Pool, Excluded Stocks | Perception (Step 2.4) |
+| `predict/{date}/mapper.annotations.json` | LLM-owned Step 2 perception annotations (`daily_mapper_annotations.v1`) | Perception (Step 2.4) |
+| `predict/{date}/mapper.md` | Rendered perception report from mapper.json: Market State, Theme Ranking, Candidate Pool, Strategy Inputs, Observation Pool, Excluded Stocks | Perception (Step 2.4) |
+| `predict/{date}/mapper.json` | Full validated Step 2 machine contract (`daily_mapper.v1`) | Perception (Step 2.4) |
+| `predict/{date}/mapper.strategy_view.json` | Compact Step 3 reading contract (`daily_strategy_input.v1`) projected from mapper.json | Perception → Reasoning bridge |
+| `predict/{date}/strategy.json` | Machine-readable Step 3 decisions for review/backtests (`daily_strategy.v1`) | Reasoning (Step 3) |
 | `predict/{date}/strategy.md` | Reasoning result: Direction / RiskSeverity / OverrideHint 应用 + Buy/Stop/Target + ReasoningTrace + Market Context (RegimeHint) | Reasoning (Step 3) |
 
 ## Quick Reference
@@ -253,8 +269,10 @@ Output:
 | Layer | Step | Agent | Input | Output | Key V5 constraint |
 |-------|------|-------|-------|--------|-------------------|
 | Perception | 1 | macro-strategist + daily-news-brief | — | news.md | — |
-| Perception | 2 | sector-analyst + daily-stock-mapping V5 | news.md | themes.md → theme_stocks.md → mapper.md | **No Direction / RiskSeverity** (Invariant 1) |
-| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.md + RULES.md | strategy.md (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
+| Perception | 2 | sector-analyst + daily-stock-mapping V5 | news.md | themes.md → theme_stocks.md → mapper.annotations.json → mapper.json → mapper.strategy_view.json → mapper.md | **No Direction / RiskSeverity** (Invariant 1) |
+| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.strategy_view.json + RULES.md | strategy.md + strategy.json (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
+
+Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default and outputs both `strategy.md` and `strategy.json`. `mapper.json` is the full source contract; `mapper.md` is report-only and legacy fallback only when JSON files are missing.
 
 ## Common Usage
 

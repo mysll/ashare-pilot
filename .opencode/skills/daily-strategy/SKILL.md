@@ -1,6 +1,6 @@
-﻿---
+---
 name: daily-strategy
-description: Generate daily trading strategy from V5 mapper.md. Used as Step 3 of daily-market-analysis pipeline. Step 3 is the REASONING layer — consumes Step 2 Computed Perception, produces Direction / RiskSeverity / 历史规则应用 / Buy/Stop/Target via structured ReasoningTrace.
+description: Generate daily trading strategy from V5 mapper.strategy_view.json. Used as Step 3 of daily-market-analysis pipeline. Step 3 is the REASONING layer — consumes Step 2 Computed Perception, produces Direction / RiskSeverity / 历史规则应用 / Buy/Stop/Target via structured ReasoningTrace.
 ---
 
 # Daily Strategy Generation (V5)
@@ -12,7 +12,7 @@ Loaded by the `portfolio-manager` subagent when dispatched for pipeline strategy
 ```
 Compute (Python)
     ↓
-Perception (Step 2 — mapper.md)
+Perception (Step 2 — mapper.json -> mapper.strategy_view.json)
     ↓
 Reasoning (Step 3 — this skill ← 你在这里)
     ↓
@@ -31,7 +31,7 @@ Step 3 不只是“在 Direction 内交易” — Step 3 **是 Direction 的产�
 | 2. Unidirectional Information Flow | **默认不重读 news.md** — 仅在 3 类 Conditional Reread 触发时回查 `NewsLink` 单条 |
 | 3. Execution 永不新增信息 | strategy.md 格式化层严格消费 Step 3 Reasoning 输出；不自行加仓 / 改 stop |
 | 4. 白名单修改需 Regression Audit | V5+ 修订白名单须 30 日命中回测 — Phase 5 companion 阶段绑定 |
-| 5. Python 嵌套 Schema | Step 3 读 `comp.value` / `comp.conf` / `tech.value` / `tech.conf` 等前缀列 |
+| 5. Python 嵌套 Schema | Step 3 读 `candidates[*].scores.*` / `pattern.*` / `strategy_inputs` 等 JSON fields |
 
 ---
 
@@ -40,7 +40,9 @@ Step 3 不只是“在 Direction 内交易” — Step 3 **是 Direction 的产�
 ```
 Inputs:
   Date:       provided in prompt (YYYY-MM-DD)
-  Mapper:     predict/{date}/mapper.md      (Step 2 V5 output, 7 sections)
+  StrategyView: predict/{date}/mapper.strategy_view.json (Step 3 compact input, daily_strategy_input.v1)
+  Mapper:     predict/{date}/mapper.json    (full Step 2 V5 source contract, daily_mapper.v1)
+  Fallback:   predict/{date}/mapper.md      (legacy only, if mapper.json is missing)
   Rules:      memory/RULES.md + memory/SHARED_RULES.md  (LLM 全文语义匹配)
   Indicators: predict/{date}/pool_indicators.json       (V5 nested, for compute_trade_profile.py)
   News:       predict/{date}/news.md        (仅 for Conditional Reread 单条回查)
@@ -55,17 +57,23 @@ python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <co
 `fetch_pool_indicators.py` produces V5 nested format `[{code, raw_observation, computed_perception}, ...]`.
 Do **NOT** use `lib/fetch/fetch_indicators.py` — it outputs K-line time-series without `code` fields, incompatible with `compute_trade_profile.py`.
 
-1. Read `mapper.md` **Market State** — DominantThemes, BoardPolicy, FinancingFlow, RiskFlags
-2. Read `mapper.md` **Candidate Pool** — V5 prefix columns
-3. Read `mapper.md` **Strategy Inputs** — Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 (**authoritative source**)
-4. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
-5. Read `memory/RULES.md` + `memory/SHARED_RULES.md` 全文 — LLM 语义匹配
-6. **Generate Trade Profiles** via `compute_trade_profile.py` — per-stock 交易策略 + 入场条件 (§ Trade Profile Generation)
-7. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
-8. Generate both:
+1. Validate `mapper.json`, then build/read the compact Step 3 view:
+   ```bash
+   python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date {date}
+   python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {date}
+   ```
+2. Read `mapper.strategy_view.json` **market_state** — dominant themes, board policy, financing flow, risk flags
+3. Read `mapper.strategy_view.json` **candidates** — `scores.*`, `major_event`, `risk_type`, `pattern`, `anomaly`, `news_link`, `role_tags`
+4. Read `mapper.strategy_view.json` **candidates[*].strategy_inputs** — Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 (**authoritative projection from mapper.json**)
+5. If `mapper.strategy_view.json` is missing but `mapper.json` exists, build it with `build_strategy_view.py`; if both JSON files are missing, fall back to `mapper.md` legacy parsing and note fallback in `ReasoningTrace`
+6. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
+7. Read `memory/RULES.md` + `memory/SHARED_RULES.md` 全文 — LLM 语义匹配
+8. **Generate Trade Profiles** via `compute_trade_profile.py` — per-stock 交易策略 + 入场条件 (§ Trade Profile Generation)
+9. **对每个 Candidate Pool stock 执行 Reasoning Flow**（见 § Reasoning Flow）
+10. Generate both:
    - `predict/{date}/strategy.md` — human-readable report
    - `predict/{date}/strategy.json` — machine-readable strategy data for review/backtests
-9. Validate `strategy.json` with `validate_strategy_json.py`
+11. Validate `strategy.json` with `validate_strategy_json.py`
 
 ---
 
@@ -103,7 +111,7 @@ V5 Step 3 对每个 Candidate Pool stock 按 4 步推理：
 | `neutral` | ±0.5% |
 | `strong-sector` | neutral index BUT dominant theme heat ≥ 85 OR 科创50 > +2% |
 
-RegimeHint 是 Step 3 独有的 reasoning 输出（不在 mapper.md 中）。
+RegimeHint 是 Step 3 独有的 reasoning 输出（不在 mapper.json 中）。
 
 ### Step 3-C — Direction 推理（per stock）
 
@@ -524,7 +532,7 @@ If validation fails, fix `strategy.json` before finishing Step 3. Do not generat
 | 无 PerceptionOverride | Override allowed for whitelisted fields with audit |
 | 无 ReasoningTrace 输出 | **ReasoningTrace 强制结构化输出** |
 
-**Backward compat**：V5 Step3 接受 V4-U mapper.md（缺 `comp.conf` / `pattern.*` / `risk_type.value`）— 退化为不消费 confidence、pattern 仅看 anomaly、按 risk_flags 自行映射 risk_type。Direction 仍自算。
+**Backward compat**：V5 Step3 defaults to `mapper.strategy_view.json`, rebuilt from `mapper.json` when needed. If a legacy date has only V4-U `mapper.md`（缺 `comp.conf` / `pattern.*` / `risk_type.value`）, fall back to Markdown parsing, consume less confidence/pattern context, and note the fallback in `ReasoningTrace`. Direction 仍自算。
 
 ---
 
@@ -541,7 +549,7 @@ If validation fails, fix `strategy.json` before finishing Step 3. Do not generat
 ## Summary
 
 V5 Step 3 是 Reasoning Layer：
-- **输入**：V5 mapper.md computed perception + Confidence + Pattern + Anomaly + Market Context + RULES.md
+- **输入**：V5 mapper.strategy_view.json computed perception + Confidence + Pattern + Anomaly + Market Context + RULES.md
 - **输出**：Direction + RiskSeverity + 历史规则应用 + Trade Profile(交易策略/入场条件) + ReasoningTrace + (可选) PerceptionOverride
 - **核心规则**：Unidirectional Flow（不重读新闻）+ Override Audit（写 trace）+ RuleBind（apply 同时记 effect）
 - **永远不做**：Execution 层补信息；扫全文 news.md 重新映射主题；override 不可 override 字段（如 comp, tech_score）；ad-hoc 创造不在参数表内的止损
