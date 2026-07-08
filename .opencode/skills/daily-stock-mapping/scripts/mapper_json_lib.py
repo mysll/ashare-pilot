@@ -1,9 +1,5 @@
 #!/usr/bin/env python3
-"""Helpers for the daily mapper JSON contract.
-
-Normal flow is annotations/base JSON -> mapper.json -> rendered mapper.md.
-Legacy Markdown parsing remains available only for old dates.
-"""
+"""Helpers for the daily mapper JSON contract."""
 
 from __future__ import annotations
 
@@ -203,81 +199,6 @@ def board_policy_from_scope(scope: dict[str, Any]) -> dict[str, str]:
     return policy
 
 
-def extract_section(text: str, heading: str) -> str:
-    marker = f"## {heading}"
-    start = text.find(marker)
-    if start < 0:
-        return ""
-    next_match = re.search(r"(?m)^##\s+", text[start + len(marker) :])
-    end = len(text) if next_match is None else start + len(marker) + next_match.start()
-    return text[start:end]
-
-
-def parse_markdown_table(section: str) -> list[dict[str, str]]:
-    lines = [line.strip() for line in section.splitlines() if line.strip().startswith("|")]
-    header: list[str] | None = None
-    rows: list[dict[str, str]] = []
-    for line in lines:
-        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-        if not cells:
-            continue
-        if header is None:
-            header = cells
-            continue
-        if all(set(cell.replace(":", "").strip()) <= {"-"} for cell in cells):
-            continue
-        if len(cells) < len(header):
-            cells.extend([""] * (len(header) - len(cells)))
-        rows.append({header[i]: cells[i] for i in range(len(header))})
-    return rows
-
-
-def parse_market_state(mapper_text: str) -> dict[str, Any]:
-    rows = parse_markdown_table(extract_section(mapper_text, "Market State"))
-    state: dict[str, Any] = {
-        "dominant_themes": [],
-        "financing_flow": None,
-        "risk_flags": [],
-        "board_policy": {},
-    }
-    for row in rows:
-        field = row.get("Field")
-        value = clean_text(row.get("Value"))
-        if field == "DominantThemes" and value:
-            state["dominant_themes"] = parse_dominant_themes(value)
-        elif field == "FinancingFlow":
-            state["financing_flow"] = value
-        elif field == "RiskFlags" and value:
-            state["risk_flags"] = [part.strip() for part in re.split(r"[,;]", value) if part.strip()]
-        elif field == "BoardPolicy" and value:
-            state["board_policy"] = parse_board_policy(value)
-    return state
-
-
-def parse_dominant_themes(value: str) -> list[dict[str, Any]]:
-    themes: list[dict[str, Any]] = []
-    for part in value.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        match = re.match(r"(.+?)\(([-+]?\d+(?:\.\d+)?)\)$", part)
-        if match:
-            themes.append({"name": match.group(1).strip(), "heat": parse_float(match.group(2))})
-        else:
-            themes.append({"name": part, "heat": None})
-    return themes
-
-
-def parse_board_policy(value: str) -> dict[str, Any]:
-    policy: dict[str, Any] = {}
-    for part in value.split(","):
-        if "=" not in part:
-            continue
-        key, raw = [x.strip() for x in part.split("=", 1)]
-        policy[key] = raw
-    return policy
-
-
 def parse_list_cell(value: Any) -> list[str]:
     text = clean_text(value)
     if text is None:
@@ -323,24 +244,6 @@ def scored_annotation(obj: Any, fallback: dict[str, Any] | None = None) -> dict[
     }
 
 
-def parse_themes(mapper_text: str) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_section(mapper_text, "Theme Ranking"))
-    themes: list[dict[str, Any]] = []
-    for row in rows:
-        name = clean_text(row.get("Theme"))
-        if not name:
-            continue
-        themes.append(
-            {
-                "name": name,
-                "rank": parse_int(row.get("Rank")),
-                "final_heat": parse_float(row.get("Final")),
-                "heat_trace": clean_text(row.get("HeatTrace")),
-            }
-        )
-    return themes
-
-
 def strategy_inputs_from_pool(code: str, pool: dict[str, dict[str, Any]]) -> dict[str, Any]:
     entry = pool.get(code)
     return {
@@ -355,51 +258,6 @@ def strategy_inputs_from_pool(code: str, pool: dict[str, dict[str, Any]]) -> dic
     }
 
 
-def parse_candidate_pool(mapper_text: str, pool: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_section(mapper_text, "Candidate Pool"))
-    candidates: list[dict[str, Any]] = []
-    for row in rows:
-        code = clean_text(row.get("Code"))
-        if not code or not CODE_RE.fullmatch(code):
-            continue
-        news_link = clean_text(row.get("NewsLink"))
-        candidates.append(
-            {
-                "code": code,
-                "name": clean_text(row.get("Name")),
-                "role_tags": parse_list_cell(row.get("RoleTags")),
-                "scores": {
-                    "composite": score(row.get("comp.value"), row.get("comp.conf")),
-                    "tech": score(row.get("tech.value"), row.get("tech.conf")),
-                    "theme_heat": score(row.get("th_heat.value")),
-                    "news_impact": score(row.get("news_imp.value"), None, news_link or "phase 1 mapper bridge"),
-                    "auction": score(row.get("auc.value"), 100, "from mapper phase 1 bridge"),
-                    "money_flow": score(50, 50, "phase 1 default"),
-                },
-                "major_event": {
-                    "polarity": normalize_major_event(row.get("maj_ev.pol")),
-                    "confidence": 90,
-                    "evidence": news_link,
-                },
-                "risk_type": {
-                    "value": parse_list_cell(row.get("risk_type.value")) or parse_list_cell(computed_value(pool.get(code), "risk_type")),
-                    "confidence": 100,
-                },
-                "pattern": {
-                    "heat": pattern_state(row.get("pattern.heat")),
-                    "leader": pattern_state(row.get("pattern.leader")),
-                    "auction": pattern_state(row.get("pattern.auct")),
-                    "rotation": pattern_state(row.get("pattern.rotation")),
-                    "volume": pattern_state(row.get("pattern.volume")),
-                },
-                "anomaly": clean_text(row.get("anomaly")),
-                "news_link": news_link,
-                "strategy_inputs": strategy_inputs_from_pool(code, pool),
-            }
-        )
-    return candidates
-
-
 def normalize_major_event(value: Any) -> str:
     text = (clean_text(value) or "none").lower()
     if text in {"positive", "negative", "none", "unknown"}:
@@ -410,104 +268,6 @@ def normalize_major_event(value: Any) -> str:
 def pattern_state(value: Any) -> dict[str, Any]:
     text = clean_text(value)
     return {"state": text or "UNKNOWN", "confidence": 80 if text else 0, "trace": None}
-
-
-def parse_observation_pool(mapper_text: str) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_section(mapper_text, "Observation Pool"))
-    result: list[dict[str, Any]] = []
-    for row in rows:
-        code = clean_text(row.get("Code"))
-        if code and CODE_RE.fullmatch(code):
-            result.append(
-                {
-                    "code": code,
-                    "name": clean_text(row.get("Name")),
-                    "composite": parse_float(row.get("Composite")),
-                    "theme": clean_text(row.get("Theme")),
-                    "reason": clean_text(row.get("Reason")),
-                    "anomaly": clean_text(row.get("Anomaly")),
-                }
-            )
-    return result
-
-
-def parse_excluded_stocks(mapper_text: str) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_section(mapper_text, "Excluded Stocks"))
-    result: list[dict[str, Any]] = []
-    for row in rows:
-        code = clean_text(row.get("Code"))
-        if code and CODE_RE.fullmatch(code):
-            result.append(
-                {
-                    "code": code,
-                    "name": clean_text(row.get("Name")),
-                    "reason": clean_text(row.get("ExclusionReason")),
-                    "source": clean_text(row.get("ExclusionSource")),
-                }
-            )
-    return result
-
-
-def extract_removed_stocks_section(theme_stocks_text: str) -> str:
-    marker = "**Removed stocks (failed hard filters):**"
-    start = theme_stocks_text.find(marker)
-    if start < 0:
-        return ""
-    next_heading = re.search(r"(?m)^##\s+", theme_stocks_text[start + len(marker) :])
-    end = len(theme_stocks_text) if next_heading is None else start + len(marker) + next_heading.start()
-    return theme_stocks_text[start:end]
-
-
-def validate_theme_stocks_markdown_contract(theme_stocks_text: str, label: str = "theme_stocks.md") -> None:
-    if not extract_section(theme_stocks_text, "Stock Pool (After Technical Enrichment)"):
-        raise ValueError(f"{label} missing required section: ## Stock Pool (After Technical Enrichment)")
-    if "**Removed stocks (failed hard filters):**" not in theme_stocks_text:
-        raise ValueError(f"{label} missing required section: **Removed stocks (failed hard filters):**")
-
-
-def parse_theme_observation_pool(theme_stocks_text: str, candidate_codes: set[str]) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_section(theme_stocks_text, "Stock Pool (After Technical Enrichment)"))
-    result: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in rows:
-        code = clean_text(row.get("Code"))
-        if not code or not CODE_RE.fullmatch(code) or code in candidate_codes or code in seen:
-            continue
-        risk = clean_text(row.get("Risk?"))
-        if not risk or risk.lower() == "no":
-            continue
-        result.append(
-            {
-                "code": code,
-                "name": clean_text(row.get("Name")),
-                "composite": parse_float(row.get("Best Score")),
-                "theme": clean_text(row.get("Source Themes")),
-                "reason": risk,
-                "anomaly": None,
-            }
-        )
-        seen.add(code)
-    return result
-
-
-def parse_theme_excluded_stocks(theme_stocks_text: str) -> list[dict[str, Any]]:
-    rows = parse_markdown_table(extract_removed_stocks_section(theme_stocks_text))
-    result: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for row in rows:
-        code = clean_text(row.get("Code"))
-        if not code or not CODE_RE.fullmatch(code) or code in seen:
-            continue
-        result.append(
-            {
-                "code": code,
-                "name": clean_text(row.get("Name")),
-                "reason": clean_text(row.get("Reason")),
-                "source": clean_text(row.get("ExclusionSource")),
-            }
-        )
-        seen.add(code)
-    return result
 
 
 def technical_value(stock: dict[str, Any], pool_entry: dict[str, Any] | None, field: str) -> Any:
@@ -762,44 +522,28 @@ def theme_heat_from_theme_stock(stock: dict[str, Any] | None, theme_heat_by_name
     return max(candidates), "theme_stocks.json source_themes"
 
 
-def build_mapper_from_markdown(date: str, mapper_text: str, pool: dict[str, dict[str, Any]]) -> dict[str, Any]:
-    return {
-        "schema_version": "daily_mapper.v1",
-        "date": date,
-        "generated_at": utc_now_iso(),
-        "generation_mode": "phase1_markdown_bridge",
-        "market_state": parse_market_state(mapper_text),
-        "themes": parse_themes(mapper_text),
-        "candidate_pool": parse_candidate_pool(mapper_text, pool),
-        "observation_pool": parse_observation_pool(mapper_text),
-        "excluded_stocks": parse_excluded_stocks(mapper_text),
-    }
-
-
 def build_base_from_annotations(
     date: str,
     annotations: dict[str, Any],
     pool: dict[str, dict[str, Any]],
-    theme_stocks_text: str | None = None,
-    theme_stocks_doc: dict[str, Any] | None = None,
+    theme_stocks_doc: dict[str, Any],
     scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     theme_stock_by_code: dict[str, dict[str, Any]] = {}
     theme_heat_by_name: dict[str, float] = {}
-    if theme_stocks_doc is not None:
-        for theme in theme_stocks_doc.get("themes", []):
-            if not isinstance(theme, dict):
-                continue
-            name = clean_text(theme.get("name"))
-            heat = parse_float(theme.get("heat"))
-            if name and heat is not None:
-                theme_heat_by_name[name] = heat
-        for stock in theme_stocks_doc.get("stocks", []):
-            if not isinstance(stock, dict):
-                continue
-            code = clean_text(stock.get("code"))
-            if code:
-                theme_stock_by_code[code] = stock
+    for theme in theme_stocks_doc.get("themes", []):
+        if not isinstance(theme, dict):
+            continue
+        name = clean_text(theme.get("name"))
+        heat = parse_float(theme.get("heat"))
+        if name and heat is not None:
+            theme_heat_by_name[name] = heat
+    for stock in theme_stocks_doc.get("stocks", []):
+        if not isinstance(stock, dict):
+            continue
+        code = clean_text(stock.get("code"))
+        if code:
+            theme_stock_by_code[code] = stock
 
     themes = []
     for i, item in enumerate(annotations.get("themes", []), start=1):
@@ -821,15 +565,12 @@ def build_base_from_annotations(
         code = clean_text(item.get("code"))
         if not code or not CODE_RE.fullmatch(code):
             continue
-        if theme_stocks_doc is not None:
-            theme_stock = theme_stock_by_code.get(code)
-            if theme_stock is None:
-                raise ValueError(f"mapper.annotations stock {code} missing from theme_stocks.json stocks[]")
-            status = theme_stock_filter(theme_stock)["status"]
-            if status != "candidate":
-                raise ValueError(f"mapper.annotations stock {code} has theme_stocks.json filter.status={status!r}, expected 'candidate'")
-        else:
-            theme_stock = None
+        theme_stock = theme_stock_by_code.get(code)
+        if theme_stock is None:
+            raise ValueError(f"mapper.annotations stock {code} missing from theme_stocks.json stocks[]")
+        status = theme_stock_filter(theme_stock)["status"]
+        if status != "candidate":
+            raise ValueError(f"mapper.annotations stock {code} has theme_stocks.json filter.status={status!r}, expected 'candidate'")
         entry = pool.get(code)
         tech = computed_value(entry, "tech_score")
         risk = computed_value(entry, "risk_type")
@@ -863,16 +604,8 @@ def build_base_from_annotations(
         )
 
     candidate_codes = {item["code"] for item in candidates}
-    if theme_stocks_doc is not None:
-        observation_pool = observation_pool_from_theme_stocks(theme_stocks_doc, candidate_codes)
-        excluded_stocks = excluded_stocks_from_theme_stocks(theme_stocks_doc)
-    elif theme_stocks_text:
-        validate_theme_stocks_markdown_contract(theme_stocks_text)
-        observation_pool = parse_theme_observation_pool(theme_stocks_text, candidate_codes)
-        excluded_stocks = parse_theme_excluded_stocks(theme_stocks_text)
-    else:
-        observation_pool = []
-        excluded_stocks = []
+    observation_pool = observation_pool_from_theme_stocks(theme_stocks_doc, candidate_codes)
+    excluded_stocks = excluded_stocks_from_theme_stocks(theme_stocks_doc)
 
     resolved_scope = scope or load_trading_scope()
 
