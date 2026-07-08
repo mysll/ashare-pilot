@@ -260,6 +260,7 @@ Final Heat < 55 excluded from tradeable pool; 40-54 with bullish direction → W
 - Never invent themes
 - Concepts are matching signals only, not output
 - Confidence must be calculated, not guessed
+- `evidence` must cite current news or market evidence such as `news#77`, `flash#2`, or a concise evidence phrase; never cite legacy `themes.md#...`
 
 ---
 

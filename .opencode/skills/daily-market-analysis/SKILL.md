@@ -11,7 +11,7 @@ description: Use when users request comprehensive daily financial market analysi
 |-------|------|-------|--------|
 | Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
 | Perception | Step 1+2 | macro-strategist + sector-analyst | news.md -> themes.json -> theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json -> mapper.annotations.json -> mapper.json -> mapper.strategy_view.json |
-| Reasoning | Step 3 | portfolio-manager | strategy.md + strategy.json (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
+| Reasoning | Step 3 | portfolio-manager | strategy.json + daily_report.html (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
 
 Step 2 NEVER produces Direction or RiskSeverity (V5 Invariant 1). Step 3 is the sole Reasoning layer.
 
@@ -83,7 +83,7 @@ digraph workflow {
         "mapper.annotations.json" [shape=note, style=filled, fillcolor="#fffdeb"];
         "mapper.json\n(full contract)" [shape=note, style=filled, fillcolor="#fffdeb"];
         "mapper.strategy_view.json\n(Step 3 input)" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "strategy.md + strategy.json\n(+ReasoningTrace)" [shape=note, style=filled, fillcolor="#fffdeb"];
+        "strategy.json + daily_report.html\n(+ReasoningTrace)" [shape=note, style=filled, fillcolor="#fffdeb"];
     }
 
     // Main pipeline flow
@@ -102,7 +102,7 @@ digraph workflow {
     "2.4 Structured Dataset" -> "mapper.annotations.json";
     "2.4 Structured Dataset" -> "mapper.json\n(full contract)";
     "2.4 Structured Dataset" -> "mapper.strategy_view.json\n(Step 3 input)";
-    "Step 3: Reasoning" -> "strategy.md + strategy.json\n(+ReasoningTrace)";
+    "Step 3: Reasoning" -> "strategy.json + daily_report.html\n(+ReasoningTrace)";
 
     // Skill feeds
     "daily-news-brief" -> "Step 1: News Brief";
@@ -127,7 +127,7 @@ digraph workflow {
     // V5 architecture annotation
     { rank=same; "2.1 Theme Extraction" "2.2 Stock Pool Build" "2.3 Technical Enrichment\n(Python V5 nested schema)" "2.4 Structured Dataset" }
     {
-        label="V5 Architecture: Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (strategy.md)";
+        label="V5 Architecture: Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (strategy.json + daily_report.html)";
         shape=plaintext;
         fontsize=11;
     }
@@ -251,13 +251,13 @@ Inputs:
 - predict/{YYYY-MM-DD}/mapper.json
 
 Output:
-- predict/{YYYY-MM-DD}/strategy.md
 - predict/{YYYY-MM-DD}/strategy.json
+- predict/{YYYY-MM-DD}/daily_report.html
 ```
 
 **CRITICAL:** Do NOT inline any file content, data summaries, stock tables, rules, formulas, or analysis. Keep the prompt clean.
 
-**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.md`
+**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
 
 ---
 
@@ -276,7 +276,7 @@ Output:
 | `predict/{date}/mapper.json` | Full validated Step 2 machine contract (`daily_mapper.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.strategy_view.json` | Compact Step 3 reading contract (`daily_strategy_input.v1`) projected from mapper.json | Perception → Reasoning bridge |
 | `predict/{date}/strategy.json` | Machine-readable Step 3 decisions for review/backtests (`daily_strategy.v1`) | Reasoning (Step 3) |
-| `predict/{date}/strategy.md` | Reasoning result: Direction / RiskSeverity / OverrideHint 应用 + Buy/Stop/Target + ReasoningTrace + Market Context (RegimeHint) | Reasoning (Step 3) |
+| `predict/{date}/daily_report.html` | Daily readable summary rendered from JSON: themes, strategy table, stock details, observation/excluded pools, referenced news | Reasoning (Step 3 readable output) |
 
 ## Quick Reference
 
@@ -284,9 +284,9 @@ Output:
 |-------|------|-------|-------|--------|-------------------|
 | Perception | 1 | macro-strategist + daily-news-brief | — | news.md | — |
 | Perception | 2 | sector-analyst + daily-stock-mapping V5 | news.md | themes.json -> theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json -> mapper.annotations.json -> mapper.json -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
-| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.strategy_view.json + RULES.md | strategy.md + strategy.json (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
+| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.strategy_view.json + RULES.md | strategy.json + daily_report.html (+ReasoningTrace) | Default no full news.md reread (Invariant 2) |
 
-Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default and outputs both `strategy.md` and `strategy.json`. `mapper.json` is the full source contract.
+Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default, writes `strategy.json`, then renders `daily_report.html`. `mapper.json` is the full source contract.
 
 ## Common Usage
 
@@ -300,7 +300,7 @@ Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default
 - Each step depends on previous output
 - Directory: `predict/{YYYY}-{MM}-{DD}/` (e.g., `predict/2026-04-07/`)
 - All output in Chinese (中文)
-- **V5 architecture:** Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (strategy.md formatted output)
+- **V5 architecture:** Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (`strategy.json` + `daily_report.html`)
 - `fetch_pool_indicators.py` outputs V5 nested JSON (`raw_observation` + `computed_perception` each with `{value, confidence, trace}` per field)
 - Step 2 NEVER produces Direction / RiskSeverity — Step 3 is the sole Reasoning authority
 - Daily pipeline runs at any time; data availability depends on market state (see § Execution Timing)

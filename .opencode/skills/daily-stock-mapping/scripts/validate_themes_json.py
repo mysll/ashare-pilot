@@ -32,6 +32,8 @@ def validate(doc: dict[str, Any]) -> list[str]:
         add(errors, "schema_version", f"must be {SCHEMA_VERSION}")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         add(errors, "date", "must be YYYY-MM-DD")
+    if clean_text(doc.get("source")) == "themes.md":
+        add(errors, "source", "must not depend on legacy themes.md")
 
     themes = doc.get("themes")
     if not isinstance(themes, list):
@@ -66,6 +68,8 @@ def validate(doc: dict[str, Any]) -> list[str]:
             value = theme.get(key)
             if value is not None and not isinstance(value, str):
                 add(errors, f"{base}.{key}", "must be string or null")
+            elif isinstance(value, str) and "themes.md" in value:
+                add(errors, f"{base}.{key}", "must not reference legacy themes.md")
 
     tradeable = [theme for theme in themes if isinstance(theme, dict) and theme.get("status") == "tradeable"]
     if not tradeable:
