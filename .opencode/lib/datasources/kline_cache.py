@@ -10,7 +10,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent.parent.parent.parent.parent / ".cache" / "kline"
+DEFAULT_CACHE_DIR = Path(__file__).resolve().parent.parent.parent.parent / ".cache" / "kline"
 
 
 def _fmt_to_date(date_str: str) -> str:

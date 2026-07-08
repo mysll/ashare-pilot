@@ -12,6 +12,7 @@ All numeric values are float/int — no string-formatted values like "14.38%".
 
 Usage:
     python fetch_pool_indicators.py sh600519,sz000001,sz002156 --json
+    python fetch_pool_indicators.py --codes-file theme_stocks.universe.json --json
     python fetch_pool_indicators.py sh600519,sz000001 --json -o results.json
 """
 
@@ -146,7 +147,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Fetch indicators and feature engineering for stock pool"
     )
-    parser.add_argument("codes", help="Comma-separated stock codes")
+    parser.add_argument("codes", nargs="?", help="Comma-separated stock codes")
+    parser.add_argument("--codes-file", help="JSON/text file with codes. JSON may contain codes[] or stocks[].code")
     parser.add_argument("--json", action="store_true", help="Output as flat JSON array")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
     parser.add_argument(
@@ -155,7 +157,34 @@ def main():
     )
 
     args = parser.parse_args()
-    codes = [c.strip() for c in args.codes.split(",") if c.strip()]
+    codes = []
+    if args.codes_file:
+        path = Path(args.codes_file)
+        text = path.read_text(encoding="utf-8")
+        if path.suffix.lower() == ".json":
+            data = json.loads(text)
+            if isinstance(data, dict) and isinstance(data.get("codes"), list):
+                codes.extend(str(c).strip() for c in data["codes"] if str(c).strip())
+            elif isinstance(data, dict) and isinstance(data.get("stocks"), list):
+                for item in data["stocks"]:
+                    if isinstance(item, dict) and item.get("code"):
+                        codes.append(str(item["code"]).strip())
+            elif isinstance(data, list):
+                for item in data:
+                    if isinstance(item, str):
+                        codes.append(item.strip())
+                    elif isinstance(item, dict) and item.get("code"):
+                        codes.append(str(item["code"]).strip())
+            else:
+                raise SystemExit(f"[ERROR] unsupported codes JSON shape: {path}")
+        else:
+            codes.extend(c.strip() for c in text.replace("\n", ",").split(",") if c.strip())
+    if args.codes:
+        codes.extend(c.strip() for c in args.codes.split(",") if c.strip())
+    seen = set()
+    codes = [c for c in codes if not (c in seen or seen.add(c))]
+    if not codes:
+        raise SystemExit("[ERROR] provide codes or --codes-file")
 
     results = []
     for code in codes:

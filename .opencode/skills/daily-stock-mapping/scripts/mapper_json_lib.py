@@ -14,22 +14,30 @@ from pathlib import Path
 from typing import Any
 
 
-CODE_RE = re.compile(r"\b(?:sh|sz)\d{6}\b")
+CODE_RE = re.compile(r"\b(?:[a-z]{2}\d{6}|[a-z]{2,4}_[a-z0-9]+)\b", re.IGNORECASE)
 MISSING_VALUES = {"", "-", "--", "None", "none", "null", "N/A", "鈥?", "鈥擿", "—"}
 NUMERIC_TOLERANCE = 0.005
 NEWS_IMPACT_MATRIX = {
+    ("R4", "P0"): 0,
     ("R4", "P3"): 95,
     ("R4", "P2"): 85,
     ("R4", "P1"): 70,
+    ("R3", "P0"): 0,
     ("R3", "P3"): 80,
     ("R3", "P2"): 70,
     ("R3", "P1"): 55,
+    ("R2", "P0"): 0,
     ("R2", "P3"): 65,
     ("R2", "P2"): 55,
     ("R2", "P1"): 40,
+    ("R1", "P0"): 0,
     ("R1", "P3"): 45,
     ("R1", "P2"): 35,
     ("R1", "P1"): 25,
+    ("R0", "P3"): 0,
+    ("R0", "P2"): 0,
+    ("R0", "P1"): 0,
+    ("R0", "P0"): 0,
 }
 
 
@@ -123,6 +131,76 @@ def load_pool(path: Path) -> dict[str, dict[str, Any]]:
         if isinstance(item, dict) and isinstance(item.get("code"), str):
             result[item["code"]] = item
     return result
+
+
+def default_scope_path() -> Path:
+    return workspace_root() / ".opencode" / "config" / "trading-scope.json"
+
+
+def load_trading_scope(path: Path | None = None) -> dict[str, Any]:
+    scope_path = path or default_scope_path()
+    data = read_json(scope_path)
+    if not isinstance(data, dict):
+        raise ValueError(f"trading scope must be an object: {scope_path}")
+    if not isinstance(data.get("boards"), dict):
+        raise ValueError(f"trading scope missing boards object: {scope_path}")
+    if not isinstance(data.get("overrides", []), list):
+        raise ValueError(f"trading scope overrides must be a list: {scope_path}")
+    return data
+
+
+def scope_decision(code: str, scope: dict[str, Any]) -> dict[str, Any]:
+    """Return tradeability using trading-scope.json only.
+
+    Longest board prefix wins. Overrides may use either {"code": "..."} or
+    {"codes": [...]} and can set exclude/allowed plus an optional reason.
+    """
+    normalized = str(code or "").strip()
+    for override in scope.get("overrides", []):
+        if not isinstance(override, dict):
+            continue
+        codes = override.get("codes")
+        if isinstance(codes, str):
+            codes = [codes]
+        elif not isinstance(codes, list):
+            single = override.get("code")
+            codes = [single] if isinstance(single, str) else []
+        if normalized not in codes:
+            continue
+        if "allowed" in override:
+            allowed = bool(override.get("allowed"))
+            exclude = not allowed
+        else:
+            exclude = bool(override.get("exclude"))
+            allowed = not exclude
+        return {
+            "allowed": allowed,
+            "matched_rule": f"overrides.{normalized}",
+            "reason": clean_text(override.get("reason")) or ("allowed by override" if allowed else "excluded by override"),
+        }
+
+    boards = scope.get("boards", {})
+    matches = [prefix for prefix in boards if isinstance(prefix, str) and normalized.startswith(prefix)]
+    if not matches:
+        return {"allowed": False, "matched_rule": "boards.<none>", "reason": "no matching trading-scope board"}
+    prefix = max(matches, key=len)
+    rule = boards.get(prefix) if isinstance(boards.get(prefix), dict) else {}
+    exclude = bool(rule.get("exclude"))
+    return {
+        "allowed": not exclude,
+        "matched_rule": f"boards.{prefix}",
+        "reason": clean_text(rule.get("reason")) or ("allowed by trading scope" if not exclude else "excluded by trading scope"),
+    }
+
+
+def board_policy_from_scope(scope: dict[str, Any]) -> dict[str, str]:
+    policy: dict[str, str] = {}
+    boards = scope.get("boards", {})
+    for prefix, rule in boards.items():
+        if not isinstance(rule, dict):
+            continue
+        policy[str(prefix)] = "exclude" if rule.get("exclude") else "allow"
+    return policy
 
 
 def extract_section(text: str, heading: str) -> str:
@@ -380,6 +458,13 @@ def extract_removed_stocks_section(theme_stocks_text: str) -> str:
     return theme_stocks_text[start:end]
 
 
+def validate_theme_stocks_markdown_contract(theme_stocks_text: str, label: str = "theme_stocks.md") -> None:
+    if not extract_section(theme_stocks_text, "Stock Pool (After Technical Enrichment)"):
+        raise ValueError(f"{label} missing required section: ## Stock Pool (After Technical Enrichment)")
+    if "**Removed stocks (failed hard filters):**" not in theme_stocks_text:
+        raise ValueError(f"{label} missing required section: **Removed stocks (failed hard filters):**")
+
+
 def parse_theme_observation_pool(theme_stocks_text: str, candidate_codes: set[str]) -> list[dict[str, Any]]:
     rows = parse_markdown_table(extract_section(theme_stocks_text, "Stock Pool (After Technical Enrichment)"))
     result: list[dict[str, Any]] = []
@@ -425,6 +510,258 @@ def parse_theme_excluded_stocks(theme_stocks_text: str) -> list[dict[str, Any]]:
     return result
 
 
+def technical_value(stock: dict[str, Any], pool_entry: dict[str, Any] | None, field: str) -> Any:
+    technical = stock.get("technical") if isinstance(stock.get("technical"), dict) else {}
+    if field in technical:
+        return technical.get(field)
+    if field == "tech_score":
+        return computed_value(pool_entry, "tech_score")
+    if field in {"risk_type", "risk_flags"}:
+        return computed_value(pool_entry, field)
+    if field == "fetch_failed":
+        return bool(pool_entry.get("fetch_failed")) if pool_entry else None
+    return raw_value(pool_entry, field)
+
+
+def theme_stock_filter(stock: dict[str, Any]) -> dict[str, Any]:
+    filt = stock.get("filter") if isinstance(stock.get("filter"), dict) else {}
+    status = clean_text(filt.get("status")) or clean_text(stock.get("status")) or "candidate"
+    return {
+        "status": status,
+        "reason": clean_text(filt.get("reason")) or clean_text(stock.get("reason")),
+        "source": clean_text(filt.get("source")) or clean_text(stock.get("source")),
+    }
+
+
+def theme_stock_theme_text(stock: dict[str, Any]) -> str | None:
+    themes = stock.get("source_themes")
+    if isinstance(themes, list):
+        parts = []
+        for item in themes:
+            if isinstance(item, dict):
+                name = clean_text(item.get("name") or item.get("theme"))
+                score_value = item.get("score")
+                score_num = parse_float(score_value)
+                if name and score_num is not None:
+                    parts.append(f"{name}({format_num(score_num)})")
+                elif name:
+                    parts.append(name)
+            else:
+                text = clean_text(item)
+                if text:
+                    parts.append(text)
+        return ", ".join(parts) if parts else None
+    return clean_text(themes)
+
+
+def observation_pool_from_theme_stocks(theme_doc: dict[str, Any], candidate_codes: set[str]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for stock in theme_doc.get("stocks", []):
+        if not isinstance(stock, dict):
+            continue
+        code = clean_text(stock.get("code"))
+        if not code or code in seen or code in candidate_codes:
+            continue
+        filt = theme_stock_filter(stock)
+        if filt["status"] != "observation":
+            continue
+        result.append(
+            {
+                "code": code,
+                "name": clean_text(stock.get("name")) or code,
+                "composite": parse_float(stock.get("best_score") or stock.get("composite")),
+                "theme": theme_stock_theme_text(stock),
+                "reason": filt["reason"] or "observation",
+                "anomaly": clean_text(stock.get("anomaly")),
+            }
+        )
+        seen.add(code)
+    return result
+
+
+def excluded_stocks_from_theme_stocks(theme_doc: dict[str, Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def append_item(item: dict[str, Any], default_source: str) -> None:
+        code = clean_text(item.get("code"))
+        if not code or code in seen:
+            return
+        result.append(
+            {
+                "code": code,
+                "name": clean_text(item.get("name")) or code,
+                "reason": clean_text(item.get("reason")) or clean_text((item.get("filter") or {}).get("reason") if isinstance(item.get("filter"), dict) else None),
+                "source": clean_text(item.get("source")) or clean_text((item.get("filter") or {}).get("source") if isinstance(item.get("filter"), dict) else None) or default_source,
+            }
+        )
+        seen.add(code)
+
+    for item in theme_doc.get("removed_stocks", []):
+        if isinstance(item, dict):
+            append_item(item, "removed")
+    for item in theme_doc.get("board_excluded", []):
+        if isinstance(item, dict):
+            append_item(item, "board-policy")
+    for stock in theme_doc.get("stocks", []):
+        if not isinstance(stock, dict):
+            continue
+        filt = theme_stock_filter(stock)
+        if filt["status"] == "removed":
+            append_item(
+                {
+                    "code": stock.get("code"),
+                    "name": stock.get("name"),
+                    "reason": filt["reason"],
+                    "source": filt["source"],
+                },
+                "removed",
+            )
+    return result
+
+
+def source_flags_from_value(value: Any) -> dict[str, bool]:
+    if isinstance(value, dict):
+        return {
+            "candidate": bool(value.get("candidate", value.get("theme_library", False))),
+            "market": bool(value.get("market", value.get("mkt", False))),
+            "news": bool(value.get("news", value.get("news_direct", False))),
+            "lhb": bool(value.get("lhb", False)),
+        }
+    text = clean_text(value) or ""
+    lowered = text.lower()
+    return {
+        "candidate": "candidate" in lowered or "pure" in lowered,
+        "market": "market" in lowered or "mkt" in lowered,
+        "news": "news" in lowered or "✓" in text,
+        "lhb": "lhb" in lowered,
+    }
+
+
+def merge_source_flags(base: Any, override: Any) -> dict[str, bool]:
+    result = source_flags_from_value(base)
+    extra = source_flags_from_value(override)
+    for key, value in extra.items():
+        result[key] = bool(result.get(key) or value)
+    return result
+
+
+def technical_from_pool_entry(entry: dict[str, Any] | None) -> dict[str, Any]:
+    return {
+        "tech_score": parse_float(computed_value(entry, "tech_score")),
+        "amount": parse_float(raw_value(entry, "amount")),
+        "atr_pct": parse_float(raw_value(entry, "atr_pct")),
+        "risk_type": computed_value(entry, "risk_type") or [],
+        "risk_flags": computed_value(entry, "risk_flags") or [],
+        "fetch_failed": bool(entry.get("fetch_failed")) if entry else True,
+    }
+
+
+def deterministic_filter_from_technical(technical: dict[str, Any]) -> dict[str, Any]:
+    if technical.get("fetch_failed"):
+        return {"status": "removed", "reason": "fetch_failed", "source": "indicators-fetch-failed"}
+    amount = parse_float(technical.get("amount"))
+    atr_pct = parse_float(technical.get("atr_pct"))
+    hard_reasons = []
+    if amount is not None and amount < 30000:
+        hard_reasons.append(f"amount={format_num(amount)} < 30000")
+    if atr_pct is not None and atr_pct > 8:
+        hard_reasons.append(f"atr_pct={format_num(atr_pct, percent=True)} > 8%")
+    if hard_reasons:
+        return {"status": "removed", "reason": ", ".join(hard_reasons), "source": "hard-filter"}
+    tech_score = parse_float(technical.get("tech_score"))
+    if tech_score is None:
+        return {"status": "observation", "reason": "IndicatorsMissing", "source": "soft-filter"}
+    if tech_score < 50:
+        return {"status": "observation", "reason": f"tech_score={format_num(tech_score)} < 50", "source": "soft-filter"}
+    return {"status": "candidate", "reason": None, "source": None}
+
+
+def merge_theme_stock_annotations(base_doc: dict[str, Any], annotations: dict[str, Any], date: str) -> dict[str, Any]:
+    doc = json.loads(json.dumps(base_doc, ensure_ascii=False))
+    doc["schema_version"] = "daily_theme_stocks.v1"
+    doc["date"] = date
+    doc["generated_at"] = utc_now_iso()
+    doc["generation_mode"] = "base_annotations_merge"
+    doc["annotation_schema_version"] = annotations.get("schema_version")
+
+    theme_annotations = {
+        item.get("name"): item
+        for item in annotations.get("themes", [])
+        if isinstance(item, dict) and isinstance(item.get("name"), str)
+    }
+    for theme in doc.get("themes", []):
+        if not isinstance(theme, dict):
+            continue
+        ann = theme_annotations.get(theme.get("name"))
+        if not ann:
+            continue
+        if clean_text(ann.get("note")):
+            theme["note"] = clean_text(ann.get("note"))
+        if clean_text(ann.get("evidence")):
+            theme["evidence"] = clean_text(ann.get("evidence"))
+
+    stock_annotations = {
+        item.get("code"): item
+        for item in annotations.get("stocks", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    for stock in doc.get("stocks", []):
+        if not isinstance(stock, dict):
+            continue
+        ann = stock_annotations.get(stock.get("code"))
+        if not ann:
+            continue
+        if "source_flags" in ann:
+            stock["source_flags"] = merge_source_flags(stock.get("source_flags"), ann.get("source_flags"))
+        for key in ("news_ref", "market_ref", "anomaly", "source_explanation", "note"):
+            if key in ann:
+                stock[key] = clean_text(ann.get(key))
+    return doc
+
+
+def role_tags_from_theme_stock(stock: dict[str, Any] | None) -> list[str]:
+    if not isinstance(stock, dict):
+        return []
+    flags = source_flags_from_value(stock.get("source_flags"))
+    tags = []
+    if flags.get("candidate"):
+        tags.append("ThemeLibrary")
+    if flags.get("market"):
+        tags.append("MarketActive")
+    if flags.get("news"):
+        tags.append("NewsDirect")
+    if flags.get("lhb"):
+        tags.append("LHB")
+    source_themes = stock.get("source_themes") if isinstance(stock.get("source_themes"), list) else []
+    if len(source_themes) >= 2:
+        tags.append("MultiTheme")
+    if any(isinstance(item, dict) and item.get("anchor") for item in source_themes):
+        tags.append("Anchor")
+    return tags
+
+
+def theme_heat_from_theme_stock(stock: dict[str, Any] | None, theme_heat_by_name: dict[str, float]) -> tuple[float | None, str]:
+    if not isinstance(stock, dict):
+        return None, "theme_stocks.json unavailable"
+    candidates: list[float] = []
+    for item in stock.get("source_themes", []):
+        if not isinstance(item, dict):
+            continue
+        name = clean_text(item.get("name"))
+        if name and name in theme_heat_by_name:
+            candidates.append(theme_heat_by_name[name])
+        else:
+            value = parse_float(item.get("score"))
+            if value is not None:
+                candidates.append(value)
+    if not candidates:
+        value = parse_float(stock.get("best_score"))
+        return value, "theme_stocks.json best_score" if value is not None else "theme_stocks.json missing theme heat"
+    return max(candidates), "theme_stocks.json source_themes"
+
+
 def build_mapper_from_markdown(date: str, mapper_text: str, pool: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": "daily_mapper.v1",
@@ -444,7 +781,26 @@ def build_base_from_annotations(
     annotations: dict[str, Any],
     pool: dict[str, dict[str, Any]],
     theme_stocks_text: str | None = None,
+    theme_stocks_doc: dict[str, Any] | None = None,
+    scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    theme_stock_by_code: dict[str, dict[str, Any]] = {}
+    theme_heat_by_name: dict[str, float] = {}
+    if theme_stocks_doc is not None:
+        for theme in theme_stocks_doc.get("themes", []):
+            if not isinstance(theme, dict):
+                continue
+            name = clean_text(theme.get("name"))
+            heat = parse_float(theme.get("heat"))
+            if name and heat is not None:
+                theme_heat_by_name[name] = heat
+        for stock in theme_stocks_doc.get("stocks", []):
+            if not isinstance(stock, dict):
+                continue
+            code = clean_text(stock.get("code"))
+            if code:
+                theme_stock_by_code[code] = stock
+
     themes = []
     for i, item in enumerate(annotations.get("themes", []), start=1):
         if not isinstance(item, dict) or not item.get("name"):
@@ -465,18 +821,28 @@ def build_base_from_annotations(
         code = clean_text(item.get("code"))
         if not code or not CODE_RE.fullmatch(code):
             continue
+        if theme_stocks_doc is not None:
+            theme_stock = theme_stock_by_code.get(code)
+            if theme_stock is None:
+                raise ValueError(f"mapper.annotations stock {code} missing from theme_stocks.json stocks[]")
+            status = theme_stock_filter(theme_stock)["status"]
+            if status != "candidate":
+                raise ValueError(f"mapper.annotations stock {code} has theme_stocks.json filter.status={status!r}, expected 'candidate'")
+        else:
+            theme_stock = None
         entry = pool.get(code)
         tech = computed_value(entry, "tech_score")
         risk = computed_value(entry, "risk_type")
+        theme_heat, theme_heat_trace = theme_heat_from_theme_stock(theme_stock, theme_heat_by_name)
         candidates.append(
             {
                 "code": code,
-                "name": clean_text(item.get("name")) or code,
-                "role_tags": [],
+                "name": clean_text(item.get("name")) or clean_text(theme_stock.get("name") if isinstance(theme_stock, dict) else None) or code,
+                "role_tags": role_tags_from_theme_stock(theme_stock),
                 "scores": {
                     "composite": score(0, 0, "recomputed after annotation merge"),
                     "tech": score(tech, 100 if tech is not None else 0, "pool_indicators"),
-                    "theme_heat": score(50, 50, "base default; refine upstream when themes.json exists"),
+                    "theme_heat": score(theme_heat if theme_heat is not None else 50, 100 if theme_heat is not None else 50, theme_heat_trace),
                     "news_impact": score(None, 0, "filled from annotations"),
                     "auction": score(50, 100, "base default"),
                     "money_flow": score(50, 50, "base default"),
@@ -497,8 +863,18 @@ def build_base_from_annotations(
         )
 
     candidate_codes = {item["code"] for item in candidates}
-    observation_pool = parse_theme_observation_pool(theme_stocks_text, candidate_codes) if theme_stocks_text else []
-    excluded_stocks = parse_theme_excluded_stocks(theme_stocks_text) if theme_stocks_text else []
+    if theme_stocks_doc is not None:
+        observation_pool = observation_pool_from_theme_stocks(theme_stocks_doc, candidate_codes)
+        excluded_stocks = excluded_stocks_from_theme_stocks(theme_stocks_doc)
+    elif theme_stocks_text:
+        validate_theme_stocks_markdown_contract(theme_stocks_text)
+        observation_pool = parse_theme_observation_pool(theme_stocks_text, candidate_codes)
+        excluded_stocks = parse_theme_excluded_stocks(theme_stocks_text)
+    else:
+        observation_pool = []
+        excluded_stocks = []
+
+    resolved_scope = scope or load_trading_scope()
 
     return {
         "schema_version": "daily_mapper_base.v1",
@@ -509,7 +885,7 @@ def build_base_from_annotations(
             "dominant_themes": [{"name": item["name"], "heat": item.get("final_heat")} for item in themes[:3]],
             "financing_flow": None,
             "risk_flags": [],
-            "board_policy": {"sh688": "exclude", "bj": "exclude"},
+            "board_policy": board_policy_from_scope(resolved_scope),
         },
         "themes": themes,
         "candidate_pool": candidates,

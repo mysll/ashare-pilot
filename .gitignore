@@ -1,6 +1,7 @@
 # Cookie storage (contains sensitive data)
 .cookie
 .cache
+.claude
 
 # Python
 __pycache__/

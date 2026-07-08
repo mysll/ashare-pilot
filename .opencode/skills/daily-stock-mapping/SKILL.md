@@ -1,6 +1,6 @@
 ---
 name: daily-stock-mapping
-description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.md, theme_stocks.md, mapper.annotations.json, validated mapper.json, mapper.strategy_view.json, and rendered mapper.md.
+description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.md, validated theme_stocks.json, rendered theme_stocks.md, mapper.annotations.json, validated mapper.json, mapper.strategy_view.json, and rendered mapper.md.
 ---
 
 # Daily Stock Mapping
@@ -12,17 +12,17 @@ Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis p
 | Stage | Input | Output |
 |-------|-------|--------|
 | Theme Extraction | news.md | themes.md |
-| Stock Pool Build | themes.md | theme_stocks.md |
-| Technical Enrichment | theme_stocks.md | theme_stocks.md (enriched in-place) |
-| Structured Dataset | theme_stocks.md (enriched) | mapper.annotations.json -> mapper.json -> mapper.strategy_view.json -> mapper.md |
+| Stock Pool Build | LLM-selected tradeable themes passed as CLI args | theme_stocks.base.json |
+| Technical Enrichment | theme_stocks.base.json + pool_indicators.json + theme_stocks.annotations.json | validated theme_stocks.json -> rendered theme_stocks.md |
+| Structured Dataset | theme_stocks.json | mapper.annotations.json -> mapper.json -> mapper.strategy_view.json -> mapper.md |
 
 ## Scope
 
-A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (`sh688*`, `bj*`) are config-driven — see `.opencode/config/trading-scope.json`. Default policy excludes both boards.
+Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do not hard-code board exclusions in generated artifacts or scripts; apply the config decision and record the matched rule/reason.
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
-**Phase 3 JSON contract rule:** Step 2 LLM writes `predict/{date}/mapper.annotations.json` only for LLM-owned perception fields. Scripts build `mapper.base.json`, merge/validate `mapper.json`, project `mapper.strategy_view.json` for Step 3 reading, then render `mapper.md`. `mapper.json` is the full machine contract; `mapper.strategy_view.json` is the Step 3 reading contract; `mapper.md` is report-only.
+**Phase 3 JSON contract rule:** scripts build deterministic `predict/{date}/theme_stocks.base.json`; the LLM writes `predict/{date}/theme_stocks.annotations.json` only for semantic stock-pool annotations and `predict/{date}/mapper.annotations.json` only for mapper perception fields. Scripts merge/validate final `theme_stocks.json`, render `theme_stocks.md`, build `mapper.base.json`, merge/validate `mapper.json`, project `mapper.strategy_view.json` for Step 3 reading, then render `mapper.md`. `theme_stocks.json` and `mapper.json` are machine contracts; Markdown is report-only.
 
 **Format Rule:** The LLM authors perception annotations, not full machine artifacts. Scripts own validated JSON assembly and Markdown rendering.
 
@@ -32,12 +32,13 @@ A-shares only (sh/sz prefix). Ignore HK/US and other markets. Board exclusions (
 
 | Symptom | Fix |
 |---------|-----|
+| Skipped `theme_stocks.base.json` / `theme_stocks.annotations.json` / `theme_stocks.json` | Build base, write annotations, merge final JSON, validate it, then render Markdown from JSON. |
 | Skipped `mapper.annotations.json` or `mapper.json` | Generate annotations, then run annotation validation, JSON build, and mapper validation before Step 3. |
 | Theme name not in Theme Library | Discard. Theme Library is the only source. |
 | Stock in pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable. |
-| Stock from excluded boards (sh688/bj) entered pool | Remove per trading-scope.json. |
+| Scope-excluded stock entered `theme_stocks.json.stocks[]` | Move to `board_excluded[]` using `.opencode/config/trading-scope.json` matched rule/reason. |
 | LLM hand-wrote the complete `mapper.json` or `mapper.md` report | Regenerate through the mapper JSON scripts; LLM should provide perception annotations, not own the full file/report contract. |
-| theme_stocks.md row missing `source_themes` column | Re-add. Downstream needs stock provenance. |
+| `build_theme_stocks_base.py` called without `--theme` / `--themes` | Pass the LLM-selected tradeable themes as CLI args. Do not use `theme_stocks.md` as the source. |
 | mapper.md contains buy/stop/target recommendations | Remove. Strategy is Step 3 territory. |
 | Step 2 produces Direction / RiskSeverity / OverrideHint | Violation (V5 Invariant 1). Step 2 is Perception only. |
 | Step 2 makes causal inference ("capital inflow drove rally") | Violation. Correlation OK; causation forbidden. |
@@ -256,21 +257,40 @@ Final Heat < 55 excluded from tradeable pool; 40-54 with bullish direction → W
 
 ### Retrieve Candidate Stocks
 
-For each theme in `themes.md`:
+`build_theme_stocks_base.py` reads Theme Library JSON directly for the selected tradeable themes. The LLM passes selected themes as CLI args; it does not hand-build the stock pool table.
 
-```bash
-python .opencode/skills/theme-library/scripts/query_theme.py candidates <theme_name> --json
+For supplemental stocks that are not already covered by the Theme Library candidate path, write one optional JSON file before building the universe:
+
+```text
+predict/{date}/theme_stocks.extra.json
 ```
 
-Use `candidate_stocks` as the primary pool (purity + liquidity + market_cap combined).
+Shape:
 
-Optionally supplement with `market` view for active signals outside the static candidate list:
-
-```bash
-python .opencode/skills/theme-library/scripts/query_theme.py market <theme_name> --top 10 --json
+```json
+{
+  "schema_version": "daily_theme_stocks_extra.v1",
+  "date": "YYYY-MM-DD",
+  "stocks": [
+    {
+      "code": "sz300308",
+      "name": "中际旭创",
+      "source": "news_direct",
+      "source_themes": ["AI算力", "光通信"],
+      "score": 85,
+      "news_ref": "news.md#77",
+      "market_ref": "top_amount#1",
+      "source_explanation": "news-mentioned and active in theme market view"
+    }
+  ]
+}
 ```
 
-The `market` view provides:
+Allowed `source` values are descriptive, not filtering authorities: `market_active`, `news_direct`, `lhb`, or `manual`. Scope and technical filters still apply in scripts.
+
+If using `query_theme.py market`, place selected active names in `theme_stocks.extra.json`; do not add more CLI stock parameters.
+
+The market view can provide evidence for extra stocks:
 
 | Field | Content | Use |
 |-------|---------|-----|
@@ -280,9 +300,9 @@ The `market` view provides:
 
 ### Inject News-mentioned Stocks
 
-Scan `news.md` for explicitly mentioned A-share stocks (codes or names). For each:
+Scan `news.md` for explicitly mentioned A-share stocks (codes or names). For each selected supplemental stock:
 1. Resolve name → code via `fetch_stock.py --search` or LLM knowledge
-2. Add to pool with `source = "news_mentioned"`, score = rough NewsImpact estimate
+2. Add it to `theme_stocks.extra.json` with `source = "news_direct"`, score = rough NewsImpact estimate
 3. Mark `news_direct: true`
 
 News-mentioned stocks skip theme-library constraints but NOT the board filter.
@@ -299,25 +319,22 @@ python .opencode/lib/fetch/fetch_special.py lhb --json
 
 For each LHB stock (~50 records):
 1. Look up theme membership: `query_theme.py stock <code> --json`
-2. If the stock belongs to ANY theme in `themes.md` (Final Heat ≥ 55) → add to pool
+2. If the stock belongs to ANY selected tradeable theme → add to `theme_stocks.extra.json`
 3. Mark `source: lhb` with score: net buy > 0 = 85; limit-up = 90; limit-down = skip
-4. Merge with existing pool entries, keep higher score
 
 ### Supplement with Pure Stocks
 
-```bash
-python .opencode/skills/theme-library/scripts/query_theme.py pure <theme_name> --top 15 --json
-```
-
-Add all `pure_stocks` to catch stocks highly relevant but outside the candidate list. Merge with existing entries, keep higher score.
+`build_theme_stocks_base.py` already includes top pure stocks from Theme Library. Increase `--top-pure` only when the generated universe is too narrow.
 
 ### Deduplicate & Board Filter
 
 1. Merge `source_themes` lists, keep highest score across themes, record all theme associations
-2. Apply board filter from `.opencode/config/trading-scope.json`: exclude `sh688*` and `bj*`
+2. Apply board filter from `.opencode/config/trading-scope.json`; use the matched config rule/reason, never hard-code excluded prefixes
 3. News-mentioned (`news_direct: true`) and LHB stocks bypass score-based dedup but NOT the board filter
 
-### Output Format (theme_stocks.md, pre-enrichment)
+### Pool Draft Shape (transition input, pre-enrichment)
+
+This draft table is legacy reference only. The active workflow does not parse it. The durable source becomes CLI theme args -> Theme Library JSON -> `theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json`.
 
 ```markdown
 # Stock Pool
@@ -343,10 +360,10 @@ Total unique stocks: N (deduplicated across themes)
 
 ### Stock Pool Constraints
 
-- Stocks come from four sources: Theme Library queries, news.md mentions, LHB list (post theme-filter), and market active signals
+- Stocks come from Theme Library plus optional `theme_stocks.extra.json` entries for market/news/LHB supplemental names
 - Never generate stocks manually — must be traceable to a source
 - `source_themes` must be preserved
-- LHB and news-mentioned stocks always kept; if they fail technical filters, flag for manual review
+- LHB and news-mentioned stocks may be added through `theme_stocks.extra.json`, but they still go through scope and technical filters
 - Board filter applied BEFORE Technical Enrichment — never fetch indicators for excluded boards
 - If a theme's post-filter candidate count drops below 8, re-run pure stock supplement with `--top 20` (max 1 round)
 
@@ -473,19 +490,60 @@ Risk markers only — **not auto-reject**. Step 2 classifies RiskType; RiskSever
 - Stocks with `tech_score 50-59`: flag `tech_risk: true`.
 - Risk flags alone do NOT remove stocks from pool.
 
-### Output Format (theme_stocks.md, enriched)
+### Output Contract: theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json
 
-Add technical columns to the stock table. Remove only hard-filter failures. Stocks with risk flags remain with flags shown.
+Build deterministic base first:
 
-```markdown
-## Stock Pool (After Technical Enrichment)
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD} --theme "<theme_name>:<heat>:<confidence>" --universe-only
+python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/{YYYY-MM-DD}/theme_stocks.universe.json --json -o predict/{YYYY-MM-DD}/pool_indicators.json
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD}
+```
 
-| # | Code | Name | Best Score | Source Themes | Auc% | AucAmt | Sent | Streak | Seal | Tech | RSI | %B | MA50 | Turn% | Risk? |
-|---|------|------|-----------|---------------|------|--------|------|--------|------|------|-----|----|----------|-------|-------|
-| 1 | sz000977 | Inspur Info | 94.2 | AI Compute | +1.2 | 3200 | 75 | 1 | sealed | 78.5 | 55.3 | 0.62 | >ma50 | 6.8% | No |
-| ... |
+The LLM passes all tradeable themes selected in Step 2.1 only when building the universe. Use `--theme "name:heat:confidence"` repeatedly, or `--themes "AI算力:72:92,军工:71:88"`. The first command writes `theme_stocks.universe.json`; the second refreshes indicators for exactly that universe; the third reads the locked universe and builds the filtered base. The script reads Theme Library JSON plus optional `theme_stocks.extra.json` during universe generation and owns deterministic fields: stock membership, source theme links, scope decisions, technical values, hard filters, soft filters, `board_excluded[]`, `removed_stocks[]`, and `filter.status`.
 
-Removed stocks (failed hard filters): list with reason + ExclusionSource.
+Then write LLM-owned semantic annotations only:
+
+```text
+predict/{date}/theme_stocks.annotations.json
+```
+
+Required annotation shape:
+
+```json
+{
+  "schema_version": "daily_theme_stocks_annotations.v1",
+  "date": "YYYY-MM-DD",
+  "themes": [
+    {"name": "AI算力", "note": "why this theme matters today", "evidence": "themes.md#1"}
+  ],
+  "stocks": [
+    {
+      "code": "sz000977",
+      "source_flags": {"news": false, "market": true},
+      "news_ref": "news.md#87",
+      "market_ref": "Anchor",
+      "anomaly": null,
+      "source_explanation": "AI算力 anchor with market activity"
+    }
+  ]
+}
+```
+
+Rules:
+
+- Do not write `theme_stocks.json` by hand.
+- Do not put `filter.status`, technical fields, scope decisions, `board_excluded[]`, or `removed_stocks[]` in annotations.
+- Use annotations only for semantic enrichments: `news_ref`, `market_ref`, `anomaly`, `source_explanation`, theme notes, and source-flag corrections backed by evidence.
+- `theme_stocks.md` is rendered from `theme_stocks.json`; do not hand-author it as the downstream source.
+
+After writing `theme_stocks.annotations.json`, run:
+
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/render_theme_stocks_md.py --date {YYYY-MM-DD}
 ```
 
 ---
@@ -766,9 +824,16 @@ Required shape:
 
 Do not write `mapper.json` or `mapper.md` by hand.
 
-After writing `mapper.annotations.json`, run:
+After building `theme_stocks.base.json`, writing `theme_stocks.annotations.json`, and writing `mapper.annotations.json`, run:
 
 ```bash
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD} --theme "<theme_name>:<heat>:<confidence>" --universe-only
+python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/{YYYY-MM-DD}/theme_stocks.universe.json --json -o predict/{YYYY-MM-DD}/pool_indicators.json
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/render_theme_stocks_md.py --date {YYYY-MM-DD}
 python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date {YYYY-MM-DD}
 python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
 python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
@@ -777,7 +842,7 @@ python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --dat
 python .opencode/skills/daily-stock-mapping/scripts/render_mapper_md.py --date {YYYY-MM-DD}
 ```
 
-`build_mapper_base.py` reads the enriched `theme_stocks.md` for deterministic `Observation Pool` and `Excluded Stocks` rows. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. `render_mapper_md.py` renders the human report from `mapper.json`. If annotation validation fails, fix `mapper.annotations.json`. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with an invalid `mapper.json`.
+`build_theme_stocks_base.py` owns deterministic stock-pool fields and filters and must be called with LLM-selected themes via `--theme` / `--themes`; it does not parse `theme_stocks.md` in the active workflow. `build_theme_stocks_json.py` merges LLM semantic annotations into the final stock-pool contract. `build_mapper_base.py` reads `theme_stocks.json` for deterministic `Observation Pool` and `Excluded Stocks` rows. Legacy markdown fallback is only for explicit old-date recovery via `--theme-stocks-md`. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. `render_mapper_md.py` renders the human report from `mapper.json`. If theme-stock validation fails, fix `theme_stocks.annotations.json` or deterministic inputs and rebuild `theme_stocks.json`. If mapper annotation validation fails, fix `mapper.annotations.json`. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with invalid JSON.
 
 ### Rendered Report Reference
 
@@ -789,8 +854,8 @@ The following fields appear in rendered `mapper.md`, but the LLM must not author
 | Theme Ranking | `mapper.json.themes` |
 | Candidate Pool | `mapper.json.candidate_pool[*].scores`, `major_event`, `risk_type`, `pattern`, `news_link`, `role_tags` |
 | Strategy Inputs | `mapper.json.candidate_pool[*].strategy_inputs` from `pool_indicators.json` |
-| Observation Pool | `mapper.json.observation_pool` from enriched `theme_stocks.md` |
-| Excluded Stocks | `mapper.json.excluded_stocks` from enriched `theme_stocks.md` |
+| Observation Pool | `mapper.json.observation_pool` from `theme_stocks.json` |
+| Excluded Stocks | `mapper.json.excluded_stocks` from `theme_stocks.json` |
 
 | Column | Source | Notes |
 |--------|--------|-------|
@@ -814,7 +879,7 @@ Validation rules:
 
 | ExclusionSource | Meaning |
 |-----------------|---------|
-| `board-policy` | Config-driven (sh688/bj) |
+| `board-policy` | Config-driven board exclusion |
 | `hard-filter` | Liquidity < 3亿 / atr_pct > 8% |
 | `indicators-fetch-failed` | Phase 2 fetch failure |
 | `soft-filter` | tech_score < 50 |

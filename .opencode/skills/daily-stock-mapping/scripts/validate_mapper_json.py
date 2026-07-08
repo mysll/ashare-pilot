@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mapper_json_lib import CODE_RE, default_predict_dir, ensure_doc_date, load_pool, numbers_match, raw_value, read_json
+from mapper_json_lib import CODE_RE, default_predict_dir, ensure_doc_date, load_pool, load_trading_scope, numbers_match, raw_value, read_json, scope_decision
 
 
 PRICE_SOURCES = {"PrevClose", "Auction", "Live"}
@@ -45,7 +45,7 @@ def check_score(errors: list[str], obj: Any, path: str, require_trace: bool = Fa
         add(errors, path, "non-null LLM field must have trace or evidence")
 
 
-def check_doc(doc: dict[str, Any], pool: dict[str, dict[str, Any]] | None) -> list[str]:
+def check_doc(doc: dict[str, Any], pool: dict[str, dict[str, Any]] | None, scope: dict[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
     if doc.get("schema_version") != "daily_mapper.v1":
         add(errors, "schema_version", "must be daily_mapper.v1")
@@ -70,8 +70,10 @@ def check_doc(doc: dict[str, Any], pool: dict[str, dict[str, Any]] | None) -> li
         if code in seen:
             add(errors, f"{base}.code", f"duplicate {code}")
         seen.add(code)
-        if code.startswith("sh688") or code.startswith("bj"):
-            add(errors, f"{base}.code", "excluded board in candidate pool")
+        if scope is not None:
+            decision = scope_decision(code, scope)
+            if not decision["allowed"]:
+                add(errors, f"{base}.code", f"excluded by trading scope ({decision['matched_rule']}): {decision['reason']}")
 
         scores = stock.get("scores")
         if not isinstance(scores, dict):
@@ -128,6 +130,7 @@ def main() -> int:
     parser.add_argument("path", nargs="?", help="Path to mapper.json")
     parser.add_argument("--date", help="YYYY-MM-DD; used for default path")
     parser.add_argument("--pool", help="Path to pool_indicators.json")
+    parser.add_argument("--scope", help="Path to trading-scope.json")
     args = parser.parse_args()
 
     if sys.platform == "win32":
@@ -157,7 +160,8 @@ def main() -> int:
     if pool_path.exists():
         pool = load_pool(pool_path)
 
-    errors = check_doc(doc, pool)
+    scope = load_trading_scope(Path(args.scope) if args.scope else None)
+    errors = check_doc(doc, pool, scope)
     if errors:
         print(f"[ERROR] {path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for item in errors:

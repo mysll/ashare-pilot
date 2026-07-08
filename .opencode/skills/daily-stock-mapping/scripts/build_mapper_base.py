@@ -12,6 +12,7 @@ from mapper_json_lib import (
     build_mapper_from_markdown,
     default_predict_dir,
     ensure_doc_date,
+    load_trading_scope,
     load_pool,
     read_json,
     write_json,
@@ -25,7 +26,9 @@ def main() -> int:
     parser.add_argument("--mapper-md", help="Path to legacy mapper.md; default predict/{date}/mapper.md when --legacy-md is set")
     parser.add_argument("--annotations", help="Path to mapper.annotations.json; default predict/{date}/mapper.annotations.json")
     parser.add_argument("--pool", help="Path to pool_indicators.json; default predict/{date}/pool_indicators.json")
-    parser.add_argument("--theme-stocks", help="Path to enriched theme_stocks.md; default predict/{date}/theme_stocks.md")
+    parser.add_argument("--theme-stocks-json", help="Path to theme_stocks.json; default predict/{date}/theme_stocks.json")
+    parser.add_argument("--theme-stocks", help="Legacy path to enriched theme_stocks.md; default predict/{date}/theme_stocks.md")
+    parser.add_argument("--scope", help="Path to trading-scope.json; default .opencode/config/trading-scope.json")
     parser.add_argument("--output", help="Path to mapper.base.json; default predict/{date}/mapper.base.json")
     args = parser.parse_args()
 
@@ -35,10 +38,12 @@ def main() -> int:
     predict_dir = default_predict_dir(args.date)
     annotations_path = Path(args.annotations) if args.annotations else predict_dir / "mapper.annotations.json"
     pool_path = Path(args.pool) if args.pool else predict_dir / "pool_indicators.json"
+    theme_stocks_json_path = Path(args.theme_stocks_json) if args.theme_stocks_json else predict_dir / "theme_stocks.json"
     theme_stocks_path = Path(args.theme_stocks) if args.theme_stocks else predict_dir / "theme_stocks.md"
     output_path = Path(args.output) if args.output else predict_dir / "mapper.base.json"
 
     pool = load_pool(pool_path)
+    scope = load_trading_scope(Path(args.scope) if args.scope else None)
     if args.legacy_md:
         mapper_path = Path(args.mapper_md) if args.mapper_md else predict_dir / "mapper.md"
         if not mapper_path.exists():
@@ -61,9 +66,31 @@ def main() -> int:
         except ValueError as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
-        theme_stocks_text = theme_stocks_path.read_text(encoding="utf-8") if theme_stocks_path.exists() else None
-        doc = build_base_from_annotations(args.date, annotations, pool, theme_stocks_text)
-        mode = "annotations"
+        theme_stocks_doc = None
+        theme_stocks_text = None
+        if theme_stocks_json_path.exists():
+            theme_stocks_doc = read_json(theme_stocks_json_path)
+            if not isinstance(theme_stocks_doc, dict):
+                print(f"[ERROR] theme_stocks.json must be a JSON object: {theme_stocks_json_path}", file=sys.stderr)
+                return 1
+            try:
+                ensure_doc_date(theme_stocks_doc, args.date, str(theme_stocks_json_path))
+            except ValueError as exc:
+                print(f"[ERROR] {exc}", file=sys.stderr)
+                return 1
+            mode = "annotations+theme_stocks_json"
+        elif theme_stocks_path.exists():
+            theme_stocks_text = theme_stocks_path.read_text(encoding="utf-8")
+            mode = "annotations+theme_stocks_md_legacy"
+        else:
+            print(f"[ERROR] missing theme_stocks.json: {theme_stocks_json_path}", file=sys.stderr)
+            print(f"[ERROR] missing legacy theme_stocks.md: {theme_stocks_path}", file=sys.stderr)
+            return 1
+        try:
+            doc = build_base_from_annotations(args.date, annotations, pool, theme_stocks_text, theme_stocks_doc, scope)
+        except ValueError as exc:
+            print(f"[ERROR] {exc}", file=sys.stderr)
+            return 1
     write_json(output_path, doc)
     print(f"OK: wrote {output_path} ({mode})")
     return 0
