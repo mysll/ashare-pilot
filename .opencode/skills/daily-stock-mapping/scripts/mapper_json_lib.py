@@ -570,7 +570,8 @@ def build_base_from_annotations(
             raise ValueError(f"mapper.annotations stock {code} missing from theme_stocks.json stocks[]")
         status = theme_stock_filter(theme_stock)["status"]
         if status != "candidate":
-            raise ValueError(f"mapper.annotations stock {code} has theme_stocks.json filter.status={status!r}, expected 'candidate'")
+            print(f"[WARN] mapper.annotations stock {code} ({theme_stock.get('name')}) has filter.status={status!r}, skipping annotation", file=sys.stderr)
+            continue
         entry = pool.get(code)
         tech = computed_value(entry, "tech_score")
         risk = computed_value(entry, "risk_type")
