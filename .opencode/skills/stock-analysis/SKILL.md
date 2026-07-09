@@ -77,6 +77,7 @@ Returns ~5500 A stocks with: code, name, price, yestclose, updown, percent, high
 
 ```bash
 python .opencode/lib/fetch/fetch_history.py sh600519                  # Last 3 months
+python .opencode/lib/fetch/fetch_history.py sh600519 --range 5d       # Last 5 calendar days
 python .opencode/lib/fetch/fetch_history.py sz000001 --range 1m       # Last 1 month
 python .opencode/lib/fetch/fetch_history.py sh600519 --range 1y --json
 python .opencode/lib/fetch/fetch_history.py sh600519 --csv
@@ -86,10 +87,14 @@ python .opencode/lib/fetch/fetch_history.py sh600519 --json -o output.json   # S
 python .opencode/lib/fetch/fetch_history.py sh600519 --csv -o output.csv     # Save as CSV
 ```
 
+`--range` accepts any positive integer followed by `d`, `w`, `m`, or `y`
+(calendar days/weeks/months/years), such as `2d`, `5d`, `2w`, `3m`, or `1y`.
+
 ### Technical Indicators (A stocks only)
 
 ```bash
 python .opencode/lib/fetch/fetch_indicators.py sh600519                  # Default indicators (SMA, MACD, RSI, Bollinger)
+python .opencode/lib/fetch/fetch_indicators.py sh600519 --range 5d       # Last 5 calendar days
 python .opencode/lib/fetch/fetch_indicators.py sz000001 --range 6m       # Last 6 months
 python .opencode/lib/fetch/fetch_indicators.py sh600519 --indicators rsi,macd,close_50_sma
 python .opencode/lib/fetch/fetch_indicators.py sh600519 --json           # JSON output

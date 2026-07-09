@@ -9,7 +9,7 @@ import requests
 
 from .base import BaseDataSource, RateLimitConfig
 from .kline_cache import load_cache, save_cache, merge_dedup, _fmt_to_date
-from .utils import calc_price_precision, format_price, format_amount
+from .utils import calc_price_precision, format_price, format_amount, parse_range_days
 
 
 SINA_URL = "https://hq.sinajs.cn/list="
@@ -423,8 +423,7 @@ class SinaDataSource(BaseDataSource):
             return None
 
         now = datetime.now()
-        range_days = {"1y": 365, "6m": 182, "3m": 90, "1m": 30, "1w": 7}
-        days = range_days.get(range_str, 90)
+        days = parse_range_days(range_str)
         cutoff_date = (now - timedelta(days=days)).strftime("%Y-%m-%d")
         start_date = (now - timedelta(days=days + 10)).strftime("%Y-%m-%d")
 

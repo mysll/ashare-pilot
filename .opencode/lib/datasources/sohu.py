@@ -16,6 +16,7 @@ from .kline_cache import (
     _date_to_fmt,
     _fmt_to_date,
 )
+from .utils import parse_range_days
 
 
 SOHU_URL = "https://q.stock.sohu.com/hisHq"
@@ -55,17 +56,7 @@ class SohuDataSource(BaseDataSource):
         return None
 
     def _calc_start_date(self, range_str: str) -> datetime:
-        now = datetime.now()
-        if range_str == "1y":
-            return now - timedelta(days=365)
-        elif range_str == "6m":
-            return now - timedelta(days=182)
-        elif range_str == "1m":
-            return now - timedelta(days=30)
-        elif range_str == "1w":
-            return now - timedelta(days=7)
-        else:
-            return now - timedelta(days=90)
+        return datetime.now() - timedelta(days=parse_range_days(range_str))
 
     def _parse_jsonp_response(self, raw: str) -> list:
         start = raw.find("(")

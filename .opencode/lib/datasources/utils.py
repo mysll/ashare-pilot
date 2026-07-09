@@ -1,6 +1,24 @@
 """Common utility functions for data formatting."""
 
+import re
 from typing import Any
+
+
+RANGE_PATTERN = re.compile(r"^([1-9]\d*)([dwmy])$", re.IGNORECASE)
+
+
+def parse_range_days(range_str: str) -> int:
+    """Convert a range such as 5d, 2w, 3m, or 1y to calendar days."""
+    match = RANGE_PATTERN.fullmatch(str(range_str).strip())
+    if not match:
+        raise ValueError(
+            f"Invalid range {range_str!r}; expected a positive integer followed by d, w, m, or y"
+        )
+
+    value = int(match.group(1))
+    unit = match.group(2).lower()
+    multipliers = {"d": 1, "w": 7, "m": 30, "y": 365}
+    return value * multipliers[unit]
 
 
 def format_price(value: Any, precision: int = 2) -> str:

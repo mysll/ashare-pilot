@@ -22,6 +22,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from lib.datasources import SohuDataSource, SinaDataSource
+from lib.datasources.utils import RANGE_PATTERN
 _sohu = SohuDataSource()
 _sina = SinaDataSource()
 
@@ -71,9 +72,11 @@ def main():
     parser.add_argument("code", help="Stock code (sh/sz only, e.g., sh600519)")
     parser.add_argument(
         "--range",
-        choices=["1y", "6m", "3m", "1m", "1w"],
+        type=lambda value: value.lower() if RANGE_PATTERN.fullmatch(value) else parser.error(
+            "--range must be a positive integer followed by d, w, m, or y (for example: 5d, 2w, 3m, 1y)"
+        ),
         default="3m",
-        help="Time range",
+        help="Time range: positive integer + d/w/m/y (for example: 5d, 2w, 3m, 1y)",
     )
     parser.add_argument("--start", help="Start date (YYYYMMDD), overrides --range")
     parser.add_argument("--end", help="End date (YYYYMMDD), default: today")
