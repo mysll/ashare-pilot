@@ -10,7 +10,6 @@ from __future__ import annotations
 import argparse
 import json
 import math
-import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -20,9 +19,6 @@ ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / ".opencode"))
 
 from lib.fetch.fetch_stock import fetch_intraday_kline, fetch_stocks  # noqa: E402
-
-
-CODE_RE = re.compile(r"\b(?:sh|sz)\d{6}\b")
 
 
 def parse_float(value: Any) -> float | None:
@@ -37,80 +33,74 @@ def parse_float(value: Any) -> float | None:
         return None
 
 
-def read_text(path: Path) -> str:
-    return path.read_text(encoding="utf-8", errors="replace") if path.exists() else ""
+def read_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        raise FileNotFoundError(f"required input missing: {path}")
+    with path.open("r", encoding="utf-8-sig") as f:
+        doc = json.load(f)
+    if not isinstance(doc, dict):
+        raise ValueError(f"JSON root must be an object: {path}")
+    return doc
 
 
-def parse_strategy_rows(strategy_text: str) -> dict[str, dict[str, Any]]:
-    rows: dict[str, dict[str, Any]] = {}
-    for line in strategy_text.splitlines():
-        if not line.startswith("|"):
-            continue
-        codes = CODE_RE.findall(line)
-        if not codes:
-            continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        code = codes[0]
-        if code not in rows:
-            rows[code] = {"code": code, "raw_row": line, "name": "", "sector": "", "direction": "", "rating": "", "profile": "", "anchor": "", "trigger": "", "no_buy": "", "position": "", "horizon": ""}
-        row = rows[code]
-        row["name"] = next((c for c in cells if code not in c and c and not c.startswith("#")), row.get("name", ""))
-        if len(cells) >= 12:
-            row.update({
-                "name": cells[2],
-                "sector": cells[3],
-                "direction": cells[4],
-                "rating": cells[5],
-                "profile": cells[6],
-                "anchor": cells[7],
-                "trigger": cells[8],
-                "no_buy": cells[9],
-                "position": cells[10],
-                "horizon": cells[11],
-            })
-        elif len(cells) >= 10:
-            row.update({
-                "name": cells[2],
-                "sector": cells[3],
-                "direction": cells[4],
-                "rating": cells[5],
-                "profile": cells[6],
-                "trigger": cells[7],
-                "position": cells[8],
-                "horizon": cells[9],
-            })
-    return rows
+def parse_strategies(doc: dict[str, Any], expected_date: str) -> dict[str, dict[str, Any]]:
+    if doc.get("schema_version") != "daily_strategy.v1":
+        raise ValueError("strategy.json schema_version must be daily_strategy.v1")
+    if doc.get("date") != expected_date:
+        raise ValueError(f"strategy.json date mismatch: expected {expected_date}, got {doc.get('date')!r}")
+    stocks = doc.get("stocks")
+    if not isinstance(stocks, list) or not stocks:
+        raise ValueError("strategy.json stocks must be a non-empty list")
+
+    strategies: dict[str, dict[str, Any]] = {}
+    for stock in stocks:
+        if not isinstance(stock, dict) or not isinstance(stock.get("code"), str):
+            raise ValueError("strategy.json contains a stock without a valid code")
+        code = stock["code"]
+        if code in strategies:
+            raise ValueError(f"strategy.json contains duplicate code: {code}")
+        normalized = dict(stock)
+        normalized.update({
+            "profile": stock.get("entry_profile", ""),
+            "trigger": stock.get("entry_trigger", ""),
+            "no_buy": stock.get("no_buy_condition", ""),
+            "position": stock.get("position_budget"),
+        })
+        strategies[code] = normalized
+    return strategies
 
 
-def parse_mapper_inputs(mapper_text: str) -> dict[str, dict[str, Any]]:
+def parse_mapper_inputs(doc: dict[str, Any], expected_date: str) -> dict[str, dict[str, Any]]:
+    if doc.get("schema_version") != "daily_mapper.v1":
+        raise ValueError("mapper.json schema_version must be daily_mapper.v1")
+    if doc.get("date") != expected_date:
+        raise ValueError(f"mapper.json date mismatch: expected {expected_date}, got {doc.get('date')!r}")
+
     inputs: dict[str, dict[str, Any]] = {}
-    in_section = False
-    for line in mapper_text.splitlines():
-        if line.startswith("## Section 4") or line.startswith("## Strategy Inputs"):
-            in_section = True
-            continue
-        if in_section and line.startswith("## "):
-            break
-        if not in_section or not line.startswith("|"):
-            continue
-        codes = CODE_RE.findall(line)
-        if not codes:
-            continue
-        cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 8:
-            continue
-        code = codes[0]
-        inputs[code] = {
-            "code": code,
-            "price_ref": parse_float(cells[1]),
-            "price_source": cells[2],
-            "ma20": parse_float(cells[3]),
-            "ma5": parse_float(cells[4]),
-            "atr": parse_float(cells[5]),
-            "atr_pct": parse_float(cells[6]),
-            "high20": parse_float(cells[7]),
-            "low20": parse_float(cells[8]) if len(cells) > 8 else None,
-        }
+    for pool_name in ("candidate_pool", "observation_pool"):
+        pool = doc.get(pool_name)
+        if not isinstance(pool, list):
+            raise ValueError(f"mapper.json {pool_name} must be a list")
+        for stock in pool:
+            if not isinstance(stock, dict) or not isinstance(stock.get("code"), str):
+                continue
+            raw = stock.get("strategy_inputs")
+            if not isinstance(raw, dict):
+                continue
+            code = stock["code"]
+            if code in inputs:
+                raise ValueError(f"mapper.json contains duplicate strategy_inputs for code: {code}")
+            inputs[code] = {
+                "code": code,
+                "price_ref": parse_float(raw.get("price")),
+                "price_source": raw.get("price_source"),
+                "ma20": parse_float(raw.get("ma20")),
+                "ma5": parse_float(raw.get("ma5")),
+                "atr": parse_float(raw.get("atr")),
+                "atr_pct": parse_float(raw.get("atr_pct")),
+                "high20": parse_float(raw.get("high20")),
+                "low20": parse_float(raw.get("low20")),
+            }
     return inputs
 
 
@@ -207,7 +197,7 @@ def build_stock_snapshot(code: str, strategy: dict[str, Any], mapper: dict[str, 
         data_warnings.append("invalid_price")
     if kflags.get("data_warning"):
         data_warnings.append(kflags["data_warning"])
-    if not re.match(r"^(sh|sz)\d{6}$", code):
+    if not (len(code) == 8 and code[:2] in {"sh", "sz"} and code[2:].isdigit()):
         data_warnings.append("invalid_code")
 
     flags = {
@@ -255,16 +245,17 @@ def main() -> int:
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    strategy_path = ROOT / "predict" / args.date / "strategy.md"
-    mapper_path = ROOT / "predict" / args.date / "mapper.md"
-    strategy_text = read_text(strategy_path)
-    mapper_text = read_text(mapper_path)
-
-    strategies = parse_strategy_rows(strategy_text)
-    mapper_inputs = parse_mapper_inputs(mapper_text)
-    codes = [c for c in strategies if c in mapper_inputs]
-    if not codes:
-        codes = list(strategies)
+    strategy_path = ROOT / "predict" / args.date / "strategy.json"
+    mapper_path = ROOT / "predict" / args.date / "mapper.json"
+    strategies = parse_strategies(read_json(strategy_path), args.date)
+    mapper_inputs = parse_mapper_inputs(read_json(mapper_path), args.date)
+    missing_mapper = [code for code in strategies if code not in mapper_inputs]
+    if missing_mapper:
+        raise ValueError(
+            "mapper.json missing strategy_inputs for strategy codes: "
+            + ", ".join(missing_mapper)
+        )
+    codes = list(strategies)
 
     quotes = fetch_stocks(codes) if codes else []
     quote_by_code = {q.get("code"): q for q in quotes}

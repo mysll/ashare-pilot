@@ -1,6 +1,6 @@
 ﻿---
 name: intraday-operation-guide
-description: Use when the user wants one-shot intraday human trading instructions based on today's morning strategy and current market data. Reads predict/{date}/strategy.md + mapper.md, fetches current quotes and 5-minute intraday K-lines, then outputs actionable A/B/C/D operation guidance. This skill does NOT place orders.
+description: Use when the user wants one-shot intraday human trading instructions based on today's morning strategy and current market data. Reads predict/{date}/strategy.json + mapper.json, fetches current quotes and 5-minute intraday K-lines, then outputs actionable A/B/C/D operation guidance. This skill does NOT place orders.
 ---
 
 # Intraday Operation Guide
@@ -14,8 +14,8 @@ It is NOT an automated trading skill. It gives instructions for a human trader.
 ## Inputs
 
 Required:
-- `predict/{YYYY-MM-DD}/strategy.md`
-- `predict/{YYYY-MM-DD}/mapper.md`
+- `predict/{YYYY-MM-DD}/strategy.json`
+- `predict/{YYYY-MM-DD}/mapper.json`
 
 Optional:
 - `predict/{YYYY-MM-DD}/theme_stocks.md`
@@ -41,8 +41,8 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapsho
 ```
 
 The script:
-- extracts strategy stocks from `strategy.md`
-- reads MA5/MA20/ATR/High20 from `mapper.md`
+- reads strategy stocks and execution constraints from `strategy.json`
+- reads MA5/MA20/ATR/High20 from `mapper.json`
 - fetches current quotes in one batch
 - fetches today's 5-minute K-line for each strategy stock
 - computes mechanical execution signals
@@ -66,8 +66,8 @@ Read:
 
 ```text
 operation/{YYYY-MM-DD}/operation_snapshot.json
-predict/{YYYY-MM-DD}/strategy.md
-predict/{YYYY-MM-DD}/mapper.md
+predict/{YYYY-MM-DD}/strategy.json
+predict/{YYYY-MM-DD}/mapper.json
 ```
 
 Write `operation_guide.md` in Chinese.
@@ -238,7 +238,7 @@ Short reason per stock.
 - Do not ask the user to judge "是否站稳"; use `price_strength_confirmed`, `above_ma5`, `above_ma20`, and `below_vwap`.
 - If morning strategy has `不买条件` and snapshot confirms it, class MUST be D.
 - If morning strategy has `锚点`, show current distance to that anchor using `dist_atr`.
-- Keep each card short. Long thesis belongs in `strategy.md`, not here.
+- Keep each card short. Long thesis and reasoning belong in `strategy.json`, not here.
 
 ## Constraints
 
