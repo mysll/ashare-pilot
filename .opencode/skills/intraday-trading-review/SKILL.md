@@ -95,8 +95,38 @@ digraph workflow {
    ```
 
 2. **T日收盘价验证** (yesterday's close): 确认 14:50-14:57 执行窗口内价格是否在买入区间
+
+   **调用规范**
+
    ```bash
-   python .opencode/lib/fetch/fetch_history.py CODE --range 2d
+   python .opencode/lib/fetch/fetch_history.py CODE \
+     --start STRATEGY_DATE --end REVIEW_DATE --json
+   ```
+
+   - `CODE` 为单个 A 股代码；多个标的逐只调用。
+   - `STRATEGY_DATE` 取被复盘策略的目录日期，`REVIEW_DATE` 取实际复盘日期，格式均为 `YYYYMMDD`。
+   - 若按相对区间查询，`--range` 可选值为 `1w`、`1m`、`3m`、`6m`、`1y`。
+   - T+1 指 T 之后的首个交易日，不是自然日加一天。按 `date` 排序后，以日期等于策略日的记录作为
+     T 日 K 线，以其后的第一条记录作为 T+1 K 线。
+   - 周末、节假日或停牌导致 T 之后没有有效 K 线时，不得用自然日数据或更早记录代替；
+     应标记为“暂无 T+1 行情”，待下一条有效交易记录产生后再复盘。
+
+   **JSON 输出格式**
+
+   ```json
+   [
+     {
+       "date": "YYYY-MM-DD",
+       "open": "0.00",
+       "close": "0.00",
+       "high": "0.00",
+       "low": "0.00",
+       "change": "0.00",
+       "change_pct": "0.00",
+       "volume": "0",
+       "amount": "0.00"
+     }
+   ]
    ```
 
 3. **T+1 竞价数据** (if available): 开盘价 vs 昨日收盘价 → 涨跌幅
