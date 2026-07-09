@@ -14,21 +14,21 @@ digraph workflow {
     rankdir=LR;
     node [shape=box];
 
-    "Step 1: Read Strategy" [label="Step 1\nRead Intraday Strategy\n(intraday/{date}/overnight_strategy.md\n+ intraday_mapper.md)", style=filled, fillcolor="#e6f3ff"];
+    "Step 1: Read Strategy" [label="Step 1\nRead Intraday Strategy\n(intraday/{date}/overnight_strategy.json\n+ intraday_mapper.json)", style=filled, fillcolor="#e6f3ff"];
     "Step 2: Fetch Actuals" [label="Step 2\nFetch T+1 Prices\n(stock-analysis skill)", style=filled, fillcolor="#fff3e6"];
     "Step 3: Compare & Analyze" [label="Step 3\nCompare & Analyze\n(performance-analyst)", style=filled, fillcolor="#e6ffe6"];
     "Step 4: Write Memory" [label="Step 4\nWrite to Memory\n(memory/intraday/{date}/)", style=filled, fillcolor="#ffe6ff"];
 
-    "intraday/{date}/\novernight_strategy.md" [shape=note];
-    "intraday/{date}/\nintraday_mapper.md" [shape=note];
+    "intraday/{date}/\novernight_strategy.json" [shape=note];
+    "intraday/{date}/\nintraday_mapper.json" [shape=note];
     "memory/intraday/{date}/\nintraday_verification.md" [shape=note];
     "memory/intraday/INDEX.md" [shape=note];
     "memory/INTRADAY_RULES.md" [shape=note];
     "memory/SHARED_RULES.md" [shape=note];
 
-    "Step 1: Read Strategy" -> "intraday/{date}/\novernight_strategy.md";
-    "Step 1: Read Strategy" -> "intraday/{date}/\nintraday_mapper.md";
-    "intraday/{date}/\novernight_strategy.md" -> "Step 2: Fetch Actuals";
+    "Step 1: Read Strategy" -> "intraday/{date}/\novernight_strategy.json";
+    "Step 1: Read Strategy" -> "intraday/{date}/\nintraday_mapper.json";
+    "intraday/{date}/\novernight_strategy.json" -> "Step 2: Fetch Actuals";
     "Step 2: Fetch Actuals" -> "Step 3: Compare & Analyze";
     "Step 3: Compare & Analyze" -> "memory/intraday/{date}/\nintraday_verification.md";
     "memory/intraday/{date}/\nintraday_verification.md" -> "Step 4: Write Memory";
@@ -52,11 +52,11 @@ digraph workflow {
 
 ### Step 1: Read Yesterday's Intraday Strategy
 
-**Action:** Read `intraday/{YYYY}-{MM}-{DD}/overnight_strategy.md` **AND** `intraday/{YYYY}-{MM}-{DD}/intraday_mapper.md`
+**Action:** Read `intraday/{YYYY}-{MM}-{DD}/overnight_strategy.json` **AND** `intraday/{YYYY}-{MM}-{DD}/intraday_mapper.json`
 
 使用上一个交易日的日期 — 例如今天 7-3 复盘 7-2 的尾盘策略。
 
-**What to extract from `overnight_strategy.md`:**
+**What to extract from `overnight_strategy.json`:**
 
 - **Market Context**: RegimeHint, 恐慌模式, 资金方向, 板块热度, 评分池质量
 - **Strategy Table**: 每只核心持仓的方向 / 交易策略 / 仓位 / 买入区间 / 止损 / 目标位
@@ -65,7 +65,7 @@ digraph workflow {
 - **ReasoningTrace**: 方向推理路径 + 规则应用
 - **Rule 应用汇总**: 各规则触发标的及动作
 
-**What to extract from `intraday_mapper.md`:**
+**What to extract from `intraday_mapper.json`:**
 
 - **Opportunity Pool**: A/B/C tier stocks with scores — 对比系统打分与 LLM 最终推荐
 - **Score Trace**: per-stock 9-dim breakdown — 用于评估评分维度是否有效
@@ -326,7 +326,7 @@ Spearman rank correlation: score rank vs actual return
 在 `memory/intraday/INDEX.md` 中对应日期行追加复盘结果:
 
 ```markdown
-| {MM-DD} | {Regime} | {Top Pick} | {Tier} | {Score} | [intraday_mapper](intraday/{YYYY-MM-DD}/intraday_mapper.md) → 复盘: {N}/{M}盈, {key_result} |
+| {MM-DD} | {Regime} | {Top Pick} | {Tier} | {Score} | [intraday_mapper](intraday/{YYYY-MM-DD}/intraday_mapper.json) → 复盘: {N}/{M}盈, {key_result} |
 ```
 
 #### 4c. Update Rule Files
@@ -359,7 +359,7 @@ Spearman rank correlation: score rank vs actual return
 
 | Step | Action | Input | Output |
 |------|--------|-------|--------|
-| 1 | Read Strategy | `intraday/{date}/overnight_strategy.md` + `intraday_mapper.md` | Extracted positions, rules, scores |
+| 1 | Read Strategy | `intraday/{date}/overnight_strategy.json` + `intraday_mapper.json` | Extracted positions, rules, scores |
 | 2 | Fetch Actuals | Stock codes from strategy | T/T+1 price data |
 | 3 | performance-analyst analysis | Predictions + actuals | Full comparison report |
 | 4 | Write Memory | Analysis report | `memory/intraday/{date}/intraday_verification.md` + INDEX/RULES updates |

@@ -1,6 +1,6 @@
 ﻿---
 name: intraday-strategy
-description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes enriched ComputePool + ThemeRanking, scores for tomorrow expected premium, outputs OpportunityPool with A/B/C tiers + intraday_mapper.md. This is the sole Reasoning layer.
+description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes a deterministic mapper base, writes semantic annotations, and publishes validated intraday_mapper.json. This is the sole Reasoning layer.
 ---
 
 # Overnight Strategy (Skill 3)
@@ -16,7 +16,7 @@ This is the SOLE Reasoning layer. All Direction / RiskSeverity / Expected Premiu
 ```
 Skill 2 → Enriched ComputePool + ThemeRanking
                     ↓
-Skill 3 → Overnight Scoring + intraday_mapper.md (THIS)
+Skill 3 → Overnight Scoring + intraday_mapper.annotations.json → intraday_mapper.json (THIS)
                     ↓
 [14:50 Execute Buy]
 ```
@@ -47,9 +47,62 @@ Tiers: A (75+) = Leader Watch, B (60-74) = Premium Candidates, C (45-59) = Early
 
 **Important:** V1 uses Rule Based Initial Weights. These will be calibrated via historical backtesting in V2. See spec § 八.
 
-## Output: intraday_mapper.md
+## JSON-first output contract
 
-Generate `intraday/{YYYY-MM-DD}/intraday_mapper.md` with 7 sections.
+First run `build_intraday_mapper_base.py`. Generate only
+`intraday/{YYYY-MM-DD}/intraday_mapper.annotations.json`; never copy numeric
+compute fields into it. The required schema is:
+
+```json
+{
+  "schema_version": "intraday_mapper_annotations.v1",
+  "date": "YYYY-MM-DD",
+  "market_assessment": {
+    "regime_hint": "string",
+    "tomorrow_expectation": "string",
+    "risk_severity": "low|medium|high|critical",
+    "reasoning_trace": "string"
+  },
+  "stocks": [{
+    "code": "sh600000",
+    "sector": "string",
+    "direction": "持有偏多|持有|谨慎持有|观望",
+    "trading_strategy": "趋势跟随|回调布局|强势接力|防御布局",
+    "risk_severity": "low|medium|high|critical",
+    "expected_premium": "string",
+    "key_reason": "string",
+    "position_plan": "string",
+    "t_plus_1_exit_plan": "string",
+    "t_plus_1_plan": {
+      "auction_condition": "string",
+      "open_strategy": "string",
+      "stop_loss": "string",
+      "take_profit": "string"
+    },
+    "rules_applied": ["I01"],
+    "reasoning_trace": "string"
+  }],
+  "strategy": {
+    "position_cap": "string",
+    "risk_control": ["string"],
+    "execution_window": "14:50-14:57"
+  }
+}
+```
+
+Then run:
+
+```bash
+python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py --date {YYYY-MM-DD}
+python .opencode/skills/intraday-strategy/scripts/build_intraday_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_json.py --date {YYYY-MM-DD}
+python .opencode/skills/intraday-strategy/scripts/build_overnight_strategy_json.py --date {YYYY-MM-DD}
+python .opencode/skills/intraday-strategy/scripts/validate_overnight_strategy_json.py --date {YYYY-MM-DD}
+python .opencode/skills/intraday-strategy/scripts/render_overnight_strategy_html.py --date {YYYY-MM-DD}
+```
+
+The following seven headings describe logical data groups in the final JSON,
+not Markdown sections.
 
 ### 1. Market State
 Copy from Skill 1 output — indices, breadth, capital direction, Theme Dashboard (top 10 by Composite rank).
@@ -117,7 +170,7 @@ Append entry to `memory/intraday/INDEX.md`:
 ```
 | Date | Regime | Top Pick | Tier | Score | File |
 |------|:------:|---------|:----:|:----:|------|
-| 2026-07-01 | neutral | code(name) | B | 72 | [intraday_mapper](intraday/2026-07-01/intraday_mapper.md) |
+| 2026-07-01 | neutral | code(name) | B | 72 | [intraday_mapper](intraday/2026-07-01/intraday_mapper.json) |
 ```
 
 ### Position Sizing
@@ -126,9 +179,12 @@ Apply size based on tier (A: observe, B: standard position, C: half position)
 - Set stop-loss based on ATR (from enriched data)
 - Note: buy execution window is 14:50-14:57
 
-## Output: overnight_strategy.md
+## Strategy fields
 
-Alongside `intraday_mapper.md`, generate `overnight_strategy.md` with:
+Store the following content under `market_assessment`, per-stock `reasoning`,
+and top-level `strategy` in `intraday_mapper.json`. The build script projects
+those fields into `overnight_strategy.json`; do not create
+`overnight_strategy.md` as a data dependency:
 
 1. **Market Context** — RegimeHint, 明日预期
 2. **Strategy Table** — per-stock: 方向 / 交易策略 / 仓位 / 持仓意图 (T+0/T+1)
@@ -177,7 +233,7 @@ Excluded-board stocks:
 
 **Rationale**: 14:50-14:57 执行窗口内，涨停封死股票无人卖出，不存在成交机会。此类股票仅作为次日竞价的观察标的。
 
-涨停股票在 overnight_strategy.md 中：
+涨停股票在 `intraday_mapper.annotations.json` 的策略字段中：
 - ✅ 可放在 A-Tier Leader Watch（标注"涨停封板不可尾盘买入，明日竞价关注"）
 - ❌ 不可放在 B-Tier 核心持仓中建议尾盘买入
 - ❌ 不可给出 T+1 持仓意图为"隔夜持有"
@@ -235,7 +291,7 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 ## Constraints
 
 - This is the ONLY skill that outputs Direction, RiskSeverity, or Expected Premium
-- All scores come from `score_overnight.py` output; LLM does NOT compute scores
+- All scores come from `score_overnight.py` through `intraday_mapper.base.json`; LLM does NOT compute or transcribe scores
 - LLM role: interpret scores, write reasoning trace, generate natural-language strategy, query rules
 - Do NOT recalculate any numbers — trust the compute layer
 - When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)

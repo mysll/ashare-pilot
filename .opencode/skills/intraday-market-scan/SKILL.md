@@ -23,7 +23,7 @@ Skill 2: intraday-stock-discovery
     → ComputePool (80-150) + ThemeRanking
     ↓
 Skill 3: intraday-strategy
-    → OpportunityPool (20-40) + intraday_mapper.md
+    → OpportunityPool (20-40) + intraday_mapper.json + overnight_strategy.json
 ```
 
 ## Inputs

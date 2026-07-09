@@ -18,7 +18,7 @@ Skill 1 → MarketState + ScanPool (300-500)
                 ↓
 Skill 2 → Enriched ComputePool (80-150) + ThemeRanking (THIS)
                 ↓
-Skill 3 → OpportunityPool (20-40) + intraday_mapper.md
+Skill 3 → OpportunityPool (20-40) + intraday_mapper.json + overnight_strategy.json
 ```
 
 ## Execute: Compute Phase
