@@ -15,6 +15,7 @@ from mapper_json_lib import clean_text, default_predict_dir, ensure_doc_date, pa
 SCHEMA_VERSION = "daily_themes.v1"
 STATUSES = {"tradeable", "watch", "discarded"}
 DIRECTIONS = {"bullish", "mixed", "panic", "neutral", "unknown"}
+DIRECTION_HINT = "use exactly one of: bullish, mixed, panic, neutral, unknown"
 
 
 def add(errors: list[str], path: str, message: str) -> None:
@@ -60,9 +61,11 @@ def validate(doc: dict[str, Any]) -> list[str]:
         status = theme.get("status")
         if status not in STATUSES:
             add(errors, f"{base}.status", f"must be one of {sorted(STATUSES)}")
-        direction = theme.get("direction", "unknown")
-        if direction not in DIRECTIONS:
-            add(errors, f"{base}.direction", f"must be one of {sorted(DIRECTIONS)}")
+        direction = theme.get("direction")
+        if not isinstance(direction, str):
+            add(errors, f"{base}.direction", f"required string; {DIRECTION_HINT}")
+        elif direction not in DIRECTIONS:
+            add(errors, f"{base}.direction", f"invalid enum {direction!r}; {DIRECTION_HINT}")
 
         for key in ("reason", "evidence"):
             value = theme.get(key)

@@ -254,6 +254,20 @@ Columns: `MktAct` = market_action (Base anchor, 45%); `Emotion(raw)` = pre-gate 
 
 Final Heat < 55 excluded from tradeable pool; 40-54 with bullish direction → Watch Themes.
 
+**Hard enum contract for `themes[].direction`:**
+
+Use exactly one of these lowercase machine enums. Do not invent synonyms, mixed-language labels, or display labels in `themes.json`; human-readable Chinese labels belong only in downstream renderers.
+
+| Enum | Meaning | Emotion coeff |
+|------|---------|:---:|
+| `bullish` | Bullish catalyst: sector leading, limit-up cluster, net inflow, or positive headline catalyst | ×1.0 |
+| `mixed` | Direction split: mixed price action, commodity/news support without equity confirmation, or no consensus | ×0.8 |
+| `panic` | Crash-driven attention: sell-off, limit-down cluster, negative major event, or avoid semantics | ×0.5 |
+| `neutral` | Background/routine theme with no actionable direction | ×0.8 |
+| `unknown` | Direction cannot be determined from cited evidence | ×0.8 |
+
+Validation rejects missing or non-whitelisted direction values. If you need a new direction, update `validate_themes_json.py`, this table, and downstream render labels together; do not add a one-off value in generated JSON.
+
 ### Theme Extraction Constraints
 
 - Theme names MUST come from Theme Library
@@ -810,6 +824,8 @@ Required shape:
 
 Do not write `mapper.json` by hand.
 
+Annotation membership is best-effort, not a hard workflow gate. If `mapper.annotations.json` contains a stock that is absent from `theme_stocks.json.stocks[]`, or a stock whose `filter.status` is not `candidate`, the mapper build scripts skip that annotation with a warning. Do not regenerate solely for these membership misses; the locked `theme_stocks.json` pool owns final inclusion. Regenerate only when `validate_mapper_annotations.py` reports schema/enum/evidence/date errors, or when final `validate_mapper_json.py` fails.
+
 After building `theme_stocks.base.json`, writing `theme_stocks.annotations.json`, and writing `mapper.annotations.json`, run:
 
 ```bash
@@ -827,7 +843,7 @@ python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --da
 python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {YYYY-MM-DD}
 ```
 
-`build_theme_stocks_universe.py` owns selected-theme expansion from validated `themes.json`; it does not parse Markdown in the active workflow. `build_theme_stocks_base.py` owns deterministic technical filters and reads only `theme_stocks.universe.json` plus `pool_indicators.json`. `build_theme_stocks_json.py` merges LLM semantic annotations into the final stock-pool contract. `build_mapper_base.py` reads `theme_stocks.json` for deterministic `Observation Pool` and `Excluded Stocks` rows. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. If theme validation fails, fix `themes.json`. If theme-stock validation fails, fix `theme_stocks.annotations.json` or deterministic inputs and rebuild `theme_stocks.json`. If mapper annotation validation fails, fix `mapper.annotations.json`. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with invalid JSON.
+`build_theme_stocks_universe.py` owns selected-theme expansion from validated `themes.json`; it does not parse Markdown in the active workflow. `build_theme_stocks_base.py` owns deterministic technical filters and reads only `theme_stocks.universe.json` plus `pool_indicators.json`. `build_theme_stocks_json.py` merges LLM semantic annotations into the final stock-pool contract. `build_mapper_base.py` reads `theme_stocks.json` for deterministic candidate membership, `Observation Pool`, and `Excluded Stocks`; annotations for missing or non-candidate stocks are skipped instead of blocking the workflow. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. If theme validation fails, fix `themes.json`. If theme-stock validation fails, fix `theme_stocks.annotations.json` or deterministic inputs and rebuild `theme_stocks.json`. If mapper annotation validation fails, fix `mapper.annotations.json` schema/enum/evidence/date issues. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with invalid JSON.
 
 | Column | Source | Notes |
 |--------|--------|-------|

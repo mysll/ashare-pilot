@@ -568,7 +568,11 @@ def build_base_from_annotations(
             continue
         theme_stock = theme_stock_by_code.get(code)
         if theme_stock is None:
-            raise ValueError(f"mapper.annotations stock {code} missing from theme_stocks.json stocks[]")
+            print(
+                f"[WARN] mapper.annotations stock {code} missing from theme_stocks.json stocks[], skipping annotation",
+                file=sys.stderr,
+            )
+            continue
         status = theme_stock_filter(theme_stock)["status"]
         if status != "candidate":
             print(f"[WARN] mapper.annotations stock {code} ({theme_stock.get('name')}) has filter.status={status!r}, skipping annotation", file=sys.stderr)
