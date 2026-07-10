@@ -34,7 +34,8 @@ def risk_class(value: Any) -> str:
 
 
 def regime_label(value: Any) -> str:
-    return {
+    raw = str(value or "").strip()
+    label = {
         "narrow_tech_rally": "震荡上行 / 机会大于风险",
         "broad_rally": "普遍上涨 / 积极参与",
         "strong_sector": "主线强势 / 聚焦核心",
@@ -43,7 +44,26 @@ def regime_label(value: Any) -> str:
         "weak": "弱势行情 / 防守优先",
         "risk_off": "风险收缩 / 降低仓位",
         "panic": "恐慌行情 / 暂停执行",
-    }.get(str(value or ""), str(value or "市场状态未确认"))
+    }.get(raw)
+    if label:
+        return label
+    if not raw:
+        return "市场状态未确认"
+    for sep in (" — ", "—", "：", ":", "。"):
+        if sep in raw:
+            raw = raw.split(sep, 1)[0].strip()
+            break
+    return raw[:18] + ("…" if len(raw) > 18 else "")
+
+
+def split_market_reason(value: Any, limit: int = 90) -> tuple[str, str]:
+    raw = str(value or "").strip()
+    if not raw:
+        return "", ""
+    if len(raw) <= limit:
+        return raw, raw
+    head = raw[:limit].rstrip()
+    return f"{head}…", raw
 
 
 def direction_class(value: Any) -> str:
@@ -217,6 +237,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     max_risk = controls[0] if controls else market.get("tomorrow_expectation")
     subtitle = market.get("tomorrow_expectation") or market.get("reasoning_trace")
     index_chips = market_chips(mapper)
+    market_reason, market_reason_detail = split_market_reason(market.get("reasoning_trace"))
 
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -244,7 +265,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     .market-tag{{display:inline-flex;padding:4px 9px;border:1px solid rgba(253,176,34,.34);border-radius:6px;color:var(--warn);background:var(--warn-soft);font-weight:700}}
     .index-strip{{display:flex;flex-wrap:wrap;gap:7px;margin-top:13px}} .index-chip{{display:inline-flex;gap:5px;align-items:center;padding:4px 8px;border-radius:7px;font-size:12px;border:1px solid transparent}}
     .index-up{{color:var(--rise);background:var(--rise-soft);border-color:rgba(255,92,104,.25)}} .index-down{{color:var(--fall);background:var(--fall-soft);border-color:rgba(50,213,131,.25)}} .index-flat{{color:#c7d2e1;background:rgba(145,161,181,.12);border-color:rgba(145,161,181,.2)}}
-    .market-copy{{margin-top:13px;color:#b9c6d5}} .decision-layout{{margin-top:18px}}
+    .market-copy{{margin-top:13px;color:#b9c6d5}} .market-detail{{margin-top:13px;color:#b9c6d5}} .market-detail summary{{cursor:pointer;list-style:none}} .market-detail summary::-webkit-details-marker{{display:none}} .market-detail .toggle-label{{display:block;margin-top:6px;color:var(--sub);font-size:12px}} .market-detail .open-label,.market-detail .market-full{{display:none}} .market-detail[open] .market-copy,.market-detail[open] .closed-label{{display:none}} .market-detail[open] .open-label{{display:block}} .market-detail[open] .market-full{{display:block;margin:8px 0 0}} .decision-layout{{margin-top:18px}}
     .big-number{{font:800 42px/1 ui-monospace,SFMono-Regular,monospace;color:var(--rise)}} .big-number small{{font:600 14px/1.2 inherit;color:var(--sub)}}
     .discipline{{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:20px}}
     .discipline span{{padding:6px 8px;border-radius:6px;background:#151f2b;color:#c9d4e2;font-size:12px}}
@@ -289,7 +310,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
       <div class="market-call">{esc(regime_label(market.get('regime_hint')))}</div>
       <span class="market-tag">{risk_label(market.get('risk_severity'))}风险 · 中性偏多</span>
       {f'<div class="index-strip">{index_chips}</div>' if index_chips else ''}
-      <p class="market-copy">{esc(market.get('reasoning_trace'))}</p>
+      {f'<details class="market-detail"><summary><span class="market-copy">{esc(market_reason)}</span><span class="toggle-label closed-label">查看全部判断依据</span><span class="toggle-label open-label">收起判断依据</span></summary><p class="market-full">{esc(market_reason_detail)}</p></details>' if market_reason else ''}
     </article>
     <article class="card cockpit-card">
       <div class="card-label">最终执行建议 / Execution</div>
