@@ -28,7 +28,7 @@ Step 3 不只是“在 Direction 内交易” — Step 3 **是 Direction 的产�
 | Invariant | Step 3 含义 |
 |-----------|------------|
 | 1. Minimal Inference 白名单 | Step 3 不越界做 perception — 不重做主题匹配、不重算 tech_score、不重映射 R×P cell |
-| 2. Unidirectional Information Flow | **默认不重读 news.md** — 仅在 3 类 Conditional Reread 触发时回查 `NewsLink` 单条 |
+| 2. Unidirectional Information Flow | 默认不重读新闻全集；仅在 3 类 Conditional Reread 触发时按 `NewsLink=news#<id>` 回查 `news.json` 单条 |
 | 3. Execution 永不新增信息 | HTML 阅读层严格消费 JSON 输出；不自行加仓 / 改 stop |
 | 4. 白名单修改需 Regression Audit | V5+ 修订白名单须 30 日命中回测 — Phase 5 companion 阶段绑定 |
 | 5. Python 嵌套 Schema | Step 3 读 `candidates[*].scores.*` / `pattern.*` / `strategy_inputs` 等 JSON fields |
@@ -44,7 +44,7 @@ Inputs:
   Mapper:     predict/{date}/mapper.json    (full Step 2 V5 source contract, daily_mapper.v1)
   Rules:      memory/RULES.md + memory/SHARED_RULES.md  (LLM 全文语义匹配)
   Indicators: predict/{date}/pool_indicators.json       (V5 nested, for compute_trade_profile.py)
-  News:       predict/{date}/news.md        (仅 for Conditional Reread 单条回查)
+  News:       predict/{date}/news.json      (仅按 news#<id> Conditional Reread 单条回查)
 ```
 
 **If `pool_indicators.json` does not exist** — generate it with the Step 2 script (**NOT** `lib/fetch/fetch_indicators.py`):
@@ -81,22 +81,22 @@ V5 Step 3 对每个 Candidate Pool stock 按 4 步推理：
 
 ### Step 3-A — Conditional Reread 判定（先于此处）
 
-默认**不重读** `news.md`。检查三类触发条件：
+默认**不扫描**新闻全集。检查三类触发条件：
 
 | 触发条件 | 判据 | 回读范围 |
 |---------|------|---------|
-| Anomaly 存在 | row.anomaly != "—" 且非空 | `NewsLink` 指向的单条新闻行 |
-| 低 Confidence | 任一 `comp.conf`, `tech.conf`, `th_heat.conf`, `news_imp.conf` < 60 | `NewsLink` 指向的单条新闻行 |
-| 硬矛盾 | 下三条之一成立 | `NewsLink` 单条 + cross_rank highlights 复核 |
+| Anomaly 存在 | row.anomaly != "—" 且非空 | `NewsLink` 指向的 `news.json` 单条 item |
+| 低 Confidence | 任一 `comp.conf`, `tech.conf`, `th_heat.conf`, `news_imp.conf` < 60 | `NewsLink` 指向的 `news.json` 单条 item |
+| 硬矛盾 | 下三条之一成立 | `news.json` 单条 item + cross_rank highlights 复核 |
 
 **三条 Hard Contradictions（机器可判）**：
 1. `th_heat.value ≥ 80 AND tech.value < 40`（主题高热但个股技术面极弱）
 2. `maj_ev.pol = "Positive" AND comp.value < 50`（公司利好但综合分极低）
 3. `auc_change_pct > +3% AND news_imp.value < 40`（竞价强但新闻关联弱）
 
-**严禁**：扫全文 news.md 重新做主题映射（违反 Invariant 2）。
+**严禁**：扫描完整 `news.json` 或 `news.md` 重新做主题映射（违反 Invariant 2）。
 
-若任一触发：回读 `NewsLink` 指向的单条新闻行（仅此一条），并在 `ReasoningTrace.RereadTriggered` 写明：触发条件 / 回读结果（≤30 字）。
+若任一触发：从 `news.json.items` 回读 `NewsLink=news#<id>` 指向的单条新闻（仅此一条），并在 `ReasoningTrace.RereadTriggered` 写明：触发条件 / 回读结果（≤30 字）。
 
 ### Step 3-B — RegimeHint 评定（per market 一次）
 
@@ -242,7 +242,7 @@ Step 3 在严格条件下可异议 Step 2 perception 字段。**非默认行为�
 ```markdown
 | Field | Old | New | Reason | NewConfidence |
 |-------|-----|-----|--------|---------------|
-| news_imp.value | 70 | 95 | reread flash#3 发现公司直接被点名于标题，原 R2 误判应 R4 | 90 |
+| news_imp.value | 70 | 95 | reread news#3 发现公司直接被点名于标题，原 R2 误判应 R4 | 90 |
 ```
 
 ### Override 率监控
@@ -358,7 +358,7 @@ Step 3 no longer writes `strategy.md`. The LLM writes `strategy.json`; scripts r
 python .opencode/skills/daily-strategy/scripts/render_daily_report_html.py --date {date}
 ```
 
-The HTML is the only daily readable report after `news.md`. It consumes `strategy.json`, `mapper.strategy_view.json`, `mapper.json`, optional `themes.json`, and `news.md` NewsLink references. It must not introduce new decisions.
+The HTML is the daily decision report. It consumes `strategy.json`, `mapper.strategy_view.json`, `mapper.json`, optional `themes.json`, and canonical `news.json` references. It must not introduce new decisions or parse `news.md`.
 
 ### Structure
 
@@ -367,7 +367,7 @@ The HTML is the only daily readable report after `news.md`. It consumes `strateg
 3. Strategy Table: `strategy.json.stocks[*]` enriched with Step 2 scores from `mapper.strategy_view.json`
 4. Stock Details: reasoning trace, Pattern, MajorEvent, Anomaly, Strategy Inputs, Trade Profile
 5. Observation Pool and Excluded Stocks from `mapper.json`
-6. Referenced News: only the `NewsLink` lines used by Step 2/3
+6. Referenced News: only `news.json` items referenced by `NewsLink=news#<id>`
 
 ### 3 "super predictions"
 
@@ -502,7 +502,7 @@ If validation fails, fix `strategy.json` before finishing Step 3. Do not generat
 | "Consume MajorEventFlag as-is" | Consume `maj_ev.pol` as input；may shift Direction per rule |
 | 不评 RiskSeverity（沿用 Step 2） | **评 RiskSeverity** per § Step 3-D |
 | OverrideHint 仅占位（V4-U） | **真应用** per 语义匹配 RULES.md 历史记忆 |
-| 不重读 news.md | Conditional Reread via 3 triggers + 3 hard contradictions |
+| 不扫描新闻全集 | Conditional lookup of one `news.json` item via 3 triggers + 3 hard contradictions |
 | 无 PerceptionOverride | Override allowed for whitelisted fields with audit |
 | 无 ReasoningTrace 输出 | **ReasoningTrace 强制结构化输出** |
 
@@ -526,4 +526,4 @@ V5 Step 3 是 Reasoning Layer：
 - **输入**：V5 mapper.strategy_view.json computed perception + Confidence + Pattern + Anomaly + Market Context + RULES.md
 - **输出**：`strategy.json` + `daily_report.html`，包含 Direction + RiskSeverity + 历史规则应用 + Trade Profile(交易策略/入场条件) + ReasoningTrace + (可选) PerceptionOverride
 - **核心规则**：Unidirectional Flow（不重读新闻）+ Override Audit（写 trace）+ RuleBind（apply 同时记 effect）
-- **永远不做**：Execution 层补信息；扫全文 news.md 重新映射主题；override 不可 override 字段（如 comp, tech_score）；ad-hoc 创造不在参数表内的止损
+- **永远不做**：Execution 层补信息；扫描完整 `news.json` 或 `news.md` 重新映射主题；override 不可 override 字段（如 comp, tech_score）；ad-hoc 创造不在参数表内的止损

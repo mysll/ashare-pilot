@@ -42,7 +42,7 @@ update_cookie.bat    # Opens Chrome for login/captcha verification
 ## Directory Layout
 
 ```
-predict/{date}/          Daily pipeline outputs (news.md, themes.md, theme_stocks.md, mapper.md, strategy.md)
+predict/{date}/          Daily pipeline outputs (news.json, news.md, themes.json, theme_stocks.json, mapper.json, strategy.json, daily_report.html)
 intraday/{date}/         Intraday pipeline outputs (intraday_mapper.md)
 memory/daily/{date}/     Morning verification (verification.md)
 memory/intraday/{date}/  Intraday verification (intraday_verification.md)
@@ -80,8 +80,8 @@ python .opencode/lib/fetch/fetch_special.py lhb --json
 python .opencode/lib/fetch/fetch_special.py rzye --top 20
 python .opencode/lib/fetch/fetch_money_flow.py --json
 
-# News
-python .opencode/skills/daily-news-brief/scripts/fetch_news.py
+# News (daily workflow: one fetch writes both canonical JSON and readable Markdown)
+python .opencode/skills/daily-news-brief/scripts/fetch_news.py --date YYYY-MM-DD --output-dir predict/YYYY-MM-DD
 
 # Theme Library queries
 python .opencode/skills/theme-library/scripts/query_theme.py list --json
@@ -106,7 +106,10 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 
 - **NEVER** use `fetch_all_astocks.py` in the pipeline (~5500 stocks, 60s — too slow for pre-market)
 - Target only stocks in the pool (30-50), not full market
-- All output files are markdown written directly by the LLM — do NOT write scripts to generate them
+- `news.json` is script-generated and is the canonical news evidence contract;
+  `news.md` may be reorganized by the LLM as a readable briefing
+- Require `predict/{date}/news.json` before Step 2; all downstream news evidence
+  references use `news#<id>` and never Markdown line numbers
 - A-share scope only (sh/sz prefix). HK/US and other markets are excluded from the daily workflow
 - Pre-market data availability: auction data from 9:15-9:25, technicals from yesterday's close, money flow is yesterday's
 

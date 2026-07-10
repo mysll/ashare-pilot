@@ -9,6 +9,7 @@ import sys
 import time
 import urllib.parse
 from datetime import datetime, date, timedelta
+from pathlib import Path
 from typing import Any
 
 import requests
@@ -372,19 +373,50 @@ NEWS_SOURCES: dict[str, Any] = {
 }
 
 
-def format_brief(news: dict[str, list[dict[str, str]]]) -> str:
-    """Format news as Markdown briefing"""
-    lines = [f"# Daily Financial News Brief — {datetime.now().strftime('%Y-%m-%d %H:%M')}", ""]
-    for category, items in news.items():
+def build_news_document(
+    news: dict[str, list[dict[str, str]]], report_date: str | None = None
+) -> dict[str, Any]:
+    """Build the canonical flat news contract with globally increasing IDs."""
+    now = datetime.now().astimezone()
+    items: list[dict[str, Any]] = []
+    next_id = 1
+    for category, category_items in news.items():
+        for source_item_no, item in enumerate(category_items, 1):
+            items.append(
+                {
+                    "id": next_id,
+                    "category": category,
+                    "source_item_no": source_item_no,
+                    "title": item.get("title", "").strip(),
+                    "url": item.get("url", "").strip(),
+                    "source": item.get("source", "").strip(),
+                    "desc": item.get("desc", "").strip(),
+                }
+            )
+            next_id += 1
+    return {
+        "schema_version": "daily_news.v1",
+        "date": report_date or now.strftime("%Y-%m-%d"),
+        "generated_at": now.isoformat(timespec="seconds"),
+        "items": items,
+    }
+
+
+def format_brief(doc: dict[str, Any]) -> str:
+    """Render the canonical news contract as Markdown."""
+    lines = [f"# Daily Financial News Brief — {doc['date']}", ""]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in doc.get("items", []):
+        grouped.setdefault(str(item.get("category", "other")), []).append(item)
+    for category, items in grouped.items():
         if not items:
             continue
         lines.append(f"## {category}")
-        for i, it in enumerate(items, 1):
+        for it in items:
             title = it.get("title", "").strip()
-            source = it.get("source", "")
             url = it.get("url", "")
             desc = it.get("desc", "")
-            line = f"{i}. [{title}]({url})"
+            line = f"- `news#{it['id']}` [{title}]({url})"
             if desc:
                 line += f" — {desc[:80]}"
             lines.append(line)
@@ -402,11 +434,23 @@ def main():
     parser = argparse.ArgumentParser(description="Aggregate financial news from multiple sources")
     parser.add_argument("-o", "--output", help="Output file path (default: stdout)")
     parser.add_argument("-j", "--json", action="store_true", help="Output JSON format")
+    parser.add_argument("--date", help="Report date in YYYY-MM-DD (default: today)")
+    parser.add_argument(
+        "--output-dir",
+        help="Write both news.md and canonical news.json to this directory",
+    )
     parser.add_argument(
         "-s", "--sources", nargs="*", choices=list(NEWS_SOURCES.keys()),
         help="Specify news sources (default: all)"
     )
     args = parser.parse_args()
+    if args.output_dir and (args.output or args.json):
+        parser.error("--output-dir cannot be combined with --output or --json")
+    if args.date:
+        try:
+            datetime.strptime(args.date, "%Y-%m-%d")
+        except ValueError:
+            parser.error("--date must be YYYY-MM-DD")
 
     sources = {k: NEWS_SOURCES[k] for k in args.sources} if args.sources else NEWS_SOURCES
     news = {}
@@ -417,7 +461,21 @@ def main():
             print(f"[WARN] {name} failed: {e}", file=sys.stderr)
             news[name] = []
 
-    output = json.dumps(news, ensure_ascii=False, indent=2) if args.json else format_brief(news)
+    doc = build_news_document(news, args.date)
+    if args.output_dir:
+        output_dir = Path(args.output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "news.json").write_text(
+            json.dumps(doc, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
+        (output_dir / "news.md").write_text(
+            format_brief(doc), encoding="utf-8", newline="\n"
+        )
+        print(f"OK: wrote {output_dir / 'news.json'}")
+        print(f"OK: wrote {output_dir / 'news.md'}")
+        return
+
+    output = json.dumps(doc, ensure_ascii=False, indent=2) if args.json else format_brief(doc)
 
     if args.output:
         with open(args.output, "w", encoding="utf-8", newline="") as f:

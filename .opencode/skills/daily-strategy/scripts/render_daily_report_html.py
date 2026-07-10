@@ -347,17 +347,24 @@ def excluded_filter(mapper: dict[str, Any], view: dict[str, Any] | None) -> str:
       <div class="table-wrap"><table><thead><tr><th>代码</th><th>名称</th><th>排除原因</th><th>来源</th></tr></thead><tbody>{rows}</tbody></table></div></details>"""
 
 
-def read_news_refs(path: Path, refs: set[str]) -> dict[str, str]:
-    if not path.exists():
+def read_news_refs(path: Path, refs: set[str]) -> dict[str, dict[str, str]]:
+    doc = read_json(path)
+    if not isinstance(doc, dict) or not isinstance(doc.get("items"), list):
         return {}
-    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-    result = {}
+    wanted: dict[int, str] = {}
     for ref in refs:
-        match = re.search(r"#(\d+)$", ref)
-        if match and 0 <= int(match.group(1)) - 1 < len(lines):
-            text = lines[int(match.group(1)) - 1].strip()
-            if text:
-                result[ref] = text[:260]
+        match = re.fullmatch(r"news#([1-9]\d*)", str(ref).strip())
+        if match:
+            wanted[int(match.group(1))] = str(ref).strip()
+    result: dict[str, dict[str, str]] = {}
+    for item in doc["items"]:
+        if not isinstance(item, dict) or item.get("id") not in wanted:
+            continue
+        original_ref = wanted[item["id"]]
+        result[original_ref] = {
+            "title": str(item.get("title") or "").strip()[:260],
+            "url": str(item.get("url") or "").strip(),
+        }
     return result
 
 
@@ -374,8 +381,8 @@ def news_chain(path: Path, strategy: dict[str, Any], view: dict[str, Any] | None
     texts = read_news_refs(path, set(links))
     cards = "".join(
         f"""<article class="news-card card"><header><span>{esc(ref)}</span><b>{esc(' / '.join(links.get(ref,[])[:3]))}</b></header>
-        <p>{esc(text)}</p></article>"""
-        for ref, text in sorted(texts.items())
+        <p><a href="{esc(item.get('url'))}" target="_blank" rel="noopener noreferrer">{esc(item.get('title'))}</a></p></article>"""
+        for ref, item in sorted(texts.items())
     )
     return cards or '<div class="empty">暂无可解析的新闻引用</div>'
 
@@ -386,7 +393,7 @@ def render_report(
     view: dict[str, Any] | None,
     mapper: dict[str, Any] | None,
     themes: dict[str, Any] | None,
-    news_path: Path,
+    news_json_path: Path,
 ) -> str:
     market = strategy.get("market") if isinstance(strategy.get("market"), dict) else {}
     stocks = [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
@@ -411,7 +418,7 @@ def render_report(
 .focus-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:13px}}.focus-card{{padding:17px;display:flex;flex-direction:column;min-height:385px}}.focus-card header{{display:flex;justify-content:space-between}}.focus-card h3{{font-size:18px}}.focus-card header .mono{{font-size:12px}}.focus-tags{{display:flex;align-items:center;gap:7px;margin:13px 0}}.focus-tags>span:first-child{{color:var(--accent);margin-right:auto}}.focus-score{{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--line)}}.focus-score small{{color:var(--sub)}}dl{{margin:0}}dl div{{padding:8px 0;border-top:1px solid var(--line2)}}dt{{color:var(--sub);font-size:11px}}dd{{margin:3px 0 0}}.focus-card footer{{display:grid;gap:4px;margin-top:auto;padding-top:10px;border-top:1px solid var(--line)}}.focus-card footer b{{color:var(--sub);font-size:11px}}.focus-card footer span{{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#cbd6e3}}
 .detail,.pool-group,.excluded-list{{margin:9px 0;overflow:hidden}}summary{{cursor:pointer;list-style:none;padding:13px 15px}}summary::-webkit-details-marker{{display:none}}.detail summary{{font-weight:700}}.detail summary>span:last-child{{float:right;color:var(--sub);font-size:12px;font-weight:500}}.detail-grid{{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;padding:0 15px 15px}}.detail-grid section{{padding-top:10px;border-top:1px solid var(--line)}}.detail-grid h4{{margin:0 0 7px;color:#c9f7ff}}.detail-grid p{{margin:6px 0;color:#c8d4e2}}.risk-text{{color:var(--warn)!important}}
 .pool-stack{{display:grid;gap:9px}}.pool-group summary{{display:flex;align-items:center;gap:9px}}.pool-group summary em,.excluded-list summary em{{font-style:normal;padding:1px 7px;border-radius:999px;background:#243244}}.pool-group summary>span:last-child{{margin-left:auto;color:var(--sub);font-size:12px}}.group-mark{{width:6px;height:24px;border-radius:3px;background:var(--blue)}}.group-mark.fall{{background:var(--fall)}}.group-mark.warn{{background:var(--warn)}}.group-mark.neutral{{background:#64748b}}.filter-stats{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:10px}}.filter-stats article{{padding:14px;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}}.filter-stats small{{display:block;color:var(--sub)}}.filter-stats b{{font:800 28px/1.2 ui-monospace,SFMono-Regular,monospace;color:var(--fall)}}.excluded-list summary{{font-weight:700}}
-.news-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.news-card{{padding:14px}}.news-card header{{display:flex;gap:8px;align-items:center;margin-bottom:8px}}.news-card header span{{padding:2px 6px;border-radius:5px;color:var(--blue);background:rgba(96,165,250,.1);font-size:11px}}.news-card header b{{color:var(--accent);font-size:12px}}.news-card p{{color:#cbd6e3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}.footer{{margin-top:27px;padding-top:16px;border-top:1px solid var(--line);text-align:center;color:var(--sub);font-size:12px}}.empty{{padding:24px;text-align:center;color:var(--sub)}}
+.news-grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}}.news-card{{padding:14px}}.news-card header{{display:flex;gap:8px;align-items:center;margin-bottom:8px}}.news-card header span{{padding:2px 6px;border-radius:5px;color:var(--blue);background:rgba(96,165,250,.1);font-size:11px}}.news-card header b{{color:var(--accent);font-size:12px}}.news-card p{{color:#cbd6e3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}}.news-card a{{color:inherit;text-decoration:none}}.news-card a:hover{{color:var(--blue);text-decoration:underline}}.footer{{margin-top:27px;padding-top:16px;border-top:1px solid var(--line);text-align:center;color:var(--sub);font-size:12px}}.empty{{padding:24px;text-align:center;color:var(--sub)}}
 @media(max-width:1150px){{.cockpit{{grid-template-columns:1fr 1fr}}.cockpit-card:first-child{{grid-column:1/-1}}.focus-grid{{grid-template-columns:repeat(2,1fr)}}.news-grid{{grid-template-columns:repeat(2,1fr)}}}}@media(max-width:760px){{.page{{padding:0 14px 30px}}.topbar{{margin:0 -14px 18px;padding:20px 14px}}.topbar-inner{{display:block}}.meta{{justify-content:flex-start;margin-top:13px}}.cockpit,.focus-grid,.news-grid,.filter-stats{{grid-template-columns:1fr}}.cockpit-card:first-child{{grid-column:auto}}.detail-grid{{grid-template-columns:1fr}}.detail summary>span:last-child,.pool-group summary>span:last-child{{display:none}}h1{{font-size:25px}}}}
 </style></head><body><div class="page">
 <header class="topbar"><div class="topbar-inner"><div><h1>每日交易决策总控台</h1><p class="subtitle">{esc(subtitle)}</p></div>
@@ -427,8 +434,8 @@ def render_report(
 <div class="section-head"><h2>单股推理链路</h2><p>默认折叠，按需追溯</p></div>{stock_details(strategy,view)}
 <div class="section-head"><h2>观察池</h2><p>按等待原因分组，默认折叠</p></div><section class="pool-stack">{observation_groups(mapper.get('observation_pool'))}</section>
 <div class="section-head"><h2>风险过滤 / 排除股票</h2><p>先看聚合原因，完整名单默认折叠</p></div>{excluded_filter(mapper,view)}
-<div class="section-head"><h2>新闻证据链</h2><p>仅展示策略候选真实引用</p></div><section class="news-grid">{news_chain(news_path,strategy,view)}</section>
-<footer class="footer">数据源：strategy.json / mapper.strategy_view.json / mapper.json / themes.json · 本页面仅为中文阅读层，不构成投资建议。</footer>
+<div class="section-head"><h2>新闻证据链</h2><p>仅展示策略候选真实引用</p></div><section class="news-grid">{news_chain(news_json_path,strategy,view)}</section>
+<footer class="footer">数据源：strategy.json / mapper.strategy_view.json / mapper.json / themes.json / news.json · 本页面仅为中文阅读层，不构成投资建议。</footer>
 </div></body></html>"""
 
 
@@ -439,7 +446,7 @@ def main() -> int:
     parser.add_argument("--strategy-view")
     parser.add_argument("--mapper")
     parser.add_argument("--themes")
-    parser.add_argument("--news")
+    parser.add_argument("--news-json")
     parser.add_argument("--output")
     args = parser.parse_args()
     if sys.platform == "win32":
@@ -453,7 +460,10 @@ def main() -> int:
     view = read_json(Path(args.strategy_view) if args.strategy_view else pdir / "mapper.strategy_view.json")
     mapper = read_json(Path(args.mapper) if args.mapper else pdir / "mapper.json")
     themes = read_json(Path(args.themes) if args.themes else pdir / "themes.json")
-    news = Path(args.news) if args.news else pdir / "news.md"
+    news_json = Path(args.news_json) if args.news_json else pdir / "news.json"
+    if not news_json.exists():
+        print(f"[ERROR] missing required news.json: {news_json}", file=sys.stderr)
+        return 1
     output = Path(args.output) if args.output else pdir / "daily_report.html"
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
@@ -463,7 +473,7 @@ def main() -> int:
             view if isinstance(view, dict) else None,
             mapper if isinstance(mapper, dict) else None,
             themes if isinstance(themes, dict) else None,
-            news,
+            news_json,
         ),
         encoding="utf-8",
         newline="\n",

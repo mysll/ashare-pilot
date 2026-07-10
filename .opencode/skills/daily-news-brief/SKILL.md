@@ -13,7 +13,9 @@ Aggregate multiple financial news sources into a structured news briefing.
 python scripts/fetch_news.py
 ```
 
-By default, outputs Markdown format briefing to stdout.
+By default, outputs Markdown format briefing to stdout. The daily workflow must
+use `--output-dir` so the same fetch writes both canonical `news.json` and
+readable `news.md`.
 
 ## Command Arguments
 
@@ -22,6 +24,8 @@ By default, outputs Markdown format briefing to stdout.
 | `-o, --output <file>` | Output to file |
 | `-j, --json` | Output JSON format |
 | `-s, --sources <names>` | Specify news sources (multiple allowed) |
+| `--date <YYYY-MM-DD>` | Set the report date |
+| `--output-dir <dir>` | Write both `news.json` and `news.md` |
 
 ## News Sources
 
@@ -41,8 +45,8 @@ By default, outputs Markdown format briefing to stdout.
 ## Usage Examples
 
 ```bash
-# Output to file
-python scripts/fetch_news.py -o brief.md
+# Daily workflow output (required)
+python scripts/fetch_news.py --date 2026-07-10 --output-dir predict/2026-07-10
 
 # Get specific sources only
 python scripts/fetch_news.py -s flash finance
@@ -51,7 +55,35 @@ python scripts/fetch_news.py -s flash finance
 python scripts/fetch_news.py -j -o news.json
 ```
 
-## Output Format
+## Canonical JSON Contract
+
+`news.json` is the machine source of truth. It uses schema `daily_news.v1` and
+a flat `items` array. Integer IDs are assigned globally in fetch order and are
+continuous from `1` to `N`. All downstream news evidence must use
+`news#<id>`. Category-local pointers, Markdown line pointers, and Markdown
+ranges are forbidden. `news.md` may be reorganized by an LLM and is never a
+machine evidence source.
+
+```json
+{
+  "schema_version": "daily_news.v1",
+  "date": "2026-07-10",
+  "generated_at": "2026-07-10T09:20:00+08:00",
+  "items": [
+    {
+      "id": 1,
+      "category": "policy",
+      "source_item_no": 1,
+      "title": "Example",
+      "url": "https://example.com/1",
+      "source": "Example Source",
+      "desc": ""
+    }
+  ]
+}
+```
+
+## Markdown Output Format
 
 Default Markdown format:
 
@@ -59,9 +91,8 @@ Default Markdown format:
 # Daily Financial News Brief — 2025-04-01 10:30
 
 ## flash
-1. [Title](URL) — Summary...
-2. ...
+- `news#1` [Title](URL) — Summary...
 
 ## finance
-1. [Title](URL)
+- `news#21` [Title](URL)
 ```

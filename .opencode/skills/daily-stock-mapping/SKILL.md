@@ -1,6 +1,6 @@
 ---
 name: daily-stock-mapping
-description: Step 2 of daily-market-analysis pipeline. Consumes news.md, produces themes.json, validated theme_stocks.json, mapper.annotations.json, validated mapper.json, and mapper.strategy_view.json.
+description: Step 2 of daily-market-analysis pipeline. Consumes canonical news.json plus readable news.md, produces themes.json, validated theme_stocks.json, mapper.annotations.json, validated mapper.json, and mapper.strategy_view.json.
 ---
 
 # Daily Stock Mapping
@@ -11,7 +11,7 @@ Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis p
 
 | Stage | Input | Output |
 |-------|-------|--------|
-| Theme Extraction | news.md | themes.json |
+| Theme Extraction | news.json + news.md | themes.json |
 | Stock Pool Build | themes.json + optional theme_stocks.extra.json | theme_stocks.universe.json -> theme_stocks.base.json |
 | Technical Enrichment | theme_stocks.base.json + pool_indicators.json + theme_stocks.annotations.json | validated theme_stocks.json |
 | Structured Dataset | theme_stocks.json | mapper.annotations.json -> mapper.json -> mapper.strategy_view.json |
@@ -63,7 +63,9 @@ Theme Library is the ONLY valid theme source.
 
 ### Match News to Themes
 
-Read every news item in `news.md`. Match against available themes using, in priority order:
+Read every canonical news item in `news.json`. `news.md` may provide a reorganized
+market narrative, but it is not an evidence source. Match news items against
+available themes using, in priority order:
 
 1. Theme name (exact)
 2. Aliases (exact)
@@ -125,12 +127,16 @@ Final Heat = Base Heat + PolicyBonus × PolicyPolarity
 | State Council | +8 | State Council executive meeting / document naming the theme |
 | National Strategy | +10 | Written into national strategy / five-year plan (e.g., domestic chip independence) |
 
-**Polarity judgment (per-theme, from news.md):**
+**Polarity judgment (per-theme, from `news.json`):**
 - **Bullish (+1.0)**: Policy text contains language like "encourage / support / promote / subsidy / tax cut / relax / establish / pilot / development plan" → policy direction aligns with the theme's interests.
 - **Neutral (+0.5)**: Policy is a long-term / background / routine document (e.g., regulatory framework, industry standard) or text contains "standardize / improve / revise / adjust" with no clear directional impact → **default value**.
 - **Bearish (0.0)**: Policy text contains "tighten / cancel subsidy / tax increase / restrict / phase out / crackdown / inspection" → policy direction **suppresses** the theme. Must NOT award positive bonus.
 
-> **Hard constraint**: Polarity judgment for a theme must cite a specific news.md line (e.g., `finance#7`). A bearish policy receiving a non-zero bonus = direction bug — same class of error as the emotion direction gate treating panic as bullish. When uncertain about polarity, use `+0.5` (neutral) and annotate `polarity=uncertain`.
+> **Hard constraint**: Polarity judgment for a theme must cite a specific
+> `news.json` item as `news#<id>`. A bearish policy receiving a non-zero bonus =
+> direction bug — same class of error as the emotion direction gate treating
+> panic as bullish. When uncertain about polarity, use `+0.5` (neutral) and
+> annotate `polarity=uncertain`.
 >
 > **Polarity can differ across themes**: The same policy can have different directions for different themes — "restrict fuel vehicles" is bullish for New Energy Vehicles (+1.0) but bearish for traditional auto (0.0).
 
@@ -138,7 +144,7 @@ Final Heat = Base Heat + PolicyBonus × PolicyPolarity
 
 ### Sub-score Rubrics (LLM MUST follow)
 
-**Policy:** No longer a 0-100 sub-score. Apply the Policy Bonus table above with **polarity gate** (bullish ×1.0 / neutral ×0.5 / bearish ×0.0). Only count **fresh, same-day** policy that explicitly names the theme; stale/background policy still gets its tier bonus → then through polarity gate. Polarity judgment must cite a specific news.md line. When uncertain, default to `+0.5` (neutral) and annotate `polarity=uncertain`. Theme survival depends solely on `Final Heat`.
+**Policy:** No longer a 0-100 sub-score. Apply the Policy Bonus table above with **polarity gate** (bullish ×1.0 / neutral ×0.5 / bearish ×0.0). Only count **fresh, same-day** policy that explicitly names the theme; stale/background policy still gets its tier bonus → then through polarity gate. Polarity judgment must cite a specific `news#<id>` from `news.json`. When uncertain, default to `+0.5` (neutral) and annotate `polarity=uncertain`. Theme survival depends solely on `Final Heat`.
 
 **Capital (C) — weight 10%, default 45 when no data:**
 
@@ -160,7 +166,7 @@ Step 1 — Raw attention score `E_raw` (media/attention density, direction-agnos
 | 60-74 | Semantic match only, low media density |
 | <60 | Discard |
 
-Step 2 — Direction coefficient. Determine from news.md whether the theme's attention is bull-driven or panic-driven:
+Step 2 — Direction coefficient. Determine from canonical `news.json` items whether the theme's attention is bull-driven or panic-driven:
 
 | Theme Direction | Criteria | Coeff |
 |-----------------|----------|:---:|
@@ -172,7 +178,7 @@ Step 2 — Direction coefficient. Determine from news.md whether the theme's att
 
 > **Purpose:** Prevent panic-driven high attention from being misread as high bullish heat. Crash sectors still earn high `E_raw` for high attention, but the direction gate clamps emotion to ~0.5, preventing them from monopolizing the tradeable pool.
 
-**market_action (M) — sector price/volume momentum.** Direction is endogenous (up→high, down→low). Data source: price signals already present in news.md (market sentiment hot-list, commodity moves, limit-ups, sector moves). If the Stock Pool Build stage has already fetched query_theme `market` views, use `top_gainers` / `cross_rank_highlights` as corroboration.
+**market_action (M) — sector price/volume momentum.** Direction is endogenous (up→high, down→low). Data source: price signals in canonical `news.json` items (market sentiment hot-list, commodity moves, limit-ups, sector moves). If the Stock Pool Build stage has already fetched query_theme `market` views, use `top_gainers` / `cross_rank_highlights` as corroboration.
 
 | Score | Condition |
 |-------|-----------|
@@ -202,7 +208,7 @@ Step 2 — Direction coefficient. Determine from news.md whether the theme's att
 
 - LLM may set `Final Heat = max(original_Final, 57)` — just enough to cross the threshold, not inflated (catalyst is expectation, not confirmation).
 - **Mandatory tag:** `CATALYST(price-unconfirmed)`, confidence = 60 (below normal, marking expectation).
-- HeatTrace notes the override, e.g.: `M45/E80×1.0/N20/C45 Base52 →Cat57 [IPO news#XX]`.
+- HeatTrace notes the override, e.g.: `M45/E80×1.0/N20/C45 Base52 →Cat57 [IPO news#42]`.
 
 **Guardrails (MUST):**
 
@@ -243,7 +249,7 @@ Sort by `Final Heat DESC`.
         "base": 68
       },
       "matched_concepts": ["算力", "数据中心"],
-      "evidence": "flash#2",
+      "evidence": "news#2",
       "reason": "AI infra news and market action aligned"
     }
   ]
@@ -274,7 +280,9 @@ Validation rejects missing or non-whitelisted direction values. If you need a ne
 - Never invent themes
 - Concepts are matching signals only, not output
 - Confidence must be calculated, not guessed
-- `evidence` must cite current news or market evidence such as `news#77`, `flash#2`, or a concise evidence phrase; never cite legacy `themes.md#...`
+- News `evidence` must cite one or more canonical IDs such as `news#77`; never
+  cite category-local positions, Markdown lines/ranges, or legacy
+  `themes.md#...`. Non-news market evidence must use its own explicit namespace.
 
 ---
 
@@ -305,7 +313,7 @@ Shape:
       "source": "news_direct",
       "source_themes": ["AI算力", "光通信"],
       "score": 85,
-      "news_ref": "news.md#77",
+      "news_ref": "news#77",
       "market_ref": "top_amount#1",
       "source_explanation": "news-mentioned and active in theme market view"
     }
@@ -327,7 +335,8 @@ The market view can provide evidence for extra stocks:
 
 ### Inject News-mentioned Stocks
 
-Scan `news.md` for explicitly mentioned A-share stocks (codes or names). For each selected supplemental stock:
+Scan `news.json.items` for explicitly mentioned A-share stocks (codes or names).
+Use `news.md` only for narrative context. For each selected supplemental stock:
 1. Resolve name → code via `fetch_stock.py --search` or LLM knowledge
 2. Add it to `theme_stocks.extra.json` with `source = "news_direct"`, score = rough NewsImpact estimate
 3. Mark `news_direct: true`
@@ -523,7 +532,7 @@ Required annotation shape:
     {
       "code": "sz000977",
       "source_flags": {"news": false, "market": true},
-      "news_ref": "news.md#87",
+      "news_ref": "news#87",
       "market_ref": "Anchor",
       "anomaly": null,
       "source_explanation": "AI算力 anchor with market activity"
@@ -679,7 +688,8 @@ Emotion direction coefficient (×1.0/×0.8/×0.5) affects emotion **value** only
 
 ### V5 Conditional Reread (Step 3)
 
-Step 3 defaults to **not re-reading news.md**. Reread only on:
+Step 3 defaults to **not re-reading news**. Resolve the one cited `news#<id>`
+from `news.json` only when one of these conditions triggers:
 
 | Trigger | Quantitative Criterion | Reread Scope |
 |---------|----------------------|--------------|
@@ -692,7 +702,7 @@ Step 3 defaults to **not re-reading news.md**. Reread only on:
 2. `major_event = "Positive" AND composite < 50`
 3. `auction_change_pct > +3% AND news_impact < 40`
 
-**Forbidden:** Step 3 scanning full news.md for theme re-mapping.
+**Forbidden:** Step 3 scanning full `news.json` or `news.md` for theme re-mapping.
 
 ### MajorEvent
 
@@ -746,7 +756,7 @@ Two-dimensional lookup. LLM selects ONE cell; may interpolate ±5 and explain in
 | Negative sentiment (penalty / investigation) | -20 |
 | MajorEvent = Positive / Negative | Use MajorEvent instead; NewsImpact **cap=60 for Negative** |
 
-`NewsLink` = shortest pointer to source line in news.md (e.g., `flash#3`, `finance#12`).
+`NewsLink` = canonical `news.json` pointer in the form `news#<id>`.
 
 ### Anomaly Field (≤50 chars)
 
@@ -798,7 +808,7 @@ Required shape:
   "themes": [
     {
       "name": "ThemeName",
-      "emotion": {"value": 85, "confidence": 80, "evidence": "flash#1", "trace": "why"},
+      "emotion": {"value": 85, "confidence": 80, "evidence": "news#1", "trace": "why"},
       "policy_polarity": {"value": "neutral", "confidence": 70, "evidence": null, "trace": "why"},
       "catalyst_exception": null
     }
@@ -806,7 +816,7 @@ Required shape:
   "stocks": [
     {
       "code": "sz000001",
-      "news_relevance": {"r": "R2", "p": "P2", "confidence": 80, "evidence": "flash#2", "trace": "why"},
+      "news_relevance": {"r": "R2", "p": "P2", "confidence": 80, "evidence": "news#2", "trace": "why"},
       "major_event": {"polarity": "none", "confidence": 90, "evidence": null, "trace": "why"},
       "pattern": {
         "heat": {"state": "RISING", "confidence": 80, "trace": "why"},
@@ -816,7 +826,7 @@ Required shape:
         "volume": {"state": "NORMAL", "confidence": 80, "trace": "why"}
       },
       "anomaly": null,
-      "news_link": "flash#2"
+      "news_link": "news#2"
     }
   ]
 }
@@ -902,11 +912,11 @@ Step 3 **MUST** read in order:
 3. `Strategy Inputs`: Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20
    (script-injected from `pool_indicators.json`)
 4. `memory/RULES.md`
-5. `news.md` (**conditional reread only** — see V5 Conditional Reread triggers)
+5. `news.json` (**single-ID conditional lookup only** — see V5 Conditional Reread triggers)
 
 Step 3 **MUST NOT**:
 - Re-derive Composite or NewsImpact (Python-computed, confidence-tagged)
-- Scan full news.md for theme re-mapping (forbidden — V5 Invariant 2)
+- Scan full `news.json` or `news.md` for theme re-mapping (forbidden — V5 Invariant 2)
 - Ignore low-confidence signals (`confidence < 60`)
 - Re-fetch Strategy Inputs fields (unless missing/null/stale)
 
