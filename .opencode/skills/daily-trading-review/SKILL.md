@@ -148,6 +148,6 @@ New rules start in observation status. Include:
 
 ## Notes
 
-- If `predict/{date}/strategy.md` is missing, stop and ask to run daily-market-analysis first.
+- If `predict/{date}/strategy.json` is missing, stop and ask to run daily-market-analysis first.
 - Always read `memory/RULES.md` and `memory/SHARED_RULES.md` before assessing rule performance.
 - Output review content in Chinese.
