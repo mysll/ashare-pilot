@@ -1,0 +1,59 @@
+[tools]
+node = "24"
+pnpm = "11.10.0"
+python = "3.12"
+uv = "latest"
+
+[env]
+PYTHONIOENCODING = "utf-8"
+PYTHONUNBUFFERED = "1"
+
+[settings]
+python.uv_venv_auto = "source"
+
+[tasks.sync]
+run = "uv sync"
+
+[tasks.opencode]
+depends = ["sync"]
+run = "opencode"
+
+[tasks.doctor]
+description = "检查项目开发环境"
+run = """
+set -e
+
+echo "=== mise ==="
+mise current
+
+echo
+echo "=== Python ==="
+command -v python
+python --version
+python -c 'import os, sys; print("executable:", sys.executable); print("venv:", os.getenv("VIRTUAL_ENV")); print("in_venv:", sys.prefix != sys.base_prefix)'
+
+echo
+echo "=== Node ==="
+command -v node
+node --version
+
+echo
+echo "=== pnpm ==="
+command -v pnpm
+pnpm --version
+
+echo
+echo "=== uv ==="
+command -v uv
+uv --version
+
+echo
+echo "=== OpenCode ==="
+command -v opencode
+opencode --version
+"""
+
+[tasks.update-cli]
+run = [
+  "npm install -g opencode-ai@latest"
+]

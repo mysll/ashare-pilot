@@ -1,7 +1,8 @@
 # Cookie storage (contains sensitive data)
 .cookie
-.cache
-.claude
+.cache/
+.claude/
+.codex/
 
 # Python
 __pycache__/
@@ -11,8 +12,10 @@ __pycache__/
 .Python
 *.egg-info/
 .eggs/
+.venv/
 dist/
 build/
+
 
 # IDE
 .idea/
