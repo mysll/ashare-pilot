@@ -333,7 +333,7 @@ Step 3 LLM reads the Profile JSON, then:
 | `entry_profile` | enum | 交易策略: `趋势跟随` / `回调布局` / `强势接力` / `防御布局` / `暂不参与` |
 | `entry_trigger` | str | 入场条件: 简短定性描述 如 `开盘站稳MA5` / `回踩MA20` / `竞价确认` / `首根K线确认` |
 | `position_budget` | float | 仓位预算上限 (e.g. 0.02 = 2%) |
-| `time_horizon` | enum | 持仓意图: `T+0` / `T+1` / `SWING` |
+| `time_horizon` | enum | 早盘沪深A股新仓固定为 `T+1`；不得依赖当日卖出止损 |
 | `ref_ma20` | float | 参考 MA20 |
 | `ref_ma5` | float | 参考 MA5 |
 | `ref_high20` | float | 参考 High20 |
@@ -417,18 +417,58 @@ predict/{date}/strategy.json
 
 This JSON is consumed by daily review, backtests, and `daily_report.html`. Do not create ad-hoc conversion scripts from HTML; the LLM already has the final reasoning state, so emit JSON directly.
 
+New daily runs MUST write `daily_strategy.v2`. Historical `daily_strategy.v1`
+files remain readable and must not be rewritten. V2 turns the morning result into
+a conditional plan: it selects candidates before 09:30, while
+`intraday-operation-guide` confirms execution after a completed 5-minute bar.
+
+### Selection Before JSON Authoring (mandatory)
+
+Do not serialize every mapper candidate and then invent `SKIP`, `NONE`,
+`00:00:00`, or `max_holding_days=0`. First select the bounded main strategy
+list, then write the JSON contract only for selected rows:
+
+| `market.regime_prior` | Maximum `stocks[]` |
+|---|---:|
+| `strong-sector` | 10 |
+| `neutral` | 10 |
+| `weak` | 7 |
+| `panic` | 5 |
+
+Selection order:
+
+```text
+positive direction + executable setup
+→ rating / composite / theme priority
+→ CONDITIONAL rows
+→ a small number of useful WATCH_ONLY rows
+→ truncate to the regime limit
+```
+
+Rows not selected for the main strategy go to `observation_pool` as compact
+`{code, name, reason}` objects. `看空`, `中性`, and `暂不参与` rows MUST NOT
+appear in `stocks[]` for v2. Omitting a row from `stocks[]` is how the model
+expresses SKIP; there is no `SKIP` or `NONE` enum in the machine contract.
+
 ### Required Schema
 
 ```json
 {
-  "schema_version": "daily_strategy.v1",
+  "schema_version": "daily_strategy.v2",
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601 timestamp",
   "market": {
-    "regime_hint": "panic|weak|neutral|strong-sector",
+    "regime_prior": "panic|weak|neutral|strong-sector",
+    "requires_open_confirmation": true,
     "position_multiplier": 1.0,
     "stop_atr_multiplier": 1.5,
     "notes": "short market context"
+  },
+  "portfolio_limits": {
+    "max_new_exposure": 0.10,
+    "max_theme_exposure": 0.04,
+    "max_single_stock": 0.02,
+    "max_correlated_names": 2
   },
   "stocks": [
     {
@@ -443,6 +483,23 @@ This JSON is consumed by daily review, backtests, and `daily_report.html`. Do no
       "no_buy_condition": "跌破MA5后放量不能收回",
       "position_budget": 0.02,
       "horizon": "T+1",
+      "preopen_plan": {
+        "decision": "CONDITIONAL",
+        "earliest_entry_time": "09:35:05",
+        "latest_entry_time": "10:00:00",
+        "requires_first_bar": true,
+        "requires_market_confirmation": true,
+        "requires_theme_confirmation": true,
+        "entry_setup": "MOMENTUM",
+        "pre_entry_invalidations": ["市场转弱", "板块确认失败", "高开回落"]
+      },
+      "t1_risk_plan": {
+        "overnight_risk": "high",
+        "gap_up_action": "承接不足时分批兑现",
+        "flat_open_action": "反弹失败时退出",
+        "gap_down_action": "禁止补仓并优先控制风险",
+        "max_holding_days": 2
+      },
       "rules_applied": ["R68", "R37"],
       "profile_trace": "趋势跟随→回踩MA5确认→R68一致",
       "reasoning": {
@@ -468,29 +525,75 @@ This JSON is consumed by daily review, backtests, and `daily_report.html`. Do no
         "max_extension_atr": 2.5
       }
     }
+  ],
+  "observation_pool": [
+    {"code": "sh600000", "name": "示例观察股", "reason": "未进入当前regime主策略名额"}
   ]
 }
 ```
 
 ### Field Rules
 
-- `stocks` contains the full Step 3 strategy stock list rendered into `daily_report.html`.
+- `stocks` contains only the bounded main Step 3 strategy list: strong/neutral ≤10, weak ≤7, panic ≤5.
+- Never copy the full mapper Candidate Pool into `stocks[]`.
+- Never write `decision=SKIP`, `entry_setup=NONE`, `00:00:00`, or `max_holding_days=0`.
+- To skip a candidate, omit it from `stocks[]` and add a compact reason to `observation_pool`.
+- `看空`, `中性`, and `暂不参与` belong in `observation_pool`, not `stocks[]`.
 - `entry_profile` values: `趋势跟随` / `回调布局` / `强势接力` / `防御布局` / `暂不参与`.
 - `anchor` values: `MA5` / `MA10` / `MA20` / `OPEN` / `VWAP` / `首根5min` / `FLEX` / `无` / `—`.
 - `position_budget` is decimal fraction (`0.02` = 2%); use `0` for `暂不参与`.
+- `market.regime_prior` is a pre-market hypothesis, not the confirmed live regime.
+- `preopen_plan.earliest_entry_time` must be `09:35:05` or later.
+- Every stock requires a machine-checkable pre-entry invalidation list.
+- Every new A-share position requires `t1_risk_plan`; same-day sell instructions are forbidden.
+- `intraday-operation-guide` may reduce but never increase `position_budget`.
+- `position_budget` must not exceed `portfolio_limits.max_single_stock`;
+  `max_single_stock <= max_theme_exposure <= max_new_exposure`.
+- Pre-open times must parse as real `HH:MM:SS` values. Invalid values are
+  contract failures and must never be silently replaced by execution defaults.
 - `profile` stores the Python default profile after LLM confirmation/override.
 - Do not include final `BuyLo` / `BuyHi` / `Stop` / `Target`; those belong to Entry Plan.
+
+### Copy-safe WATCH_ONLY template
+
+Use this only for a selected watch row that remains inside the regime stock
+limit. Do not use it for every rejected candidate:
+
+```json
+{
+  "decision": "WATCH_ONLY",
+  "earliest_entry_time": "09:35:05",
+  "latest_entry_time": "10:00:00",
+  "requires_first_bar": true,
+  "requires_market_confirmation": true,
+  "requires_theme_confirmation": true,
+  "entry_setup": "WATCH_ONLY",
+  "pre_entry_invalidations": ["未达到盘前执行标准"]
+}
+```
+
+WATCH_ONLY still carries a valid T+1 plan to keep the v2 stock contract
+uniform, although it has zero executable position. Use at least one day for
+`max_holding_days`; never use zero.
 
 ### Validation
 
 Always validate after writing:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py predict/{date}/strategy.json
+python .opencode/skills/daily-strategy/scripts/normalize_strategy_selection.py predict/{date}/strategy.json --in-place
+python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py predict/{date}/strategy.json --require-v2
 python .opencode/skills/daily-strategy/scripts/render_daily_report_html.py --date {date}
 ```
 
-If validation fails, fix `strategy.json` before finishing Step 3. Do not generate temporary converter scripts.
+The normalizer is the standard boundary between LLM selection and the strict
+machine contract. It only moves excluded/overflow rows to `observation_pool`;
+it does not invent or repair strategy fields for selected rows.
+If validation fails on a row whose intended meaning is SKIP/NONE, do not keep
+editing that row into a fake valid strategy. Remove it from `stocks[]` and add
+it to `observation_pool`. If validation reports too many stocks, rank and move
+the overflow to `observation_pool`; never normalize all candidates into
+WATCH_ONLY. Do not generate temporary converter scripts.
 
 ---
 

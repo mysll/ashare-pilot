@@ -126,7 +126,8 @@ def rows_from_strategy_json(path: Path) -> tuple[str, list[dict[str, Any]]]:
     doc = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(doc, dict):
         raise ValueError(f"strategy_json root must be object: {path}")
-    regime = doc.get("market", {}).get("regime_hint") or "unknown"
+    market = doc.get("market", {})
+    regime = market.get("regime_prior") or market.get("regime_hint") or "unknown"
     rows = []
     for stock in doc.get("stocks", []):
         if not isinstance(stock, dict):

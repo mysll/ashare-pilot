@@ -276,7 +276,7 @@ Output:
 
 **CRITICAL:** Do NOT inline any file content, data summaries, stock tables, rules, formulas, or analysis. Keep the prompt clean.
 
-**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
+**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` (`daily_strategy.v2`) and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
 
 ---
 
@@ -295,7 +295,7 @@ Output:
 | `predict/{date}/mapper.annotations.json` | LLM-owned Step 2 perception annotations (`daily_mapper_annotations.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.json` | Full validated Step 2 machine contract (`daily_mapper.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.strategy_view.json` | Compact Step 3 reading contract (`daily_strategy_input.v1`) projected from mapper.json | Perception → Reasoning bridge |
-| `predict/{date}/strategy.json` | Machine-readable Step 3 decisions for review/backtests (`daily_strategy.v1`) | Reasoning (Step 3) |
+| `predict/{date}/strategy.json` | Conditional pre-open decisions for review/backtests and operation confirmation (`daily_strategy.v2`) | Reasoning (Step 3) |
 | `predict/{date}/daily_report.html` | Daily readable summary rendered from JSON: themes, strategy table, stock details, observation/excluded pools, referenced news | Reasoning (Step 3 readable output) |
 
 ## Quick Reference

@@ -200,6 +200,27 @@ def render_direction_mix(stocks: list[dict[str, Any]]) -> str:
     <p>市场方向偏进攻，仍需区分主线核心与跟涨标的。</p></div>"""
 
 
+def actionable_stocks(strategy: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return actual recommendations, excluding zero-budget watch-only reviews."""
+    stocks = [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
+    if any("position_budget" in stock for stock in stocks):
+        return [stock for stock in stocks if float(stock.get("position_budget") or 0) > 0]
+    return stocks
+
+
+def super_prediction_codes(strategy: dict[str, Any]) -> set[str]:
+    return {
+        str(item.get("code"))
+        for item in strategy.get("super_predictions", [])
+        if isinstance(item, dict) and item.get("code")
+    }
+
+
+def display_stock_name(stock: dict[str, Any], super_codes: set[str]) -> str:
+    name = str(stock.get("name") or "")
+    return f"{name}[*]" if str(stock.get("code")) in super_codes else name
+
+
 def render_theme_rows(items: list[dict[str, Any]]) -> str:
     rows = []
     for item in sorted(items, key=lambda x: (x.get("rank") or 999))[:20]:
@@ -220,14 +241,13 @@ def render_theme_rows(items: list[dict[str, Any]]) -> str:
 
 def render_strategy_rows(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
     candidates = by_code(view.get("candidates") if isinstance(view, dict) else [])
+    super_codes = super_prediction_codes(strategy)
     rows = []
-    for stock in strategy.get("stocks", []):
-        if not isinstance(stock, dict):
-            continue
+    for stock in actionable_stocks(strategy):
         cand = candidates.get(str(stock.get("code")), {})
         rows.append(
             f"""<tr><td><span class="badge {direction_class(stock.get('direction'))}">{esc(stock.get('direction'))}</span></td>
-              <td class="mono">{esc(stock.get('code'))}</td><td class="strong">{esc(stock.get('name'))}</td><td>{esc(stock.get('sector'))}</td>
+              <td class="mono">{esc(stock.get('code'))}</td><td class="strong">{esc(display_stock_name(stock,super_codes))}</td><td>{esc(stock.get('sector'))}</td>
               <td class="rating">{esc(stock.get('rating'))}</td><td>{score_bar(score_value(cand,'composite'))}</td>
               <td>{number(score_value(cand,'theme_heat'))}</td><td>{esc(stock.get('entry_profile'))}</td>
               <td class="two-lines" title="{esc(stock.get('entry_trigger'))}"><span class="cell-clamp">{esc(stock.get('entry_trigger'))}</span></td>
@@ -238,7 +258,8 @@ def render_strategy_rows(strategy: dict[str, Any], view: dict[str, Any] | None) 
 
 def focus_cards(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
     candidates = by_code(view.get("candidates") if isinstance(view, dict) else [])
-    stocks = [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
+    stocks = actionable_stocks(strategy)
+    super_codes = super_prediction_codes(strategy)
     stocks.sort(
         key=lambda x: (
             int(re.search(r"\d+", str(x.get("rating") or "0")).group()) if re.search(r"\d+", str(x.get("rating") or "")) else 0,
@@ -251,7 +272,7 @@ def focus_cards(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
         cand = candidates.get(str(stock.get("code")), {})
         logic = value_at(stock, "reasoning", "direction_path") or stock.get("profile_trace")
         cards.append(
-            f"""<article class="focus-card card"><header><div><h3>{esc(stock.get('name'))}</h3><span class="mono">{esc(stock.get('code'))}</span></div>
+            f"""<article class="focus-card card"><header><div><h3>{esc(display_stock_name(stock,super_codes))}</h3><span class="mono">{esc(stock.get('code'))}</span></div>
               <span class="rating">{esc(stock.get('rating'))}</span></header>
               <div class="focus-tags"><span>{esc(stock.get('sector'))}</span><span class="badge {direction_class(stock.get('direction'))}">{esc(stock.get('direction'))}</span></div>
               <div class="focus-score"><small>综合分</small>{score_bar(score_value(cand,'composite'))}</div>
@@ -265,10 +286,9 @@ def focus_cards(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
 
 def stock_details(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
     candidates = by_code(view.get("candidates") if isinstance(view, dict) else [])
+    super_codes = super_prediction_codes(strategy)
     blocks = []
-    for stock in strategy.get("stocks", []):
-        if not isinstance(stock, dict):
-            continue
+    for stock in actionable_stocks(strategy):
         cand = candidates.get(str(stock.get("code")), {})
         profile = stock.get("profile") if isinstance(stock.get("profile"), dict) else {}
         reasoning = stock.get("reasoning") if isinstance(stock.get("reasoning"), dict) else {}
@@ -278,7 +298,7 @@ def stock_details(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
             f"{key}:{value_at(pattern,key,'state') or '—'}" for key in ("heat", "leader", "auction", "rotation", "volume")
         )
         blocks.append(
-            f"""<details class="detail card"><summary><span class="mono">{esc(stock.get('code'))}</span> {esc(stock.get('name'))}
+            f"""<details class="detail card"><summary><span class="mono">{esc(stock.get('code'))}</span> {esc(display_stock_name(stock,super_codes))}
               <span>{esc(stock.get('direction'))} · {esc(stock.get('rating'))} · {esc(stock.get('entry_profile'))} · {esc(stock.get('anchor'))}</span></summary>
               <div class="detail-grid">
                 <section><h4>推理链路</h4><p>{esc(reasoning.get('direction_path'))}</p><p class="risk-text"><b>风险：</b>{esc(reasoning.get('risk'))}</p><p>{esc(reasoning.get('reread'))}</p></section>
@@ -396,12 +416,13 @@ def render_report(
     news_json_path: Path,
 ) -> str:
     market = strategy.get("market") if isinstance(strategy.get("market"), dict) else {}
-    stocks = [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
+    stocks = actionable_stocks(strategy)
     mapper = mapper if isinstance(mapper, dict) else {}
     themes_list = theme_items(themes, view)
     dominant = value_at(view, "market_state", "dominant_themes") or []
     dominant_text = " / ".join(str(x.get("name")) for x in dominant if isinstance(x, dict))
-    subtitle = f"{regime_label(market.get('regime_hint'))}，今日聚焦 {dominant_text}。" if dominant_text else esc(market.get("notes"))
+    regime = market.get("regime_prior") or market.get("regime_hint")
+    subtitle = f"{regime_label(regime)}（盘前先验，待开盘确认），今日聚焦 {dominant_text}。" if dominant_text else esc(market.get("notes"))
     generated = strategy.get("generated_at")
     return f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -424,7 +445,7 @@ def render_report(
 <header class="topbar"><div class="topbar-inner"><div><h1>每日交易决策总控台</h1><p class="subtitle">{esc(subtitle)}</p></div>
 <div class="meta"><span>日期 {esc(date)}</span><span>生成时间 {generated_time(generated)}</span><span>JSON 决策阅读层</span></div></div></header>
 <section class="cockpit">
-  <article class="card cockpit-card"><div class="label">市场结构判断 / Market Structure</div><div class="market-state"><div class="orb"></div><div><h2>{esc(regime_label(market.get('regime_hint')))}</h2><p>{esc(dominant_text or '主线未确认')}</p></div></div><div class="chips">{render_market_chips(market.get('notes'))}</div><p class="market-note">{esc(market.get('notes'))}</p></article>
+  <article class="card cockpit-card"><div class="label">盘前市场先验 / Pre-open Prior</div><div class="market-state"><div class="orb"></div><div><h2>{esc(regime_label(regime))}</h2><p>{esc(dominant_text or '主线未确认')}</p></div></div><div class="chips">{render_market_chips(market.get('notes'))}</div><p class="market-note">{esc(market.get('notes'))}</p></article>
   <article class="card cockpit-card"><div class="label">主线热度 / Theme Heat</div>{render_theme_lens(themes_list)}</article>
   <article class="card cockpit-card"><div class="label">策略方向分布 / Direction</div>{render_direction_mix(stocks)}</article>
 </section>

@@ -1,0 +1,11 @@
+{
+  "fixture_kind": "regression_scenario_not_raw_market_capture",
+  "date": "2026-07-10",
+  "regime_prior": "strong-sector",
+  "indices": [
+    {"code": "sh000001", "percent": "-0.30%", "open": "99.8", "yestclose": "100", "time": "2026-07-10 09:40:01"},
+    {"code": "sz399001", "percent": "-0.80%", "open": "99.5", "yestclose": "100", "time": "2026-07-10 09:40:01"},
+    {"code": "sh000688", "percent": "-1.20%", "open": "99.2", "yestclose": "100", "time": "2026-07-10 09:40:01"}
+  ],
+  "expected": {"regime_live": "weak", "global_action": "NO_NEW_BUY"}
+}
