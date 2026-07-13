@@ -6,13 +6,12 @@ description: Run the 14:30 overnight-alpha workflow and produce a validated JSON
 # Intraday Market Analysis (JSON-first V2)
 
 The pipeline follows Compute → Perception → Reasoning. JSON is the only
-inter-step contract. Markdown may be rendered for people, but MUST NOT be read
-by a downstream step.
+inter-step contract. Human-facing board is `overnight_strategy.html`.
 
 | Layer | Owner | Canonical output |
 |---|---|---|
 | Compute | `run_intraday_pipeline.py` | `.cache/intraday/{date}/*.json` |
-| Perception | Python + analyst agents | compute JSON (no duplicate Markdown handoff) |
+| Perception | Python + analyst agents | read compute JSON only |
 | Reasoning | `portfolio-manager` + `intraday-strategy` | `intraday_mapper.annotations.json` |
 | Contract build | Python | `intraday_mapper.base.json` → `intraday_mapper.json` → `overnight_strategy.json` |
 
@@ -49,6 +48,11 @@ The execution window is 14:50–14:57.
 
 ## 2. Perception checks
 
+Perception agents **read** compute JSON only. They do not re-run the pipeline
+and do not rewrite cache files. If a required cache file is missing or
+obviously empty, stop and re-run Step 1 compute for the same date — do not
+patch numbers by hand.
+
 ### Market perception
 
 Agent: `market-microstructure-analyst`, skill: `intraday-market-scan`.
@@ -58,9 +62,9 @@ Read these files directly:
 - `.cache/intraday/{date}/market_breadth.json`
 - `.cache/intraday/{date}/indices.json`
 - `.cache/intraday/{date}/concept_dashboard.json`
+- `.cache/intraday/{date}/scan_pool.json` (existence / size only)
 
-Check market strength, breadth, capital direction, and active concepts. Do not
-create `market_state.md` as a data handoff.
+Check market strength, breadth, capital direction, and active concepts.
 
 ### Theme perception
 
@@ -72,8 +76,7 @@ Read these files directly:
 - `.cache/intraday/{date}/compute_pool_enriched.json`
 - `.cache/intraday/{date}/theme_ranking.json`
 
-Check that the bottom-up theme ranking is consistent with the compute pool. Do
-not transcribe it into `theme_ranking.md` for Step 3.
+Check that the bottom-up theme ranking is consistent with the compute pool.
 
 Step 1 and Step 2 NEVER output Direction or RiskSeverity.
 
@@ -141,9 +144,8 @@ Final outputs:
 | `overnight_strategy.json` | validated execution-focused view for review and T+1 consumers |
 | `overnight_strategy.html` | 中文阅读看板，展示可执行持仓、T+1计划、风控和观察池 |
 
-`intraday_mapper.json` supersedes `intraday_mapper.md`; `overnight_strategy.json`
-supersedes `overnight_strategy.md`. Markdown/HTML renderers may consume these
-contracts for human reading.
+Downstream consumers and review skills read `intraday_mapper.json` and
+`overnight_strategy.json`. Humans use `overnight_strategy.html`.
 
 ## Invariants
 

@@ -8,7 +8,7 @@ Runs at ~14:30:
 
 Layout:
     Intermediate JSON data → .cache/intraday/{date}/   (this script writes these)
-    Final markdown reports → intraday/{date}/          (written later by the LLM steps)
+    Final contracts        → intraday/{date}/          (base/annotations/mapper/overnight JSON; LLM + build scripts)
 
 Usage:
     python run_intraday_pipeline.py --date 2026-06-30
@@ -81,7 +81,7 @@ def main():
     )
     args = parser.parse_args()
 
-    # Intermediate JSON data lives under .cache/; final md reports under intraday/.
+    # Intermediate JSON under .cache/; final contracts under intraday/.
     out_dir = Path(args.data_dir) if args.data_dir else Path(f".cache/intraday/{args.date}")
     out_dir.mkdir(parents=True, exist_ok=True)
     report_dir = Path(f"intraday/{args.date}")

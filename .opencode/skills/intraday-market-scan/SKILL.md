@@ -1,125 +1,88 @@
 ﻿---
 name: intraday-market-scan
-description: Use when dispatched at ~14:30 as the first step of intraday overnight analysis. Scans market breadth, indices, capital flows, concept rankings. Produces MarketState and ScanPool. NEVER outputs stock-level scoring or trading recommendations.
+description: Use when dispatched at ~14:30 as Step 1 perception of the intraday overnight pipeline. Reads compute-layer market JSON and checks breadth, indices, capital direction, and active concepts. NEVER outputs stock-level scoring, Direction, RiskSeverity, or trading recommendations.
 ---
 
-# Intraday Market Scan (Skill 1)
+# Intraday Market Scan (Skill 1 — Perception)
 
 ## Purpose
 
-Determine what the market is REALLY trading today at 14:30. Market → Hot Spots → Stocks.
+Determine what the market is REALLY trading today at ~14:30. Market → Hot Spots.
 
-This is the Compute layer of the overnight alpha pipeline. Output is pure structured perception — no reasoning, no scoring, no trading recommendations.
+This is the **market perception** check after compute. Output is structured perception only — no reasoning, no scoring, no trading recommendations.
 
 ## Pipeline Position
 
 ```
 [14:30 Trigger]
     ↓
-Skill 1: intraday-market-scan (THIS)
-    → MarketState + ScanPool (300-500 stocks, basic data only)
+Compute once: run_intraday_pipeline.py → .cache/intraday/{date}/*.json
     ↓
-Skill 2: intraday-stock-discovery
-    → ComputePool (80-150) + ThemeRanking
+Skill 1: intraday-market-scan (THIS) — read market JSON, verify MarketState
     ↓
-Skill 3: intraday-strategy
-    → OpportunityPool (20-40) + intraday_mapper.json + overnight_strategy.json
+Skill 2: intraday-stock-discovery — verify ComputePool + ThemeRanking
+    ↓
+Skill 3: intraday-strategy — annotations → intraday_mapper.json + overnight_strategy.json
 ```
 
-## Inputs
+Orchestrator: skill `intraday-market-analysis`.
 
-- Real-time East Money push2 API (cookie-based auth from `.cookie` file)
-- Theme library index (concept → stock membership for Momentum dimension)
+## Inputs (read only)
 
-## Execute: Data Fetching
+Prefer files already produced by `run_intraday_pipeline.py`:
 
-Run these scripts in parallel (all independent calls):
+- `.cache/intraday/{date}/market_breadth.json`
+- `.cache/intraday/{date}/indices.json`
+- `.cache/intraday/{date}/concept_dashboard.json`
+- `.cache/intraday/{date}/scan_pool.json` (existence / size check only)
+
+Do **not** re-run compute if these files exist for the date. Only if the orchestrator has **not** run compute for this date, fetch via:
 
 ```bash
-python .opencode/lib/fetch/fetch_market_breadth.py --json
-python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
-python .opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py --json --top 100
-python .opencode/skills/intraday-market-scan/scripts/build_scan_pool.py --compute-pool-size 120 --json
+python .opencode/lib/fetch/fetch_market_breadth.py --json -o .cache/intraday/{date}/market_breadth.json
+python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json -o .cache/intraday/{date}/indices.json
+python .opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py --json --top 100 -o .cache/intraday/{date}/concept_dashboard.json
+python .opencode/skills/intraday-market-scan/scripts/build_scan_pool.py --compute-pool-size 120 --json -o .cache/intraday/{date}/scan_pool.json
 ```
 
-Save intermediate JSON outputs under `.cache/intraday/{date}/`.
+## Perception checks
 
-> **Note:** In the normal pipeline these JSON files are already produced by
-> `run_intraday_pipeline.py` under `.cache/intraday/{date}/`. Only run the fetch
-> scripts above manually if the pipeline has NOT been run for this date.
-
-## Output: MarketState
-
-Synthesize from the script outputs into this structured format. ALL numbers come from script output — LLM generates zero numbers.
+ALL numbers come from JSON — LLM generates zero numeric values. Optional brief session narrative is fine; Skill 2/3 only consume cache JSON.
 
 ### Market Strength
-Extract from `indices.json`:
-```markdown
-## Market Strength
-- 上证: {price} ({change}%)
-- 深成: {price} ({change}%)
-- 创业板: {price} ({change}%)
-- 科创50: {price} ({change}%)
-- 中证1000: {price} ({change}%)
-```
+
+From `indices.json`: 上证 / 深成 / 创业板 / 科创50 / 中证1000 price and change%.
 
 ### Market Breadth
-Extract from `market_breadth.json`:
-```markdown
-## Market Breadth
-- 上涨: {up} / 下跌: {down} (上涨比 {ratio}%)
-- 涨停: {limit_up} / 跌停: {limit_down}
-```
+
+From `market_breadth.json`: up/down counts, up ratio, limit-up / limit-down.
 
 ### Capital Direction
-Extract from `concept_dashboard.json`:
-```markdown
-## Capital Direction
-- 主力资金方向: (infer from concept_dashboard.json Capital ranking — mention the capital leader)
-```
-**CRITICAL:** When you mention a concept in the narrative (e.g., "CPO概念净流入排名第一"),
-the reader MUST be able to verify it in the Theme Dashboard table's Capital column.
-Always cross-check: the concept you reference in prose MUST appear in the Dashboard table.
+
+From `concept_dashboard.json` Capital ranking — name the capital leader. Any concept cited in prose MUST appear in the Theme Dashboard table (same file).
 
 ### Theme Dashboard
-Extract from `concept_dashboard.json`. Each concept is a multi-dimensional object. 
-Build a table showing the top 15 concepts by Composite rank, with all dimension ranks visible:
 
-```markdown
-## Theme Dashboard
-| # | Theme | Perf | Capital | Breadth | Momentum | Composite |
-|---|-------|------|---------|---------|----------|-----------|
-| 1 | 国产芯片 | 27 | 4 | 2 | 2 | 1(94.5) |
+From `concept_dashboard.json`, top concepts by Composite rank. Dimension legend:
 
-Legend:
-Perf = Performance rank (涨幅排位): answers "today's market recognition?"
-Capital = Capital rank (资金排位): answers "sustained buying pressure?"
-Breadth = Breadth rank (广度排位): answers "sector resonance or single-stock hype?"
-Momentum = Momentum rank (持续性排位): answers "strengthening or fading?" (based on limit_up/first_board/continued_board counts)
-Composite = Weighted blend (Capital 35% + Breadth 25% + Momentum 25% + Performance 15%)
-```
+| Column | Meaning |
+|--------|---------|
+| Perf | Performance rank — today's market recognition |
+| Capital | Capital rank — sustained buying pressure |
+| Breadth | Breadth rank — sector resonance vs single-stock hype |
+| Momentum | Continuity rank — strengthening or fading |
+| Composite | Capital 35% + Breadth 25% + Momentum 25% + Performance 15% |
 
-When describing the table in narrative, align description with the column:
-- "Performance最强的是X" → reference Perf column
-- "资金最稳的是Y" → reference Capital column
-- "赚钱效应最广的是Z" → reference Breadth column
-- "持续性最强的是W" → reference Momentum column
-- "综合最强" → reference Composite column
+Narrative claims must match the column they describe (e.g. "资金第一" → Capital column).
 
+### ScanPool sanity
 
-## Output: ScanPool
-
-The `build_scan_pool.py` output (JSON) contains the Scan Pool (300-500 stocks, basic data only — NO MACD/RSI/ATR/Bollinger).
-
-Save to: `intraday/{date}/market_state.md` (final report) and `.cache/intraday/{date}/scan_pool.json` (intermediate data)
+Confirm `scan_pool.json` exists and holds a large basic pool (typically 300–500 names, basic fields only — no MACD/RSI/ATR/Bollinger).
 
 ## Constraints
 
-- DO NOT compute any technical indicators (MACD, RSI, ATR, Bollinger) — that's Skill 2 territory
-- DO NOT output Direction, RiskSeverity, buy/sell recommendations — that's Skill 3 territory
-- DO NOT reference news or morning predictions — this is pure market observation
-- All numbers MUST come from script output; LLM generates zero numeric values
-- Use `bash` tool with parallel invocations for speed (target < 5s compute time)
-- Scan Pool is 300-500 stocks with only basic market data fields
-- Each concept in the Theme Dashboard is a multi-dimensional object — reference the correct column for the narrative: Capital column for capital claims, Perf column for performance claims, etc.
-- If a concept is mentioned in prose (e.g., "CPO资金第一"), its row MUST be visible in the Dashboard table for reader verification
+- DO NOT compute technical indicators — Skill 2 / compute territory
+- DO NOT output Direction, RiskSeverity, buy/sell recommendations — Skill 3 only
+- DO NOT reference news or morning predictions — pure market observation
+- All numbers MUST come from script/JSON output under `.cache/intraday/{date}/`
+- Prefer orchestrator compute once; do not re-fetch when cache is present

@@ -21,7 +21,11 @@ Skill 3 → Overnight Scoring + intraday_mapper.annotations.json → intraday_ma
 [14:50 Execute Buy]
 ```
 
-## Execute: Compute Overnight Scores
+## Execute: Overnight scores (compute-owned)
+
+In the normal orchestrated flow, `run_intraday_pipeline.py` already writes
+`.cache/intraday/{date}/opportunity_pool.json`. Do **not** re-score if that file
+exists for the date. Only if compute was skipped:
 
 ```bash
 python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
@@ -101,8 +105,7 @@ python .opencode/skills/intraday-strategy/scripts/validate_overnight_strategy_js
 python .opencode/skills/intraday-strategy/scripts/render_overnight_strategy_html.py --date {YYYY-MM-DD}
 ```
 
-The following seven headings describe logical data groups in the final JSON,
-not Markdown sections.
+The following seven headings describe logical data groups in the final JSON.
 
 ### 1. Market State
 Copy from Skill 1 output — indices, breadth, capital direction, Theme Dashboard (top 10 by Composite rank).
@@ -182,9 +185,9 @@ Apply size based on tier (A: observe, B: standard position, C: half position)
 ## Strategy fields
 
 Store the following content under `market_assessment`, per-stock `reasoning`,
-and top-level `strategy` in `intraday_mapper.json`. The build script projects
-those fields into `overnight_strategy.json`; do not create
-`overnight_strategy.md` as a data dependency:
+and top-level `strategy` in `intraday_mapper.json`. Publish path:
+annotations → validate → `intraday_mapper.json` → `overnight_strategy.json` →
+`overnight_strategy.html`.
 
 1. **Market Context** — RegimeHint, 明日预期
 2. **Strategy Table** — per-stock: 方向 / 交易策略 / 仓位 / 持仓意图 (T+0/T+1)

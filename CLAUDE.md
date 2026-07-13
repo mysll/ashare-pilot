@@ -43,11 +43,12 @@ update_cookie.bat    # Opens Chrome for login/captcha verification
 
 ```
 predict/{date}/          Daily pipeline outputs (news.json, news.md, themes.json, theme_stocks.json, mapper.json, strategy.json, daily_report.html)
-intraday/{date}/         Intraday pipeline outputs (intraday_mapper.md)
+intraday/{date}/         Intraday overnight outputs (intraday_mapper.base.json, annotations.json, intraday_mapper.json, overnight_strategy.json, overnight_strategy.html)
+.cache/intraday/{date}/  Intraday compute cache (market_breadth, indices, concept_dashboard, scan_pool, compute_pool_enriched, theme_ranking, opportunity_pool)
 memory/daily/{date}/     Morning verification (verification.md)
 memory/intraday/{date}/  Intraday verification (intraday_verification.md)
 memory/RULES.md          Morning trading rules — MUST read before generating strategy
-memory/INTRADAY_RULES.md Intraday trading rules — MUST read before generating intraday strategy
+memory/INTRADAY_RULES.md Intraday trading rules — MUST read before generating overnight strategy
 memory/SHARED_RULES.md   Shared rules (both agents)
 memory/PERFORMANCE.md    Cumulative performance & key dates
 memory/MEMORY.md         Memory system navigation
@@ -56,9 +57,9 @@ memory/MEMORY.md         Memory system navigation
 
 ## Two-Agent System
 
-**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md`. Generates `predict/{date}/strategy.md`.
+**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md`. Generates `predict/{date}/strategy.json` (HTML report optional).
 
-**Intraday Agent (14:30 weekdays):** Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`. Generates `intraday/{date}/intraday_mapper.md`.
+**Intraday Agent (14:30 weekdays):** Orchestrates skill `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`. Canonical outputs: `intraday/{date}/intraday_mapper.json` + `overnight_strategy.json`; human board: `overnight_strategy.html`. JSON is the only inter-step contract.
 
 Both agents write verification after market close: Morning → `memory/daily/{date}/verification.md`, Intraday → `memory/intraday/{date}/intraday_verification.md`. Rules are versioned with verification history.
 
@@ -115,7 +116,7 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 
 ## Memory & Rules System
 
-Before generating `strategy.md`, MUST read `memory/RULES.md` for active trading rules. Before generating `intraday_mapper.md`, MUST read `memory/INTRADAY_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, Intraday writes to `memory/intraday/{date}/intraday_verification.md`. New rule discoveries update the corresponding rules file with verification history.
+Before generating morning strategy, MUST read `memory/RULES.md`. Before generating overnight strategy (`intraday_mapper.annotations.json` / mapper), MUST read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, Intraday writes to `memory/intraday/{date}/intraday_verification.md`. New rule discoveries update the corresponding rules file with verification history.
 
 ## Automation
 
