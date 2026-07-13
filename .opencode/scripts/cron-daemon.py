@@ -21,6 +21,7 @@ Cron format: minute hour day month weekday
 import argparse
 import logging
 import os
+import platform
 import subprocess
 import sys
 import threading
@@ -139,9 +140,19 @@ def setup_logger(log_dir: str) -> logging.Logger:
 def run_analysis(logger: logging.Logger, cmd_arg: str, model_arg: str) -> bool:
     logger.info(f"Starting daily market analysis (cmd: {cmd_arg} model: {model_arg})...")
     try:
-        shell_cmd = f"opencode run '{cmd_arg}' --model {model_arg} --dangerously-skip-permissions"
+        cmds = [
+            "opencode", "run", cmd_arg,
+            "--model", model_arg,
+            "--dangerously-skip-permissions",
+        ]
+        if platform.system() == "Windows":
+            shell_cmd = " ".join(f"'{a}'" if ' ' in a else a for a in cmds)
+            popen_args = [["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", shell_cmd]]
+        else:
+            popen_args = [cmds]
+
         process = subprocess.Popen(
-            ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", shell_cmd],
+            *popen_args,
             cwd=PROJECT_DIR,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

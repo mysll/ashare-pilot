@@ -53,6 +53,10 @@ command -v opencode
 opencode --version
 """
 
+[tasks.auto]
+description = "启动 cron 守护进程（同 auto.sh）"
+run = "python .opencode/scripts/cron-daemon.py"
+
 [tasks.update-cli]
 run = [
   "npm install -g opencode-ai@latest"
