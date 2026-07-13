@@ -167,6 +167,8 @@ def main():
         str(out_dir / "compute_pool_enriched.json"),
         "--opportunity-pool-size", str(args.opportunity_size),
         "--json", "-o", str(out_dir / "opportunity_pool.json"),
+        "--breadth", str(out_dir / "market_breadth.json"),
+        "--indices", str(out_dir / "indices.json"),
     ]
     results["score"] = run_cmd(score_cmd, "score")
 

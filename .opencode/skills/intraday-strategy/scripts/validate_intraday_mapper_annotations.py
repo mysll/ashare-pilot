@@ -15,9 +15,24 @@ CODE_RE = re.compile(r"^(sh|sz)\d{6}$")
 DIRECTIONS = {"持有偏多", "持有", "谨慎持有", "观望"}
 STRATEGIES = {"趋势跟随", "回调布局", "强势接力", "防御布局"}
 RISKS = {"low", "medium", "high", "critical"}
+COMPUTE_OWNED_STOCK_FIELDS = {
+    "overnight_score",
+    "absolute_score",
+    "tier",
+    "rank_tier",
+    "score_trace",
+    "floor_pass",
+    "floor_reason",
+    "anomaly_flags",
+    "i11_flagged",
+    "i11_applied",
+}
+HOLD_DIRECTIONS = {"持有偏多", "持有", "谨慎持有"}
+I14_WATCH_MAX = {"观望"}
+I14_CAUTIOUS_MAX = {"观望", "谨慎持有"}
 
 
-def validate(doc: Any, date: str, allowed_codes: set[str]) -> list[str]:
+def validate(doc: Any, date: str, allowed_codes: set[str], base: dict | None = None) -> list[str]:
     errors: list[str] = []
     if not isinstance(doc, dict):
         return ["root: must be object"]
@@ -34,12 +49,27 @@ def validate(doc: Any, date: str, allowed_codes: set[str]) -> list[str]:
     if not isinstance(stocks, list):
         errors.append("stocks: must be list")
         return errors
+
+    base = base if isinstance(base, dict) else {}
+    base_by_code = {
+        item.get("code"): item
+        for item in base.get("stocks", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    pool_summary = base.get("pool_summary") if isinstance(base.get("pool_summary"), dict) else {}
+    regime = pool_summary.get("regime_snapshot") if isinstance(pool_summary.get("regime_snapshot"), dict) else {}
+    up_ratio = regime.get("up_ratio_pct")
+    i13_active = isinstance(up_ratio, (int, float)) and up_ratio < 15
+
     seen: set[str] = set()
     for i, item in enumerate(stocks):
         path = f"stocks[{i}]"
         if not isinstance(item, dict):
             errors.append(f"{path}: must be object")
             continue
+        for field in COMPUTE_OWNED_STOCK_FIELDS:
+            if field in item:
+                errors.append(f"{path}.{field}: compute-owned field not allowed in annotations")
         code = item.get("code")
         if not isinstance(code, str) or not CODE_RE.fullmatch(code):
             errors.append(f"{path}.code: invalid A-share code")
@@ -49,7 +79,8 @@ def validate(doc: Any, date: str, allowed_codes: set[str]) -> list[str]:
             errors.append(f"{path}.code: duplicate {code}")
         else:
             seen.add(code)
-        if item.get("direction") not in DIRECTIONS:
+        direction = item.get("direction")
+        if direction not in DIRECTIONS:
             errors.append(f"{path}.direction: invalid enum")
         if item.get("trading_strategy") not in STRATEGIES:
             errors.append(f"{path}.trading_strategy: invalid enum")
@@ -58,9 +89,30 @@ def validate(doc: Any, date: str, allowed_codes: set[str]) -> list[str]:
         for field in ("expected_premium", "key_reason", "reasoning_trace"):
             if not isinstance(item.get(field), str) or not item[field].strip():
                 errors.append(f"{path}.{field}: must be non-empty string")
+
+        if i13_active and direction in HOLD_DIRECTIONS:
+            errors.append(f"{path}.direction: I13 requires 观望 when up_ratio_pct<15")
+
+        base_stock = base_by_code.get(code) if isinstance(code, str) else None
+        if isinstance(base_stock, dict):
+            exemption = base_stock.get("i14_exemption")
+            if exemption == "watch" and direction not in I14_WATCH_MAX and direction in HOLD_DIRECTIONS:
+                errors.append(f"{path}.direction: i14_exemption=watch caps tradeability at 观望")
+            if exemption == "cautious_hold" and direction not in I14_CAUTIOUS_MAX and direction in HOLD_DIRECTIONS:
+                if direction in {"持有", "持有偏多"}:
+                    errors.append(
+                        f"{path}.direction: i14_exemption=cautious_hold caps direction at 谨慎持有"
+                    )
+
     strategy = doc.get("strategy")
     if not isinstance(strategy, dict):
         errors.append("strategy: must be object")
+    elif i13_active:
+        cap = strategy.get("position_cap")
+        if isinstance(cap, str) and cap.strip() not in {"0", "0%", "零", "空仓"}:
+            # allow explicit zero wording; reject clearly positive caps when possible
+            if any(ch.isdigit() and ch != "0" for ch in cap):
+                errors.append("strategy.position_cap: I13 requires zero position")
     return errors
 
 
@@ -81,7 +133,7 @@ def main() -> int:
         for item in base.get("stocks", [])
         if isinstance(item, dict) and isinstance(item.get("code"), str)
     }
-    errors = validate(read_json(input_path), args.date, allowed)
+    errors = validate(read_json(input_path), args.date, allowed, base=base)
     if errors:
         print(f"[ERROR] {input_path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for error in errors:

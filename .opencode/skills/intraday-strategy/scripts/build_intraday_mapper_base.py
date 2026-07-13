@@ -52,9 +52,11 @@ def main() -> int:
         "pool_summary": {
             key: pool.get(key)
             for key in (
-                "weights_version", "pool_size", "scored_count",
+                "weights_version", "scoring_policy_version", "pool_size", "scored_count",
                 "quality_filtered_count", "floor_rejected_count",
                 "opportunity_pool_size", "score_stats", "pool_warning",
+                "regime_snapshot", "data_quality_summary",
+                "i14_applied_count", "i14_skipped_no_quick_score", "vwap_missing_count",
             )
         },
         "stocks": opportunity_stocks(pool),

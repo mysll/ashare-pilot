@@ -23,7 +23,9 @@ Usage:
 import argparse
 import json
 import math
+import statistics
 import sys
+from pathlib import Path
 
 
 WEIGHTS_V1_1 = {
@@ -243,41 +245,60 @@ def extract_trend_quality_raw(stock):
     return boll_score * 0.4 + ma_score * 0.4 + vol_score * 0.2
 
 
-def apply_quality_filter(pool):
+def apply_quality_filter(pool, regime=None):
     """Absolute eligibility floor — removes ONLY genuinely disqualifying stocks.
 
-    Hard exclusions (physically unsuitable for overnight holding):
+    Hard exclusions:
         1. No real-time data (price <= 0)
-        2. Price below intraday VWAP (buyers not in control at close)
+        2. Price below intraday VWAP (unless I14 exemption applies)
 
-    The former 涨幅/换手 hard bands are REMOVED. Strong stocks (涨停/大涨,
-    high turnover) are no longer deleted outright — they flow through to
-    scoring where extract_risk_raw applies a graded soft penalty instead.
-    This prevents the "active day → empty pool" failure mode.
+    I14 (weak market, up_ratio_pct < 35): micro VWAP deviation may pass with
+    a tradeability ceiling tag (watch / cautious_hold). Requires numeric
+    quick_score; no invented proxy.
 
-    If VWAP data is unavailable (0), the VWAP check is skipped — the
-    stock passes through for scoring. A counter tracks how many were
-    skipped so the strategy output can note this.
-
-    Returns (passed, filtered, vwap_missing_count) tuple.
+    Returns (passed, filtered, quality_stats) where quality_stats includes
+    vwap_missing_count, i14_applied_count, i14_skipped_no_quick_score.
     """
+    regime = regime or {}
+    i14_active = bool(regime.get("i14_active"))
+    if "i14_active" not in regime and is_finite_number(regime.get("up_ratio_pct")):
+        i14_active = float(regime["up_ratio_pct"]) < 35
+
     passed = []
     filtered = []
     vwap_missing_count = 0
+    i14_applied_count = 0
+    i14_skipped_no_quick_score = 0
+
     for s in pool:
+        s.pop("i14_exemption", None)
         enriched = s.get("enriched", {})
         rt = enriched.get("real_time", {})
         price = parse_float(rt.get("price", 0))
         vwap = parse_float(rt.get("vwap", 0))
-
         reasons = []
 
         if price <= 0:
             reasons.append("无实时行情数据")
-        elif vwap > 0:
-            if price < vwap:
+        elif vwap > 0 and price < vwap:
+            deviation_pct = (vwap - price) / vwap * 100.0
+            qs_raw = s.get("quick_score")
+            has_qs = is_finite_number(qs_raw)
+            quick_score = float(qs_raw) if has_qs else None
+            exempt = None
+            if i14_active:
+                if not has_qs:
+                    i14_skipped_no_quick_score += 1
+                elif deviation_pct < 3 and quick_score >= 70:
+                    exempt = "watch"
+                elif deviation_pct < 5 and quick_score >= 80:
+                    exempt = "cautious_hold"
+            if exempt:
+                s["i14_exemption"] = exempt
+                i14_applied_count += 1
+            else:
                 reasons.append("价格跌破当日成交均价线")
-        else:
+        elif vwap <= 0:
             vwap_missing_count += 1
 
         if reasons:
@@ -287,7 +308,177 @@ def apply_quality_filter(pool):
         else:
             passed.append(s)
 
-    return passed, filtered, vwap_missing_count
+    stats = {
+        "vwap_missing_count": vwap_missing_count,
+        "i14_applied_count": i14_applied_count,
+        "i14_skipped_no_quick_score": i14_skipped_no_quick_score,
+    }
+    return passed, filtered, stats
+
+
+def is_finite_number(val) -> bool:
+    if val is None or val == "" or val == "-":
+        return False
+    try:
+        x = float(str(val).replace("%", "").replace("+", "").replace(",", ""))
+        return math.isfinite(x)
+    except (TypeError, ValueError):
+        return False
+
+
+def is_present_number(obj: dict, key: str) -> bool:
+    if not isinstance(obj, dict) or key not in obj:
+        return False
+    return is_finite_number(obj.get(key))
+
+
+def unavailable_regime(reason: str) -> dict:
+    return {
+        "available": False,
+        "up_ratio_pct": None,
+        "sz_change_pct": None,
+        "i10_active": False,
+        "i14_active": False,
+        "i10_capital_scale": 1.0,
+        "warnings": [reason],
+    }
+
+
+def i10_capital_scale(up_ratio_pct: float, sz_change_pct: float) -> float:
+    if up_ratio_pct >= 40 or sz_change_pct >= 0:
+        return 1.0
+    if up_ratio_pct >= 20:
+        return 0.5
+    if up_ratio_pct >= 10:
+        return 0.25
+    return 0.0
+
+
+def parse_required_percent(val) -> float:
+    if not is_finite_number(val):
+        raise ValueError("percent_missing")
+    return float(str(val).replace("%", "").replace("+", "").replace(",", ""))
+
+
+def parse_regime_from_files(breadth_path, indices_path) -> dict:
+    """Load regime_snapshot from market_breadth.json + indices.json."""
+    try:
+        with open(breadth_path, "r", encoding="utf-8") as f:
+            breadth = json.load(f)
+        with open(indices_path, "r", encoding="utf-8") as f:
+            indices = json.load(f)
+        if not isinstance(breadth, dict):
+            return unavailable_regime("market_breadth_not_object")
+        if breadth.get("partial") is True:
+            return unavailable_regime("market_breadth_partial")
+        if is_finite_number(breadth.get("up_ratio")):
+            up_ratio_pct = float(breadth["up_ratio"])
+        else:
+            for key in ("up_count", "down_count", "flat_count"):
+                if not is_finite_number(breadth.get(key)):
+                    return unavailable_regime(f"market_breadth_missing_{key}")
+            up = float(breadth["up_count"])
+            down = float(breadth["down_count"])
+            flat = float(breadth["flat_count"])
+            total = up + down + flat
+            if total <= 0:
+                return unavailable_regime("market_breadth_total_zero")
+            up_ratio_pct = up / total * 100.0
+
+        if not isinstance(indices, list):
+            return unavailable_regime("indices_not_array")
+        sz = next((row for row in indices if isinstance(row, dict) and row.get("code") == "sz399001"), None)
+        if sz is None:
+            return unavailable_regime("sz399001_missing")
+        sz_change_pct = parse_required_percent(sz.get("percent"))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError) as exc:
+        return unavailable_regime(f"regime_parse_error:{type(exc).__name__}")
+
+    scale = i10_capital_scale(up_ratio_pct, sz_change_pct)
+    return {
+        "available": True,
+        "up_ratio_pct": round(up_ratio_pct, 2),
+        "sz_change_pct": round(sz_change_pct, 2),
+        "i10_active": scale < 1.0,
+        "i14_active": up_ratio_pct < 35,
+        "i10_capital_scale": scale,
+        "warnings": [],
+    }
+
+
+def detect_dim_anomaly(dim: str, raw: float, stock: dict):
+    """Return reason if missing/contradictory source data; raw=0 alone is not anomaly."""
+    enriched = stock.get("enriched", {}) or {}
+    mf = enriched.get("money_flow", {}) or {}
+    rt = enriched.get("real_time", {}) or {}
+    turnover = parse_float(stock.get("turnover", "0%"))
+
+    if dim == "conviction" and not is_present_number(mf, "super_large_net"):
+        return "missing_super_large_net"
+    if dim in ("intensity", "capital") and not is_present_number(mf, "main_net_inflow"):
+        return "missing_main_net_inflow"
+    if dim == "consistency" and any(
+        not is_present_number(mf, key)
+        for key in ("super_large_net", "large_net", "medium_net", "small_net")
+    ):
+        return "partial_money_flow_tiers"
+    if dim == "tail":
+        high = parse_float(rt.get("high", 0))
+        low = parse_float(rt.get("low", 0))
+        price = parse_float(rt.get("price", 0))
+        if price > 0 and turnover > 20 and high <= low:
+            return "intraday_range_contradiction"
+    return None
+
+
+def apply_i11_median_replacement(raws_by_index: dict, pool: list, skip_money_flow_dims: bool = False) -> dict:
+    """Replace missing/contradictory dim raws with valid-peer median (>=3 peers)."""
+    money_dims = {"capital", "intensity", "conviction", "consistency"}
+    dims = list(next(iter(raws_by_index.values())).keys())
+    adjusted = {i: dict(raws_by_index[i]) for i in raws_by_index}
+    flags = {i: [] for i in raws_by_index}
+
+    for dim in dims:
+        if skip_money_flow_dims and dim in money_dims:
+            continue
+        clean = []
+        for i in raws_by_index:
+            reason = detect_dim_anomaly(dim, raws_by_index[i][dim], pool[i])
+            if not reason:
+                clean.append(raws_by_index[i][dim])
+        med = statistics.median(clean) if len(clean) >= 3 else None
+        for i in raws_by_index:
+            reason = detect_dim_anomaly(dim, raws_by_index[i][dim], pool[i])
+            if not reason:
+                continue
+            if med is not None:
+                flags[i].append({
+                    "dim": dim,
+                    "raw": round(raws_by_index[i][dim], 6),
+                    "replacement": round(med, 6),
+                    "reason": reason,
+                    "valid_peer_count": len(clean),
+                })
+                adjusted[i][dim] = med
+            else:
+                flags[i].append({
+                    "dim": dim,
+                    "raw": round(raws_by_index[i][dim], 6),
+                    "replacement": None,
+                    "reason": reason,
+                    "valid_peer_count": len(clean),
+                    "replacement_skipped": "insufficient_valid_peers",
+                })
+
+    for i in raws_by_index:
+        pool[i]["anomaly_flags"] = flags[i]
+        pool[i]["i11_flagged"] = bool(flags[i])
+        pool[i]["i11_applied"] = any(f.get("replacement") is not None for f in flags[i])
+    return adjusted
+
+
+def scaled_contribution(percentile: float, weight: float, scale: float) -> float:
+    return percentile * weight * scale
 
 
 # Absolute quality floor for opportunity-pool entry.
@@ -376,11 +567,15 @@ def compute_confidences(stock, raw_values, all_raws_by_dim):
     }
 
 
-def compute_scores(pool):
+def compute_scores(pool, regime=None):
     """Compute percentile-based overnight scores for the entire pool.
 
-    Returns {scored_pool, opportunity_pool_size, ...}
+    Order: extract raws → I11 median replace → percentiles → I10 contrib scale → sum.
     """
+    regime = regime or {}
+    raw_scale = regime.get("i10_capital_scale", 1.0)
+    capital_scale = 1.0 if raw_scale is None else float(raw_scale)
+
     # Extract raw values
     raws = {}
     for i, s in enumerate(pool):
@@ -395,6 +590,9 @@ def compute_scores(pool):
             "consistency": extract_consistency_raw(s),
             "trend": extract_trend_quality_raw(s),
         }
+
+    skip_mf_i11 = not money_flow_available(pool)
+    raws = apply_i11_median_replacement(raws, pool, skip_money_flow_dims=skip_mf_i11)
 
     all_raws = {}
     for dim in ["theme", "capital", "tail", "position", "risk", "intensity", "conviction", "consistency", "trend"]:
@@ -416,31 +614,41 @@ def compute_scores(pool):
         trend_pct = percentile_rank(all_raws["trend"], r["trend"])
 
         W = WEIGHTS_V1_2
+        theme_contrib = theme_pct * W["theme_continuity"]
+        capital_contrib = scaled_contribution(capital_pct, W["capital_continuity"], capital_scale)
+        tail_contrib = tail_pct * W["tail_strength"]
+        position_contrib = position_pct * W["position_advantage"]
+        intensity_contrib = scaled_contribution(intensity_pct, W["intensity"], capital_scale)
+        conviction_contrib = scaled_contribution(conviction_pct, W["conviction"], capital_scale)
+        consistency_contrib = scaled_contribution(consistency_pct, W["consistency"], capital_scale)
+        trend_contrib = trend_pct * W["trend_quality"]
+        risk_contrib = (100.0 - risk_pct) * W["risk_penalty"]
+
         overnight_score = round(
-            theme_pct * W["theme_continuity"]
-            + capital_pct * W["capital_continuity"]
-            + tail_pct * W["tail_strength"]
-            + position_pct * W["position_advantage"]
-            + intensity_pct * W["intensity"]
-            + conviction_pct * W["conviction"]
-            + consistency_pct * W["consistency"]
-            + trend_pct * W["trend_quality"]
-            - (100.0 - risk_pct) * W["risk_penalty"],
+            theme_contrib
+            + capital_contrib
+            + tail_contrib
+            + position_contrib
+            + intensity_contrib
+            + conviction_contrib
+            + consistency_contrib
+            + trend_contrib
+            - risk_contrib,
             1,
         )
 
         overnight_score = max(overnight_score, 0.0)
 
         trace = {
-            "theme_continuity": {"raw": round(r["theme"], 3), "pct": theme_pct, "weight": W["theme_continuity"], "contrib": round(theme_pct * W["theme_continuity"], 1)},
-            "capital_continuity": {"raw": round(r["capital"], 3), "pct": capital_pct, "weight": W["capital_continuity"], "contrib": round(capital_pct * W["capital_continuity"], 1)},
-            "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": W["tail_strength"], "contrib": round(tail_pct * W["tail_strength"], 1)},
-            "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": W["position_advantage"], "contrib": round(position_pct * W["position_advantage"], 1)},
-            "risk_penalty": {"raw": round(r["risk"], 3), "pct": risk_pct, "weight": W["risk_penalty"], "contrib": round((100.0 - risk_pct) * W["risk_penalty"], 1)},
-            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct, "weight": W["intensity"], "contrib": round(intensity_pct * W["intensity"], 1)},
-            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct, "weight": W["conviction"], "contrib": round(conviction_pct * W["conviction"], 1)},
-            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct, "weight": W["consistency"], "contrib": round(consistency_pct * W["consistency"], 1)},
-            "trend_quality": {"raw": round(r["trend"], 3), "pct": trend_pct, "weight": W["trend_quality"], "contrib": round(trend_pct * W["trend_quality"], 1)},
+            "theme_continuity": {"raw": round(r["theme"], 3), "pct": theme_pct, "weight": W["theme_continuity"], "contrib": round(theme_contrib, 1)},
+            "capital_continuity": {"raw": round(r["capital"], 3), "pct": capital_pct, "weight": W["capital_continuity"], "scale": capital_scale, "contrib": round(capital_contrib, 1)},
+            "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": W["tail_strength"], "contrib": round(tail_contrib, 1)},
+            "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": W["position_advantage"], "contrib": round(position_contrib, 1)},
+            "risk_penalty": {"raw": round(r["risk"], 3), "pct": risk_pct, "weight": W["risk_penalty"], "contrib": round(risk_contrib, 1)},
+            "intensity": {"raw": round(r["intensity"], 3), "pct": intensity_pct, "weight": W["intensity"], "scale": capital_scale, "contrib": round(intensity_contrib, 1)},
+            "conviction": {"raw": round(r["conviction"], 3), "pct": conviction_pct, "weight": W["conviction"], "scale": capital_scale, "contrib": round(conviction_contrib, 1)},
+            "consistency": {"raw": round(r["consistency"], 3), "pct": consistency_pct, "weight": W["consistency"], "scale": capital_scale, "contrib": round(consistency_contrib, 1)},
+            "trend_quality": {"raw": round(r["trend"], 3), "pct": trend_pct, "weight": W["trend_quality"], "contrib": round(trend_contrib, 1)},
         }
 
         confidence = compute_confidences(stock, r, all_raws)
@@ -452,25 +660,25 @@ def compute_scores(pool):
 
     scored.sort(key=lambda x: x.get("overnight_score", 0), reverse=True)
 
+    pool_size = len(scored)
     for rank_idx, stock in enumerate(scored):
-        stock["rank"] = rank_idx + 1
-        score = stock.get("overnight_score", 0)
-        if score >= 75:
-            stock["tier"] = "A"
-        elif score >= 60:
-            stock["tier"] = "B"
-        elif score >= 45:
-            stock["tier"] = "C"
-        else:
-            stock["tier"] = "D"
+        rank = rank_idx + 1
+        stock["rank"] = rank
+        stock["absolute_score"] = stock.get("overnight_score", 0)
+        rank_tier = classify_rank_tier(rank, pool_size)
+        stock["rank_tier"] = rank_tier
+        stock["tier"] = rank_tier  # compatibility alias == rank_tier only
+        stock["rank_tier_rule"] = "rank_percentile_v1"
 
     return scored
 
 
-def classify_tier(score, rank, pool_size):
-    """Tier by rank percentile (not absolute threshold).
-    A = top 10%, B = top 40%, C = top 70%.
+def classify_rank_tier(rank, pool_size):
+    """Rank tier by pool rank percentile (not absolute score, not tradeability).
+    A = top 10%, B = top 40%, C = top 70%, D = rest.
     """
+    if pool_size <= 0:
+        return "D"
     pct = rank / pool_size
     if pct <= 0.10:
         return "A"
@@ -480,6 +688,11 @@ def classify_tier(score, rank, pool_size):
         return "C"
     else:
         return "D"
+
+
+def classify_tier(score, rank, pool_size):
+    """Backward-compatible alias; ignores absolute score, uses rank only."""
+    return classify_rank_tier(rank, pool_size)
 
 
 def main():
@@ -494,6 +707,8 @@ def main():
     )
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
+    parser.add_argument("--breadth", help="market_breadth.json for I10/I14 regime")
+    parser.add_argument("--indices", help="indices.json for I10/I14 regime")
     args = parser.parse_args()
 
     with open(args.input, "r", encoding="utf-8") as f:
@@ -503,20 +718,28 @@ def main():
     if isinstance(data, list):
         pool = data
 
+    if args.breadth and args.indices:
+        regime = parse_regime_from_files(args.breadth, args.indices)
+    else:
+        regime = unavailable_regime("breadth_or_indices_not_provided")
+        print("[WARN] --breadth/--indices omitted; I10/I14 inactive", file=sys.stderr)
+    if not regime.get("available"):
+        print(f"[WARN] regime unavailable: {regime.get('warnings')}", file=sys.stderr)
+
     print(f"Scoring {len(pool)} stocks (V1.2 TrendQuality)...", file=sys.stderr)
 
-    pool, quality_filtered, vwap_missing_count = apply_quality_filter(pool)
+    pool, quality_filtered, quality_stats = apply_quality_filter(pool, regime=regime)
+    vwap_missing_count = quality_stats["vwap_missing_count"]
     vwap_skip_note = ""
     if vwap_missing_count > 0:
         vwap_skip_note = f" (VWAP无数据跳过过滤: {vwap_missing_count}只)"
+    if quality_stats["i14_applied_count"]:
+        vwap_skip_note += f" (I14豁免: {quality_stats['i14_applied_count']}只)"
     print(f"Quality filter: {len(pool)} passed, {len(quality_filtered)} filtered{vwap_skip_note}", file=sys.stderr)
 
-    scored = compute_scores(pool)
+    scored = compute_scores(pool, regime=regime)
 
     pool_size = len(scored)
-
-    for s in scored:
-        s["tier"] = classify_tier(s["overnight_score"], s["rank"], pool_size)
 
     # Absolute quality floor: percentile rank is relative, so gate on
     # standalone merit before a stock can enter the opportunity pool.
@@ -566,10 +789,15 @@ def main():
 
     output = {
         "weights_version": "V1.2_TrendQuality",
+        "scoring_policy_version": "convergence_v1",
         "pool_size": pool_size,
         "scored_count": len(scored),
         "quality_filtered_count": len(quality_filtered),
         "vwap_missing_count": vwap_missing_count,
+        "i14_applied_count": quality_stats["i14_applied_count"],
+        "i14_skipped_no_quick_score": quality_stats["i14_skipped_no_quick_score"],
+        "data_quality_summary": quality_stats,
+        "regime_snapshot": regime,
         "money_flow_available": mf_available,
         "quality_filtered": quality_filtered,
         "opportunity_pool_size": len(opportunity_pool),

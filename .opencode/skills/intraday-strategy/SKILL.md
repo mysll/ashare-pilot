@@ -35,21 +35,25 @@ python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intr
 
 | Dimension | Weight | What it measures |
 |-----------|:------:|-----------------|
-| Theme Continuity | 18% | Bottom-up theme heat rank (leader/liquidity/momentum/breadth) |
+| Theme Continuity | 18% | source_pool ordinal (limit_up/turnover/gain_range) blended with inflow sigmoid — **not** theme_ranking heat rank (known gap) |
 | Capital Continuity | 18% | Main force net inflow vs pool peers (percentile) |
 | Tail Strength | 14% | Price position within day range × volume ratio |
-| Position Advantage | 9% | Log-scaled gain with gaussian sweet spot (peak 3-5%) |
+| Position Advantage | 9% | Gaussian sweet spot on change% (peak ~4%) |
 | Risk Deduction | -10% | Soft penalty: high change%(≥9.5:+0.4,≥7:+0.2,≥5:+0.05), turnover(>25:+0.3,>15:+0.15,>10:+0.05), limit_up source(+0.15) |
-| Intensity | 9% | Capital efficiency: main_net_inflow / turnover (high inflow + low turnover = conviction) |
-| Conviction | 9% | Institutional ratio: super_large_net / \|main_net_inflow\| (>0.5 = institutions driving) |
-| Consistency | 5% | 4-tier capital directional alignment (1.0 = all tiers same direction) |
-| Trend Quality | 8% | Bollinger zone + MA alignment + volume ratio (upper_half + bullish MAs + vol>1.5 = 1.0) |
+| Intensity | 9% | Capital efficiency: main_net_inflow / turnover |
+| Conviction | 9% | super_large_net / \|main_net_inflow\| |
+| Consistency | 5% | 4-tier capital directional alignment |
+| Trend Quality | 8% | Bollinger zone + MA alignment + volume ratio |
 
-Score = Σ(percentile_score × weight), range 0-100.
+Score = Σ(percentile × weight) [I10 may scale capital-family contributions], range 0–100 (`absolute_score`).
 
-Tiers: A (75+) = Leader Watch, B (60-74) = Premium Candidates, C (45-59) = Early Breakout, D (<45) = Drop.
+Rank tiers (`classify_rank_tier`, pool rank percentile only):
+A = top 10% (Leader Watch), B = top 10–40% (Premium), C = top 40–70% (Early), D = rest.
+Do not use 75/60/45 as hard tier cuts. Compatibility field `tier` == `rank_tier`.
 
-**Important:** V1 uses Rule Based Initial Weights. These will be calibrated via historical backtesting in V2. See spec § 八.
+**Rank tier is not Tradeability.** Suitable/Watch/Extended/Avoid is a separate Reasoning output (`tradeability`). Never map A→Suitable or B→Watch mechanically. Zero Suitable is allowed; threshold changes belong to a later backtest plan.
+
+**Important:** V1.2 uses rule-based initial weights. Calibration is out of scope for dual-truth convergence.
 
 ## JSON-first output contract
 
@@ -248,8 +252,10 @@ Excluded-board stocks:
 | 条件 | 处理 |
 |------|------|
 | 无实时行情数据 (price ≤ 0) | 硬排除，不参与评分 |
-| 价格跌破 VWAP (price < vwap) | 硬排除（买方未控盘） |
+| 价格跌破 VWAP (price < vwap) | 硬排除（买方未控盘）；弱市 I14 可豁免并打 ceiling 标签 |
 | VWAP 数据缺失 | 跳过检查，正常参与评分 |
+| I14: 偏离&lt;3% + quick_score≥70 | 入池 `i14_exemption=watch`（Reasoning ≤ 观望） |
+| I14: 偏离&lt;5% + quick_score≥80 | 入池 `i14_exemption=cautious_hold`（Reasoning ≤ 谨慎持有） |
 | 涨幅/换手偏高 | 不硬排除，通过 `risk_penalty` 软扣分 |
 
 ### 绝对质量地板
@@ -291,6 +297,18 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 | `强势接力` | 涨停次日接力 | 涨停封板股 → **仅A-Tier观望，不尾盘买** |
 | `防御布局` | 低吸稳健型 | 低涨幅+低换手+大市值 |
 
+## Score immutability
+
+- Never recompute OvernightScore, rank_tier, or quality/floor flags in annotations.
+- I10/I11/I14 effects appear only via opportunity_pool / base.json fields
+  (`regime_snapshot`, `anomaly_flags`, `i14_exemption`, `rank_tier`, `absolute_score`).
+- Rank tier and Tradeability are independent. Never translate A→Suitable or B→Watch mechanically.
+- When `i14_exemption=watch`, final tradeability cannot exceed Watch; when
+  `i14_exemption=cautious_hold`, direction cannot exceed 谨慎持有.
+- I13 (extreme weak zero position) is Reasoning-only: set all directions to 观望
+  and position_cap to 0 when breadth up_ratio < 15%; do not claim scores changed.
+- If annotations disagree with base numeric fields, validation / review treats base as truth.
+
 ## Constraints
 
 - This is the ONLY skill that outputs Direction, RiskSeverity, or Expected Premium
@@ -300,6 +318,6 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 - When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)
 - **涨停封板股票 (seal_quality="封死") 不得出现在B-Tier尾盘买入推荐中**
 - **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per .opencode/config/trading-scope.json)**
-- **质量过滤器排除（无行情/跌破VWAP）的股票不得参与评分**
+- **质量过滤器排除（无行情/跌破VWAP且无I14豁免）的股票不得参与评分**
 - Excluded-board 和涨停封板股票可出现在 A-Tier 观察区，但必须标注排除原因
 - Output language: 中文
