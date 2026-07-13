@@ -317,7 +317,7 @@ def apply_quality_filter(pool, regime=None):
 
 
 def is_finite_number(val) -> bool:
-    if val is None or val == "" or val == "-":
+    if isinstance(val, bool) or val is None or val == "" or val == "-":
         return False
     try:
         x = float(str(val).replace("%", "").replace("+", "").replace(",", ""))
@@ -373,6 +373,8 @@ def parse_regime_from_files(breadth_path, indices_path) -> dict:
             return unavailable_regime("market_breadth_partial")
         if is_finite_number(breadth.get("up_ratio")):
             up_ratio_pct = float(breadth["up_ratio"])
+            if not 0.0 <= up_ratio_pct <= 100.0:
+                return unavailable_regime("market_breadth_up_ratio_out_of_range")
         else:
             for key in ("up_count", "down_count", "flat_count"):
                 if not is_finite_number(breadth.get(key)):
@@ -380,6 +382,8 @@ def parse_regime_from_files(breadth_path, indices_path) -> dict:
             up = float(breadth["up_count"])
             down = float(breadth["down_count"])
             flat = float(breadth["flat_count"])
+            if min(up, down, flat) < 0:
+                return unavailable_regime("market_breadth_negative_count")
             total = up + down + flat
             if total <= 0:
                 return unavailable_regime("market_breadth_total_zero")
@@ -433,6 +437,8 @@ def detect_dim_anomaly(dim: str, raw: float, stock: dict):
 
 def apply_i11_median_replacement(raws_by_index: dict, pool: list, skip_money_flow_dims: bool = False) -> dict:
     """Replace missing/contradictory dim raws with valid-peer median (>=3 peers)."""
+    if not raws_by_index:
+        return {}
     money_dims = {"capital", "intensity", "conviction", "consistency"}
     dims = list(next(iter(raws_by_index.values())).keys())
     adjusted = {i: dict(raws_by_index[i]) for i in raws_by_index}

@@ -20,6 +20,11 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
         "source_tier": stock.get("tier"),
         "source_rank": stock.get("rank"),
         "overnight_score": stock.get("overnight_score"),
+        "absolute_score": stock.get("absolute_score"),
+        "rank_tier": stock.get("rank_tier"),
+        "tradeability": reasoning.get("tradeability"),
+        "i14_exemption": stock.get("i14_exemption"),
+        "anomaly_flags": stock.get("anomaly_flags") or [],
         "direction": reasoning.get("direction"),
         "trading_strategy": reasoning.get("trading_strategy"),
         "risk_severity": reasoning.get("risk_severity"),
@@ -54,6 +59,11 @@ def build(mapper: dict[str, Any]) -> dict[str, Any]:
         "schema_version": "intraday_overnight_strategy.v1",
         "date": mapper.get("date"),
         "generated_at": utc_now_iso(),
+        "scoring_policy_version": (
+            mapper.get("pool_summary", {}).get("scoring_policy_version")
+            if isinstance(mapper.get("pool_summary"), dict)
+            else None
+        ),
         "source": {
             "schema_version": mapper.get("schema_version"),
             "generated_at": mapper.get("generated_at"),

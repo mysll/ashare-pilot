@@ -30,7 +30,7 @@ def main() -> int:
         print("[ERROR] invalid base schema/date", file=sys.stderr)
         return 1
     allowed = {item.get("code") for item in base.get("stocks", []) if isinstance(item, dict)}
-    errors = validate(annotations, args.date, allowed)
+    errors = validate(annotations, args.date, allowed, base=base)
     if errors:
         print("[ERROR] annotations validation failed; regenerate annotations", file=sys.stderr)
         for error in errors:

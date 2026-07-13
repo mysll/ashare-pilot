@@ -74,6 +74,7 @@ compute fields into it. The required schema is:
   "stocks": [{
     "code": "sh600000",
     "sector": "string",
+    "tradeability": "Suitable|Watch|Extended|Avoid",
     "direction": "持有偏多|持有|谨慎持有|观望",
     "trading_strategy": "趋势跟随|回调布局|强势接力|防御布局",
     "risk_severity": "low|medium|high|critical",
@@ -303,6 +304,8 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 - I10/I11/I14 effects appear only via opportunity_pool / base.json fields
   (`regime_snapshot`, `anomaly_flags`, `i14_exemption`, `rank_tier`, `absolute_score`).
 - Rank tier and Tradeability are independent. Never translate A→Suitable or B→Watch mechanically.
+- `tradeability` is required in convergence outputs and must use exactly one of
+  `Suitable`, `Watch`, `Extended`, or `Avoid`.
 - When `i14_exemption=watch`, final tradeability cannot exceed Watch; when
   `i14_exemption=cautious_hold`, direction cannot exceed 谨慎持有.
 - I13 (extreme weak zero position) is Reasoning-only: set all directions to 观望

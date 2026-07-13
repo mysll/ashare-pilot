@@ -15,9 +15,16 @@ CODE_RE = re.compile(r"^(sh|sz)\d{6}$")
 DIRECTIONS = {"持有偏多", "持有", "谨慎持有", "观望"}
 STRATEGIES = {"趋势跟随", "回调布局", "强势接力", "防御布局"}
 RISKS = {"low", "medium", "high", "critical"}
+TRADEABILITIES = {"Suitable", "Watch", "Extended", "Avoid"}
 
 
-def validate_stock(item: Any, path: str, expected_direction: str | None, errors: list[str]) -> None:
+def validate_stock(
+    item: Any,
+    path: str,
+    expected_direction: str | None,
+    errors: list[str],
+    require_tradeability: bool = False,
+) -> None:
     if not isinstance(item, dict):
         errors.append(f"{path}: must be object")
         return
@@ -31,6 +38,11 @@ def validate_stock(item: Any, path: str, expected_direction: str | None, errors:
         errors.append(f"{path}.sector: actionable position requires non-empty string")
     if item.get("direction") not in DIRECTIONS:
         errors.append(f"{path}.direction: invalid enum")
+    tradeability = item.get("tradeability")
+    if require_tradeability and tradeability not in TRADEABILITIES:
+        errors.append(f"{path}.tradeability: invalid enum")
+    elif tradeability is not None and tradeability not in TRADEABILITIES:
+        errors.append(f"{path}.tradeability: invalid enum")
     if expected_direction == "观望" and item.get("direction") != "观望":
         errors.append(f"{path}.direction: watchlist item must be 观望")
     if expected_direction == "position" and item.get("direction") == "观望":
@@ -68,6 +80,7 @@ def validate(doc: Any, date: str) -> list[str]:
         errors.append("market: must be object")
     if not isinstance(doc.get("portfolio"), dict):
         errors.append("portfolio: must be object")
+    require_tradeability = doc.get("scoring_policy_version") == "convergence_v1"
     codes: list[str] = []
     for group, expected in (("positions", "position"), ("watchlist", "观望")):
         values = doc.get(group)
@@ -75,7 +88,13 @@ def validate(doc: Any, date: str) -> list[str]:
             errors.append(f"{group}: must be list")
             continue
         for i, item in enumerate(values):
-            validate_stock(item, f"{group}[{i}]", expected, errors)
+            validate_stock(
+                item,
+                f"{group}[{i}]",
+                expected,
+                errors,
+                require_tradeability=require_tradeability,
+            )
             if isinstance(item, dict) and isinstance(item.get("code"), str):
                 codes.append(item["code"])
     if len(codes) != len(set(codes)):
@@ -113,6 +132,12 @@ def main() -> int:
             target = strategy_stocks[code]
             if target.get("overnight_score") != source.get("overnight_score"):
                 errors.append(f"{code}.overnight_score: differs from mapper")
+            if target.get("absolute_score") != source.get("absolute_score"):
+                errors.append(f"{code}.absolute_score: differs from mapper")
+            if target.get("rank_tier") != source.get("rank_tier"):
+                errors.append(f"{code}.rank_tier: differs from mapper")
+            if target.get("tradeability") != source["reasoning"].get("tradeability"):
+                errors.append(f"{code}.tradeability: differs from mapper reasoning")
             if target.get("direction") != source["reasoning"].get("direction"):
                 errors.append(f"{code}.direction: differs from mapper reasoning")
     if errors:
