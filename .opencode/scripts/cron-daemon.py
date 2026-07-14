@@ -214,22 +214,26 @@ def daemon_loop(cron: CronExpression, logger: logging.Logger, cmd_arg: str, mode
 
     last_run_date = None
 
-    while True:
-        now = datetime.now()
+    try:
+        while True:
+            now = datetime.now()
 
-        if cron.matches(now) and last_run_date != now.date():
-            logger.info(f"Cron matched at {now}. Executing...")
-            last_run_date = now.date()
-            run_analysis(logger, cmd_arg, model_arg)
+            if cron.matches(now) and last_run_date != now.date():
+                logger.info(f"Cron matched at {now}. Executing...")
+                last_run_date = now.date()
+                run_analysis(logger, cmd_arg, model_arg)
 
-            next_dt = cron.next_run(now)
-            logger.info(f"Next run scheduled: {next_dt}")
+                next_dt = cron.next_run(now)
+                logger.info(f"Next run scheduled: {next_dt}")
 
-        sleep_until = (now + timedelta(minutes=1)).replace(
-            second=0, microsecond=0
-        )
-        sleep_seconds = (sleep_until - now).total_seconds()
-        time.sleep(max(sleep_seconds, 1))
+            sleep_until = (now + timedelta(minutes=1)).replace(
+                second=0, microsecond=0
+            )
+            sleep_seconds = (sleep_until - now).total_seconds()
+            time.sleep(max(sleep_seconds, 1))
+    except KeyboardInterrupt:
+        logger.info("Daemon stopped by user (Ctrl+C). Exiting.")
+        return
 
 
 def main():
@@ -290,4 +294,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Stopped.", file=sys.stderr)
+        sys.exit(0)
