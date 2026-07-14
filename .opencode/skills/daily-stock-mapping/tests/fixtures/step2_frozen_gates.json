@@ -1,0 +1,79 @@
+{
+  "cases": [
+    {
+      "date": "2026-07-09",
+      "purpose": "oversized universe projection",
+      "gate": "task2",
+      "before": {
+        "date": "2026-07-09",
+        "generated_at": "old",
+        "fixture_candidate_count": 82,
+        "themes": [{"name": "半导体", "rank": 1, "final_heat": 85.0}],
+        "candidates": [
+          {"code": "sz000938", "role_tags": ["ThemeLibrary"], "scores": {"composite": {"value": 78}}},
+          {"code": "sz000977", "role_tags": ["ThemeLibrary"], "scores": {"composite": {"value": 76}}}
+        ]
+      },
+      "after": {
+        "date": "2026-07-09",
+        "generated_at": "new",
+        "fixture_candidate_count": 82,
+        "themes": [{"name": "半导体", "rank": 1, "final_heat": 85.0}],
+        "candidates": [
+          {"code": "sz000938", "role_tags": ["ThemeLibrary"], "scores": {"composite": {"value": 78}}},
+          {"code": "sz000977", "role_tags": ["ThemeLibrary"], "scores": {"composite": {"value": 76}}}
+        ]
+      },
+      "allowlist": []
+    },
+    {
+      "date": "2026-07-13",
+      "purpose": "candidate membership survives missing annotations",
+      "gate": "task2",
+      "before": {
+        "date": "2026-07-13",
+        "themes": [{"name": "AI算力", "rank": 1, "final_heat": 72.0}],
+        "candidates": [
+          {"code": "sh600028", "role_tags": ["ThemeLibrary"]},
+          {"code": "sz000063", "role_tags": ["ThemeLibrary"]}
+        ]
+      },
+      "after": {
+        "date": "2026-07-13",
+        "themes": [{"name": "AI算力", "rank": 1, "final_heat": 72.0}],
+        "candidates": [
+          {"code": "sh600028", "role_tags": ["ThemeLibrary"]},
+          {"code": "sz000063", "role_tags": ["ThemeLibrary"]}
+        ]
+      },
+      "allowlist": []
+    },
+    {
+      "date": "2026-07-14",
+      "purpose": "documented missing-auction Pattern correction",
+      "gate": "task45",
+      "before": {
+        "date": "2026-07-14",
+        "themes": [{"name": "石油天然气", "rank": 1, "final_heat": 82.0}],
+        "candidates": [{
+          "code": "sh601857",
+          "role_tags": ["ThemeLibrary", "MarketActive", "NewsDirect"],
+          "pattern": {"auction": {"state": "NEUTRAL", "confidence": 100, "trace": "base default"}}
+        }]
+      },
+      "after": {
+        "date": "2026-07-14",
+        "themes": [{"name": "石油天然气", "rank": 1, "final_heat": 82.0}],
+        "candidates": [{
+          "code": "sh601857",
+          "role_tags": ["ThemeLibrary", "MarketActive", "NewsDirect"],
+          "pattern": {"auction": {"state": "UNKNOWN", "confidence": 0, "trace": "real auction input unavailable"}}
+        }]
+      },
+      "allowlist": [
+        {"path": "$.candidates[0].pattern.auction.confidence", "before": 100, "after": 0},
+        {"path": "$.candidates[0].pattern.auction.trace", "before": "base default", "after": "real auction input unavailable"}
+      ]
+    }
+  ]
+}

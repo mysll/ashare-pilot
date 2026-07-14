@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from mapper_json_lib import CODE_RE, default_predict_dir, ensure_doc_date, read_json
+from mapper_json_lib import CODE_RE, default_predict_dir, ensure_doc_date, read_json, theme_stock_filter
 
 
 RELEVANCE = {"R0", "R1", "R2", "R3", "R4"}
@@ -58,36 +58,15 @@ def check_scored(errors: list[str], item: Any, path: str, require_value: bool = 
         add(errors, path, "must include evidence or trace")
 
 
-def validate(doc: dict[str, Any]) -> list[str]:
+def validate(doc: dict[str, Any], candidate_codes: set[str] | None = None) -> list[str]:
     errors: list[str] = []
     if doc.get("schema_version") != "daily_mapper_annotations.v1":
         add(errors, "schema_version", "must be daily_mapper_annotations.v1")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         add(errors, "date", "must be YYYY-MM-DD")
 
-    themes = doc.get("themes", [])
-    if themes is not None and not isinstance(themes, list):
-        add(errors, "themes", "must be list")
-    elif isinstance(themes, list):
-        for i, theme in enumerate(themes):
-            base = f"themes[{i}]"
-            if not isinstance(theme, dict):
-                add(errors, base, "must be object")
-                continue
-            if not isinstance(theme.get("name"), str) or not theme.get("name"):
-                add(errors, f"{base}.name", "must be non-empty string")
-            check_scored(errors, theme.get("emotion"), f"{base}.emotion")
-            policy = theme.get("policy_polarity")
-            if policy is not None:
-                if not isinstance(policy, dict):
-                    add(errors, f"{base}.policy_polarity", "must be object")
-                else:
-                    if policy.get("value") not in POLARITY:
-                        add(errors, f"{base}.policy_polarity.value", "invalid enum")
-                    if "confidence" in policy:
-                        check_conf(errors, policy.get("confidence"), f"{base}.policy_polarity.confidence")
-                    if not has_evidence_or_trace(policy):
-                        add(errors, f"{base}.policy_polarity", "must include evidence or trace")
+    if doc.get("themes") not in (None, []):
+        add(errors, "themes", "duplicate theme annotations were removed; themes.json owns theme semantics")
 
     stocks = doc.get("stocks")
     if not isinstance(stocks, list):
@@ -107,8 +86,16 @@ def validate(doc: dict[str, Any]) -> list[str]:
         else:
             seen.add(code)
 
+        # Extra non-candidate rows are structurally checked above, then warned
+        # and skipped by coverage/merge. Candidate semantic requirements must
+        # not turn those discarded rows into publication blockers.
+        if candidate_codes is not None and code not in candidate_codes:
+            continue
+
         relevance = stock.get("news_relevance")
-        if relevance is not None:
+        if relevance is None:
+            add(errors, f"{base}.news_relevance", "missing; required for every deterministic candidate")
+        else:
             if not isinstance(relevance, dict):
                 add(errors, f"{base}.news_relevance", "must be object")
             else:
@@ -158,10 +145,62 @@ def validate(doc: dict[str, Any]) -> list[str]:
     return errors
 
 
+def validate_candidate_coverage(doc: dict[str, Any], theme_stocks: dict[str, Any]) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    warnings: list[str] = []
+    expected = [
+        stock.get("code") for stock in theme_stocks.get("stocks", [])
+        if isinstance(stock, dict) and theme_stock_filter(stock)["status"] == "candidate"
+    ]
+    actual = [stock.get("code") for stock in doc.get("stocks", []) if isinstance(stock, dict)]
+    expected_set = set(expected)
+    actual_set = set(actual)
+    missing = [code for code in expected if code not in actual_set]
+    extra = [code for code in actual if code not in expected_set]
+    if missing:
+        add(errors, "stocks", "missing deterministic candidate annotations: " + ",".join(str(code) for code in missing))
+    if extra:
+        warnings.append("extra non-candidate annotations will be skipped: " + ",".join(str(code) for code in extra))
+
+    pairs = []
+    for stock in doc.get("stocks", []):
+        if not isinstance(stock, dict) or stock.get("code") not in expected_set:
+            continue
+        relevance = stock.get("news_relevance")
+        if isinstance(relevance, dict):
+            pairs.append((relevance.get("r"), relevance.get("p")))
+    if len(pairs) >= 5 and len(set(pairs)) == 1 and pairs[0] == ("R2", "P2"):
+        add(errors, "stocks.news_relevance", "suspicious blanket R2/P2 assignment across all candidates")
+    return errors, warnings
+
+
+def validate_news_refs(doc: dict[str, Any], news_doc: dict[str, Any]) -> list[str]:
+    valid = {f"news#{item.get('id')}" for item in news_doc.get("items", []) if isinstance(item, dict) and isinstance(item.get("id"), int)}
+    errors: list[str] = []
+    for i, stock in enumerate(doc.get("stocks", [])):
+        if not isinstance(stock, dict):
+            continue
+        refs = []
+        relevance = stock.get("news_relevance")
+        if isinstance(relevance, dict) and relevance.get("evidence"):
+            refs.append((f"stocks[{i}].news_relevance.evidence", relevance["evidence"]))
+        if stock.get("news_link"):
+            refs.append((f"stocks[{i}].news_link", stock["news_link"]))
+        major = stock.get("major_event")
+        if isinstance(major, dict) and major.get("evidence"):
+            refs.append((f"stocks[{i}].major_event.evidence", major["evidence"]))
+        for path, value in refs:
+            for ref in re.findall(r"news#\d+", str(value)):
+                if ref not in valid:
+                    add(errors, path, f"unresolved canonical evidence ref {ref}")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate mapper.annotations.json")
     parser.add_argument("path", nargs="?", help="Path to mapper.annotations.json")
     parser.add_argument("--date", help="YYYY-MM-DD; used for default path")
+    parser.add_argument("--theme-stocks", help="Path to theme_stocks.json; defaults beside annotations")
     args = parser.parse_args()
 
     if sys.platform == "win32":
@@ -185,12 +224,40 @@ def main() -> int:
         except ValueError as exc:
             print(f"[ERROR] {exc}", file=sys.stderr)
             return 1
-    errors = validate(doc)
+    theme_stocks_path = Path(args.theme_stocks) if args.theme_stocks else path.parent / "theme_stocks.json"
+    warnings: list[str] = []
+    theme_stocks = None
+    if theme_stocks_path.exists():
+        theme_stocks = read_json(theme_stocks_path)
+    candidate_codes = {
+        stock.get("code") for stock in theme_stocks.get("stocks", [])
+        if isinstance(theme_stocks, dict) and isinstance(stock, dict) and theme_stock_filter(stock)["status"] == "candidate"
+    } if isinstance(theme_stocks, dict) else None
+    errors = validate(doc, candidate_codes)
+    if theme_stocks_path.exists() and not isinstance(theme_stocks, dict):
+        errors.append(f"{theme_stocks_path}: root must be object")
+    elif isinstance(theme_stocks, dict):
+        if args.date:
+            try:
+                ensure_doc_date(theme_stocks, args.date, str(theme_stocks_path))
+            except ValueError as exc:
+                errors.append(str(exc))
+        coverage_errors, warnings = validate_candidate_coverage(doc, theme_stocks)
+        errors.extend(coverage_errors)
+    elif args.date or args.theme_stocks:
+        errors.append(f"missing theme_stocks.json for candidate coverage: {theme_stocks_path}")
+    news_path = path.parent / "news.json"
+    if news_path.exists():
+        news_doc = read_json(news_path)
+        if isinstance(news_doc, dict):
+            errors.extend(validate_news_refs(doc, news_doc))
     if errors:
         print(f"[ERROR] {path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for item in errors:
             print(f"  - {item}", file=sys.stderr)
         return 1
+    for warning in warnings:
+        print(f"[WARN] {warning}", file=sys.stderr)
     print(f"OK: {path}")
     return 0
 

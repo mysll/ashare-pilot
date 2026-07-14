@@ -294,7 +294,8 @@ def _compute_market_view(theme_data, top=10):
     if not matched:
         return {"data_time": "", "top_gainers": [], "top_amount": [],
                 "top_turnover": [], "top_vr": [], "market_attention": [],
-                "cross_rank_highlights": []}
+                "cross_rank_highlights": [], "threshold_gainers": [],
+                "threshold_attention": []}
 
     N = len(matched)
 
@@ -328,6 +329,14 @@ def _compute_market_view(theme_data, top=10):
         s["vr_rank"] = rank_vr[s["code"]]
 
     market_attention = sorted(matched, key=lambda x: x["attention_score"], reverse=True)[:top]
+    threshold_attention = [
+        s for s in sorted(matched, key=lambda x: x["attention_score"], reverse=True)
+        if s["attention_score"] >= 80
+    ]
+    threshold_gainers = [
+        s for s in sorted(matched, key=lambda x: x["change_pct"], reverse=True)
+        if s["change_pct"] >= 3
+    ]
 
     # 热点交集：同时出现在多个 top-N 列表中的股票
     by_gainers = sorted(matched, key=lambda x: x["change_pct"], reverse=True)
@@ -379,6 +388,8 @@ def _compute_market_view(theme_data, top=10):
         "top_vr": top_vr,
         "market_attention": market_attention,
         "cross_rank_highlights": cross_rank_highlights,
+        "threshold_gainers": threshold_gainers,
+        "threshold_attention": threshold_attention,
     }
 
 

@@ -1,0 +1,36 @@
+{
+  "before": {
+    "schema_version": "daily_strategy.v2",
+    "date": "2026-07-14",
+    "market": {"regime_prior": "neutral"},
+    "stocks": [
+      {"code": "sh601857", "direction": "看多"},
+      {"code": "sh600938", "direction": "偏多"},
+      {"code": "sz002230", "direction": "偏多"},
+      {"code": "sz000999", "direction": "偏多"},
+      {"code": "sz000063", "direction": "偏多"},
+      {"code": "sh603019", "direction": "偏多"},
+      {"code": "sh600436", "direction": "偏多"},
+      {"code": "sz000938", "direction": "偏多"},
+      {"code": "sz300308", "direction": "偏多"},
+      {"code": "sh600028", "direction": "偏多"}
+    ]
+  },
+  "after": {
+    "schema_version": "daily_strategy.v2",
+    "date": "2026-07-14",
+    "market": {"regime_prior": "neutral"},
+    "stocks": [
+      {"code": "sh601857", "direction": "看多", "reasoning": {"source_basis": "石油天然气主题候选，市场活跃，并被 news#113 直接提及"}},
+      {"code": "sh600938", "direction": "偏多", "reasoning": {"source_basis": "石油天然气主题候选"}},
+      {"code": "sz002230", "direction": "偏多", "reasoning": {"source_basis": "AI应用主题候选"}},
+      {"code": "sz000999", "direction": "偏多", "reasoning": {"source_basis": "中药主题候选，市场活跃"}},
+      {"code": "sz000063", "direction": "偏多", "reasoning": {"source_basis": "AI算力主题候选，市场活跃"}},
+      {"code": "sh603019", "direction": "偏多", "reasoning": {"source_basis": "AI应用主题候选，市场活跃"}},
+      {"code": "sh600436", "direction": "偏多", "reasoning": {"source_basis": "中药主题候选，市场活跃"}},
+      {"code": "sz000938", "direction": "偏多", "reasoning": {"source_basis": "AI算力主题候选，并被 news#123 直接提及"}},
+      {"code": "sz300308", "direction": "偏多", "reasoning": {"source_basis": "AI算力主题候选，并被 news#124 直接提及"}},
+      {"code": "sh600028", "direction": "偏多", "reasoning": {"source_basis": "石油天然气主题候选"}}
+    ]
+  }
+}

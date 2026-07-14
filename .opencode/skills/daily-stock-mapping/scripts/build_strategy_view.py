@@ -145,6 +145,8 @@ def build_view(doc: dict[str, Any], include_excluded: str = "summary", include_t
                 "name": item.get("name"),
                 "rank": item.get("rank"),
                 "final_heat": item.get("final_heat"),
+                "direction": item.get("direction"),
+                "evidence": item.get("evidence"),
             }
             for item in doc.get("themes", [])
             if isinstance(item, dict)

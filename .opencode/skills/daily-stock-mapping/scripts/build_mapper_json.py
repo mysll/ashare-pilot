@@ -49,6 +49,14 @@ def main() -> int:
     except ValueError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
+    candidate_codes = [item.get("code") for item in base.get("candidate_pool", []) if isinstance(item, dict)]
+    annotation_rows = [item for item in annotations.get("stocks", []) if isinstance(item, dict)]
+    annotation_codes = [item.get("code") for item in annotation_rows]
+    missing = [code for code in candidate_codes if code not in set(annotation_codes)]
+    missing_relevance = [item.get("code") for item in annotation_rows if item.get("code") in set(candidate_codes) and not isinstance(item.get("news_relevance"), dict)]
+    if missing or missing_relevance:
+        print(f"[ERROR] candidate annotation coverage failed; missing={missing}; missing_news_relevance={missing_relevance}", file=sys.stderr)
+        return 1
     doc = merge_annotations(base, annotations, args.date)
     mode = "annotations"
     write_json(output_path, doc)

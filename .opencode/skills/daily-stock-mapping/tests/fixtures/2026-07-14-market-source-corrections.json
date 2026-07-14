@@ -1,0 +1,17 @@
+{
+  "date": "2026-07-14",
+  "historical_blanket_market_active_count": 45,
+  "structured_market_active_codes": [
+    "sh600085", "sh600129", "sh600436", "sh601857", "sh603019", "sh603619",
+    "sh603881", "sh605090", "sz000063", "sz000938", "sz000977", "sz000999",
+    "sz002317", "sz002430", "sz002490", "sz002603", "sz002728", "sz002821",
+    "sz002828", "sz300039", "sz300164", "sz300418", "sz301236"
+  ],
+  "unsupported_historical_market_active_codes": [
+    "sh600028", "sh600196", "sh600276", "sh600332", "sh600673", "sh600871",
+    "sh600938", "sh600941", "sh601360", "sh601728", "sz000333", "sz000538",
+    "sz000661", "sz002230", "sz002236", "sz002602", "sz300059", "sz300170",
+    "sz300182", "sz300308", "sz300364", "sz300738"
+  ],
+  "reason": "Historical mapper annotations blanket-filled MarketActive. Structured full-threshold market evidence confirms only the listed 23 candidates; unsupported tags must not be fabricated."
+}

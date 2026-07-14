@@ -301,7 +301,7 @@ def stock_details(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
             f"""<details class="detail card"><summary><span class="mono">{esc(stock.get('code'))}</span> {esc(display_stock_name(stock,super_codes))}
               <span>{esc(stock.get('direction'))} · {esc(stock.get('rating'))} · {esc(stock.get('entry_profile'))} · {esc(stock.get('anchor'))}</span></summary>
               <div class="detail-grid">
-                <section><h4>推理链路</h4><p>{esc(reasoning.get('direction_path'))}</p><p class="risk-text"><b>风险：</b>{esc(reasoning.get('risk'))}</p><p>{esc(reasoning.get('reread'))}</p></section>
+                <section><h4>推理链路</h4><p><b>入选依据：</b>{esc(reasoning.get('source_basis'))}</p><p>{esc(reasoning.get('direction_path'))}</p><p class="risk-text"><b>风险：</b>{esc(reasoning.get('risk'))}</p><p>{esc(reasoning.get('reread'))}</p></section>
                 <section><h4>感知信号</h4><p>{esc(signals)}</p><p><b>异常：</b>{esc(cand.get('anomaly'))}</p><p><b>新闻：</b>{esc(cand.get('news_link'))}</p></section>
                 <section><h4>策略输入</h4><p>现价 {number(inputs.get('price'),2)} · MA5 {number(inputs.get('ma5'),2)} · MA20 {number(inputs.get('ma20'),2)}</p><p>ATR% {number(inputs.get('atr_pct'),2)} · High20 {number(inputs.get('high20'),2)} · Low20 {number(inputs.get('low20'),2)}</p></section>
                 <section><h4>交易画像</h4><p>{esc(stock.get('profile_trace'))}</p><p>{esc(profile_label(profile.get('playbook')))} · {esc(profile.get('entry_window'))} · {esc(profile.get('stop_policy'))}</p></section>

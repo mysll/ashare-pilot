@@ -11,9 +11,8 @@ Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis p
 
 | Stage | Input | Output |
 |-------|-------|--------|
-| Theme Extraction | news.json + news.md | themes.json |
-| Stock Pool Build | themes.json + optional theme_stocks.extra.json | theme_stocks.universe.json -> theme_stocks.base.json |
-| Technical Enrichment | theme_stocks.base.json + pool_indicators.json + theme_stocks.annotations.json | validated theme_stocks.json |
+| Theme Extraction | compact input from canonical news.json | themes.json |
+| Prepare | themes.json + structured market/news/LHB sources | theme_stocks.json + compact mapper input |
 | Structured Dataset | theme_stocks.json | mapper.annotations.json -> mapper.json -> mapper.strategy_view.json |
 
 ## Scope
@@ -22,7 +21,7 @@ Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
-**JSON contract rule:** the LLM writes `predict/{date}/themes.json`, `predict/{date}/theme_stocks.annotations.json`, and `predict/{date}/mapper.annotations.json`. Scripts validate and assemble `theme_stocks.universe.json`, `theme_stocks.base.json`, `theme_stocks.json`, `mapper.base.json`, `mapper.json`, and `mapper.strategy_view.json`. Step 2 does not generate Markdown files.
+**JSON contract rule:** the two LLM stages write only `predict/{date}/themes.json` and candidate-complete sparse `predict/{date}/mapper.annotations.json`. Scripts own theme/stock membership, source flags, Pattern defaults, assembly, and validation. `theme_stocks.annotations.json` has been deleted with no compatibility reader. Step 2 does not generate Markdown files.
 
 **Format Rule:** The LLM authors JSON perception annotations, not full machine artifacts. Scripts own validated JSON assembly.
 
@@ -33,7 +32,7 @@ Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do
 | Symptom | Fix |
 |---------|-----|
 | Skipped `themes.json` validation | Validate `themes.json` before building the stock universe. |
-| Skipped `theme_stocks.base.json` / `theme_stocks.annotations.json` / `theme_stocks.json` | Build base, write annotations, merge final JSON, then validate it. |
+| Skipped deterministic `theme_stocks.json` publication | Run `prepare_daily_mapping.py`; do not hand-write membership or source flags. |
 | Skipped `mapper.annotations.json` or `mapper.json` | Generate annotations, then run annotation validation, JSON build, and mapper validation before Step 3. |
 | Theme name not in Theme Library | Discard. Theme Library is the only source. |
 | Stock in pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable. |
@@ -52,6 +51,8 @@ Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do
 ## Theme Extraction
 
 **Objective:** Match news items to themes from Theme Library via retrieval, not generation.
+
+Run `build_theme_evidence_input.py`, then load only [references/theme-evidence-rubric.md](references/theme-evidence-rubric.md) for this LLM phase.
 
 ### Load Theme Universe
 
@@ -314,8 +315,7 @@ Shape:
       "source_themes": ["AI算力", "光通信"],
       "score": 85,
       "news_ref": "news#77",
-      "market_ref": "top_amount#1",
-      "source_explanation": "news-mentioned and active in theme market view"
+      "market_ref": "top_amount#1"
     }
   ]
 }
@@ -500,60 +500,15 @@ Risk markers only — **not auto-reject**. Step 2 classifies RiskType; RiskSever
 - Stocks with `tech_score 50-59`: flag `tech_risk: true`.
 - Risk flags alone do NOT remove stocks from pool.
 
-### Output Contract: theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json
+### Output Contract: deterministic theme_stocks.json
 
-Build deterministic base first:
-
-```bash
-python .opencode/skills/daily-stock-mapping/scripts/validate_themes_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/{YYYY-MM-DD}/theme_stocks.universe.json --json -o predict/{YYYY-MM-DD}/pool_indicators.json
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD}
-```
-
-The first command validates `themes.json`; the second reads tradeable themes from that JSON and writes `theme_stocks.universe.json`; the third refreshes indicators for exactly that universe; the fourth reads the locked universe and builds the filtered base. `build_theme_stocks_universe.py` reads `themes.json`, Theme Library JSON, plus optional `theme_stocks.extra.json` and owns stock membership, source theme links, scope decisions, and `board_excluded[]`. `build_theme_stocks_base.py` owns technical values, hard filters, soft filters, `removed_stocks[]`, and `filter.status`.
-
-Then write LLM-owned semantic annotations only:
-
-```text
-predict/{date}/theme_stocks.annotations.json
-```
-
-Required annotation shape:
-
-```json
-{
-  "schema_version": "daily_theme_stocks_annotations.v1",
-  "date": "YYYY-MM-DD",
-  "themes": [
-    {"name": "AI算力", "note": "why this theme matters today", "evidence": "themes.json#/themes/0"}
-  ],
-  "stocks": [
-    {
-      "code": "sz000977",
-      "source_flags": {"news": false, "market": true},
-      "news_ref": "news#87",
-      "market_ref": "Anchor",
-      "anomaly": null,
-      "source_explanation": "AI算力 anchor with market activity"
-    }
-  ]
-}
-```
-
-Rules:
-
-- Do not write `theme_stocks.json` by hand.
-- Do not put `filter.status`, technical fields, scope decisions, `board_excluded[]`, or `removed_stocks[]` in annotations.
-- Use annotations only for semantic enrichments: `news_ref`, `market_ref`, `anomaly`, `source_explanation`, theme notes, and source-flag corrections backed by evidence.
-
-After writing `theme_stocks.annotations.json`, run:
+After the LLM writes and validates `themes.json`, run the prepare orchestration:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py --date {YYYY-MM-DD}
 ```
+
+Prepare validates themes, batches selected-theme market views, generates source flags from actual Theme Library/news/market/LHB inputs, expands the universe, fetches indicators sequentially, publishes `theme_stocks.json`, and writes `.mapper_annotation_input.json`. Missing sources remain false. Intermediate files contain no translated source prose or `source_explanation`.
 
 ---
 
@@ -642,8 +597,8 @@ Step 2 is **perception only**. All Direction / Severity / Override decisions are
 | 2 | Matrix classification | R×P cell lookup → NewsImpact | LLM |
 | 3 | Ternary classification | Discrete event → MajorEvent Polarity | LLM |
 | 4 | Flag classification | risk_flags → RiskType | LLM (table lookup) |
-| 5 | Pattern recognition | Multi-dim state model, independent per dimension | LLM (5 dimensions) |
-| 6 | Structural pattern label | Anomaly ≤50 chars | LLM (natural language) |
+| 5 | Sparse Pattern override | Only a reviewed dimension that differs from the script default | LLM |
+| 6 | Structural pattern label | Genuine anomaly only; omit otherwise | LLM |
 
 #### Forbidden Reasoning (Step 2 MUST NOT)
 
@@ -681,7 +636,7 @@ All computed_perception fields must carry confidence:
 | `news_impact.value` | Matrix cell weight × 100 ± adjustments | LLM |
 | `major_event.polarity` | Default Neutral=90; P/N by evidence strength | LLM |
 | `risk_type` | 100 (machine lookup, deterministic) | Python |
-| `pattern.*.state` | LLM per rubric hit clarity 0-100 | LLM |
+| `pattern.*.state` | Deterministic base; sparse reviewed override only | Python + LLM override |
 | `tech_score.value` | `present_factor_count / 6 × 100` | Python |
 
 Emotion direction coefficient (×1.0/×0.8/×0.5) affects emotion **value** only, not confidence (confidence is attention-hit clarity).
@@ -770,20 +725,18 @@ Purpose: surface structural patterns that rubrics flatten. LLM natural language.
 
 **Mandatory** if: market_active cross_rank_highlights entry, LHB injection with net buy > 0, board_streak ≥ 2 but Composite < 70, or RiskType alone insufficient. Otherwise `—`.
 
-### ThemeRole Extraction
-
-```bash
-python .opencode/skills/theme-library/scripts/query_theme.py stock <code1>,<code2>,... --roles --json
-```
+### Deterministic Role Tags
 
 | Tag | Condition | Meaning |
 |-----|-----------|---------|
-| `Anchor` | `anchor = true` in any matched theme | Market-recognized theme bellwether |
-| `IndustryLeader` | `industry_score >= 50` | Industry representative |
-| `Candidate` | `candidate_score >= 60` | Worth focused analysis |
-| `MultiTheme` | `theme_count >= 2` | Cross-theme, higher fault tolerance |
+| `ThemeLibrary` | selected-theme candidate/pure/leader membership | Theme Library source |
+| `MarketActive` | qualifying structured market-view rule | Actual market-view source |
+| `NewsDirect` | canonical direct name/code match or accepted extra with valid `news#id` | Direct news source |
+| `LHB` | in-scope structured LHB row | LHB source |
+| `MultiTheme` | at least two `source_themes` | Cross-theme membership |
+| `Anchor` | `anchor=true` in Theme Library metadata | Theme anchor |
 
-Write to Candidate Pool `RoleTags` column, comma-separated. Use `—` if none.
+Python writes `role_tags`; the LLM must not add or remove them.
 
 ---
 
@@ -792,6 +745,8 @@ Write to Candidate Pool `RoleTags` column, comma-separated. Use `—` if none.
 `mapper.annotations.json` is the only LLM-authored machine artifact in this stage. `mapper.json` is assembled and validated by scripts. `mapper.strategy_view.json` is projected from `mapper.json` for Step 3.
 
 ### LLM Output Contract: mapper.annotations.json
+
+Load only [references/mapper-semantics-rubric.md](references/mapper-semantics-rubric.md) plus `.mapper_annotation_input.json` for this LLM phase. The compact input links each candidate's `source_themes`, `direct_news_refs`, and `theme_news_refs` to deduplicated top-level `news_evidence`; use only those linked rows for candidate news semantics.
 
 Write:
 
@@ -805,27 +760,15 @@ Required shape:
 {
   "schema_version": "daily_mapper_annotations.v1",
   "date": "YYYY-MM-DD",
-  "themes": [
-    {
-      "name": "ThemeName",
-      "emotion": {"value": 85, "confidence": 80, "evidence": "news#1", "trace": "why"},
-      "policy_polarity": {"value": "neutral", "confidence": 70, "evidence": null, "trace": "why"},
-      "catalyst_exception": null
-    }
-  ],
   "stocks": [
     {
       "code": "sz000001",
       "news_relevance": {"r": "R2", "p": "P2", "confidence": 80, "evidence": "news#2", "trace": "why"},
-      "major_event": {"polarity": "none", "confidence": 90, "evidence": null, "trace": "why"},
+      "major_event": {"polarity": "positive", "confidence": 90, "evidence": "news#2", "trace": "named discrete event"},
       "pattern": {
-        "heat": {"state": "RISING", "confidence": 80, "trace": "why"},
-        "leader": {"state": "STABLE", "confidence": 80, "trace": "why"},
-        "auction": {"state": "NEUTRAL", "confidence": 100, "trace": "why"},
-        "rotation": {"state": "SECONDARY", "confidence": 70, "trace": "why"},
-        "volume": {"state": "NORMAL", "confidence": 80, "trace": "why"}
+        "rotation": {"state": "PRIMARY", "confidence": 90, "trace": "reviewed override"}
       },
-      "anomaly": null,
+      "anomaly": "genuine structural anomaly",
       "news_link": "news#2"
     }
   ]
@@ -834,26 +777,26 @@ Required shape:
 
 Do not write `mapper.json` by hand.
 
-Annotation membership is best-effort, not a hard workflow gate. If `mapper.annotations.json` contains a stock that is absent from `theme_stocks.json.stocks[]`, or a stock whose `filter.status` is not `candidate`, the mapper build scripts skip that annotation with a warning. Do not regenerate solely for these membership misses; the locked `theme_stocks.json` pool owns final inclusion. Regenerate only when `validate_mapper_annotations.py` reports schema/enum/evidence/date errors, or when final `validate_mapper_json.py` fails.
+Every deterministic candidate must appear exactly once and must include `news_relevance` with confidence plus canonical evidence or a concise trace. `major_event`, `anomaly`, and individual `pattern` dimensions are sparse: omit them unless they carry real semantics. Missing coverage blocks publication; extra non-candidate rows warn and skip. Blanket R2/P2 assignment fails review.
 
-After building `theme_stocks.base.json`, writing `theme_stocks.annotations.json`, and writing `mapper.annotations.json`, run:
+After prepare and writing `mapper.annotations.json`, run:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/validate_themes_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/{YYYY-MM-DD}/theme_stocks.universe.json --json -o predict/{YYYY-MM-DD}/pool_indicators.json
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py --date {YYYY-MM-DD}
 ```
 
-`build_theme_stocks_universe.py` owns selected-theme expansion from validated `themes.json`; it does not parse Markdown in the active workflow. `build_theme_stocks_base.py` owns deterministic technical filters and reads only `theme_stocks.universe.json` plus `pool_indicators.json`. `build_theme_stocks_json.py` merges LLM semantic annotations into the final stock-pool contract. `build_mapper_base.py` reads `theme_stocks.json` for deterministic candidate membership, `Observation Pool`, and `Excluded Stocks`; annotations for missing or non-candidate stocks are skipped instead of blocking the workflow. `build_strategy_view.py` creates the compact Step 3 input `mapper.strategy_view.json` from the validated `mapper.json`. If theme validation fails, fix `themes.json`. If theme-stock validation fails, fix `theme_stocks.annotations.json` or deterministic inputs and rebuild `theme_stocks.json`. If mapper annotation validation fails, fix `mapper.annotations.json` schema/enum/evidence/date issues. If mapper validation fails, fix either annotations or deterministic base inputs, then rerun the full sequence. Do not proceed to Step 3 with invalid JSON.
+`prepare_daily_mapping.py` owns deterministic membership, source flags, sequential indicators, filters, and compact annotation targets. `finalize_daily_mapping.py` gates candidate coverage, builds the deterministic mapper base, overlays sparse semantics, validates the mapper, and writes the Step 3 view. Both update report-only `step2_timing.json`; diagnostic write failure does not invalidate trading contracts. An upstream stage refresh invalidates recorded downstream stages, and `total_recorded_seconds` is populated only when all four timed stages are artifact-linked within the same run.
+
+Market source flags use top-N `cross_rank_highlights` plus the full selected-theme threshold sets `threshold_attention` (`attention_score >= 80`) and `threshold_gainers` (`change_pct >= 3%`). Display top-N lists must never truncate threshold qualification.
+
+`prepare_daily_mapping.py` validates the in-memory `theme_stocks.json` contract before publishing it. `finalize_daily_mapping.py` revalidates its schema/date/technical projection, requires both input dates to equal `--date`, and treats extra non-candidate annotation rows as warning-and-skip rather than requiring candidate semantics.
+
+The workflow runner should also record both LLM stages so byte and wall-time changes remain visible:
+
+```bash
+python .opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py --date {YYYY-MM-DD} --stage theme_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.theme_evidence_input.json --output predict/{YYYY-MM-DD}/themes.json
+python .opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py --date {YYYY-MM-DD} --stage mapper_annotation_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.mapper_annotation_input.json --output predict/{YYYY-MM-DD}/mapper.annotations.json
+```
 
 | Column | Source | Notes |
 |--------|--------|-------|

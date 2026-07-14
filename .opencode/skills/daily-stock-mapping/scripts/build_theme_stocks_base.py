@@ -18,7 +18,6 @@ from mapper_json_lib import (
     parse_float,
     read_json,
     scope_decision,
-    source_flags_from_value,
     technical_from_pool_entry,
     utc_now_iso,
     write_json,
@@ -82,18 +81,6 @@ def dedupe_by_code(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
-def normalize_source_flags(value: Any, source: str | None = None) -> dict[str, bool]:
-    flags = source_flags_from_value(value)
-    source_text = clean_text(source) or ""
-    if source_text in {"market", "market_active"}:
-        flags["market"] = True
-    if source_text in {"news", "news_direct", "news_mentioned"}:
-        flags["news"] = True
-    if source_text == "lhb":
-        flags["lhb"] = True
-    return flags
-
-
 def load_extra_stocks(path: Path | None, date: str) -> list[dict[str, Any]]:
     if path is None or not path.exists():
         return []
@@ -137,10 +124,9 @@ def merge_extra_stock(target: dict[str, Any], extra: dict[str, Any]) -> None:
         best = parse_float(target.get("best_score"))
         if best is None or score_value > best:
             target["best_score"] = score_value
-    flags = target.setdefault("source_flags", {"candidate": False, "market": False, "news": False, "lhb": False})
-    for key, value in normalize_source_flags(extra.get("source_flags"), source).items():
-        flags[key] = bool(flags.get(key) or value)
-    for key in ("news_ref", "market_ref", "anomaly", "source_explanation", "note"):
+    # Extras may expand membership but may not self-assert decision-visible source
+    # flags. Structured news/market/LHB inputs set those flags later.
+    for key in ("news_ref", "market_ref"):
         if clean_text(extra.get(key)):
             target[key] = clean_text(extra.get(key))
 
@@ -167,9 +153,6 @@ def universe_doc(
                 "best_score": stock.get("best_score"),
                 "news_ref": stock.get("news_ref"),
                 "market_ref": stock.get("market_ref"),
-                "anomaly": stock.get("anomaly"),
-                "source_explanation": stock.get("source_explanation"),
-                "note": stock.get("note"),
             }
             for stock in sorted(stocks_by_code.values(), key=lambda item: item.get("code") or "")
         ],
@@ -193,7 +176,6 @@ def stock_template(code: str, name: str) -> dict[str, Any]:
         "market_ref": None,
         "technical": {},
         "filter": {},
-        "anomaly": None,
     }
 
 
@@ -294,12 +276,13 @@ def build_doc_from_themes(
         if not theme_data:
             generation_notes.append(f"theme not found in Theme Library: {theme['name']}")
             continue
-        theme_name = clean_text(theme_data.get("name")) or theme["name"]
         resolved_theme = {
-            "name": theme_name,
+            "name": theme["name"],
             "rank": theme.get("rank"),
             "heat": parse_float(theme.get("heat")),
             "confidence": parse_float(theme.get("confidence")),
+            "direction": clean_text(theme.get("direction")),
+            "evidence": clean_text(theme.get("evidence")),
             "stock_count": theme_data.get("qualified_stock_count") or theme_data.get("stock_count"),
         }
         resolved_themes.append(resolved_theme)
@@ -355,7 +338,7 @@ def load_universe(path: Path, date: str) -> tuple[list[dict[str, Any]], dict[str
         stock["source_themes"] = item.get("source_themes") if isinstance(item.get("source_themes"), list) else []
         stock["source_flags"] = item.get("source_flags") if isinstance(item.get("source_flags"), dict) else stock["source_flags"]
         stock["best_score"] = parse_float(item.get("best_score"))
-        for key in ("news_ref", "market_ref", "anomaly", "source_explanation", "note"):
+        for key in ("news_ref", "market_ref"):
             if clean_text(item.get(key)):
                 stock[key] = clean_text(item.get(key))
         stocks_by_code[code] = stock

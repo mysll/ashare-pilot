@@ -25,6 +25,7 @@ def v2_doc():
         "rating": "3★", "entry_profile": "回调布局", "anchor": "MA5",
         "entry_trigger": "等待开盘确认", "no_buy_condition": "市场转弱则取消",
         "position_budget": 0.01, "horizon": "T+1", "profile": profile,
+        "reasoning": {"source_basis": "银行主题候选，来自 ThemeLibrary"},
         "preopen_plan": {
             "decision": "CONDITIONAL", "earliest_entry_time": "09:40:05",
             "latest_entry_time": "10:00:00", "requires_first_bar": True,
@@ -65,6 +66,11 @@ class StrategyValidationTests(unittest.TestCase):
         doc["stocks"][0]["preopen_plan"]["earliest_entry_time"] = "09:30:00"
         self.assertTrue(any("09:35:05" in item for item in validate(doc)))
 
+    def test_v2_requires_source_basis_for_every_selected_stock(self):
+        doc = v2_doc()
+        doc["stocks"][0]["reasoning"]["source_basis"] = ""
+        self.assertTrue(any("reasoning.source_basis" in item for item in validate(doc)))
+
     def test_v2_rejects_semantically_invalid_times(self):
         for field, value in (("earliest_entry_time", "10:99:00"), ("latest_entry_time", "25:00:00")):
             with self.subTest(field=field, value=value):
@@ -94,6 +100,11 @@ class StrategyValidationTests(unittest.TestCase):
                 doc = v2_doc()
                 doc["stocks"][0][field] = value
                 self.assertTrue(any("observation_pool" in item for item in validate(doc)))
+
+    def test_v2_observation_rows_are_compact(self):
+        doc = v2_doc()
+        doc["observation_pool"] = [{"code": "sh600000", "name": "浦发银行", "reason": "观察", "anomaly": "extra"}]
+        self.assertTrue(any("must contain only code, name, reason" in item for item in validate(doc)))
 
 
 if __name__ == "__main__":

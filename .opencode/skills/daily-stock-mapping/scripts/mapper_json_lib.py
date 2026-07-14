@@ -327,6 +327,9 @@ def observation_pool_from_theme_stocks(theme_doc: dict[str, Any], candidate_code
         filt = theme_stock_filter(stock)
         if filt["status"] != "observation":
             continue
+        risk_flags = technical_value(stock, None, "risk_flags")
+        risk_text = ", ".join(str(item) for item in risk_flags) if isinstance(risk_flags, list) else clean_text(risk_flags)
+        anomaly = "; ".join(part for part in (filt["reason"], risk_text) if part)
         result.append(
             {
                 "code": code,
@@ -334,7 +337,7 @@ def observation_pool_from_theme_stocks(theme_doc: dict[str, Any], candidate_code
                 "composite": parse_float(stock.get("best_score") or stock.get("composite")),
                 "theme": theme_stock_theme_text(stock),
                 "reason": filt["reason"] or "observation",
-                "anomaly": clean_text(stock.get("anomaly")),
+                "anomaly": anomaly or None,
             }
         )
         seen.add(code)
@@ -439,46 +442,13 @@ def deterministic_filter_from_technical(technical: dict[str, Any]) -> dict[str, 
     return {"status": "candidate", "reason": None, "source": None}
 
 
-def merge_theme_stock_annotations(base_doc: dict[str, Any], annotations: dict[str, Any], date: str) -> dict[str, Any]:
+def publish_theme_stocks(base_doc: dict[str, Any], date: str) -> dict[str, Any]:
+    """Publish the deterministic theme-stock contract without an LLM overlay."""
     doc = json.loads(json.dumps(base_doc, ensure_ascii=False))
     doc["schema_version"] = "daily_theme_stocks.v1"
     doc["date"] = date
     doc["generated_at"] = utc_now_iso()
-    doc["generation_mode"] = "base_annotations_merge"
-    doc["annotation_schema_version"] = annotations.get("schema_version")
-
-    theme_annotations = {
-        item.get("name"): item
-        for item in annotations.get("themes", [])
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
-    }
-    for theme in doc.get("themes", []):
-        if not isinstance(theme, dict):
-            continue
-        ann = theme_annotations.get(theme.get("name"))
-        if not ann:
-            continue
-        if clean_text(ann.get("note")):
-            theme["note"] = clean_text(ann.get("note"))
-        if clean_text(ann.get("evidence")):
-            theme["evidence"] = clean_text(ann.get("evidence"))
-
-    stock_annotations = {
-        item.get("code"): item
-        for item in annotations.get("stocks", [])
-        if isinstance(item, dict) and isinstance(item.get("code"), str)
-    }
-    for stock in doc.get("stocks", []):
-        if not isinstance(stock, dict):
-            continue
-        ann = stock_annotations.get(stock.get("code"))
-        if not ann:
-            continue
-        if "source_flags" in ann:
-            stock["source_flags"] = merge_source_flags(stock.get("source_flags"), ann.get("source_flags"))
-        for key in ("news_ref", "market_ref", "anomaly", "source_explanation", "note"):
-            if key in ann:
-                stock[key] = clean_text(ann.get(key))
+    doc["generation_mode"] = "deterministic_base_publish"
     return doc
 
 
@@ -523,9 +493,60 @@ def theme_heat_from_theme_stock(stock: dict[str, Any] | None, theme_heat_by_name
     return max(candidates), "theme_stocks.json source_themes"
 
 
-def build_base_from_annotations(
+def deterministic_pattern(
+    stock: dict[str, Any],
+    pool_entry: dict[str, Any] | None,
+    theme_heat: float | None,
+) -> dict[str, dict[str, Any]]:
+    """Build script-owned Pattern defaults only from available structured inputs."""
+    amount = parse_float(technical_value(stock, pool_entry, "amount"))
+    if amount is None:
+        volume = pattern_state(None)
+        volume["trace"] = "amount unavailable"
+    elif amount >= 80000:
+        volume = {"state": "SURGE", "confidence": 100, "trace": f"amount={format_num(amount)} >= 80000"}
+    elif amount >= 30000:
+        volume = {"state": "NORMAL", "confidence": 100, "trace": f"30000 <= amount={format_num(amount)} < 80000"}
+    else:
+        volume = {"state": "DRY", "confidence": 100, "trace": f"amount={format_num(amount)} < 30000"}
+
+    source_themes = stock.get("source_themes") if isinstance(stock.get("source_themes"), list) else []
+    is_anchor = any(isinstance(item, dict) and item.get("anchor") for item in source_themes)
+    streak = parse_int(raw_value(pool_entry, "board_streak")) or 0
+    seal_raw = raw_value(pool_entry, "seal_quality")
+    seal = parse_float(seal_raw)
+    seal_stable = clean_text(seal_raw) in {"封死", "sealed", "stable"} or (seal is not None and seal >= 70)
+    if is_anchor or streak >= 2 or seal_stable:
+        leader = {"state": "STABLE", "confidence": 90, "trace": f"anchor={is_anchor}; board_streak={streak}; seal_quality={seal_raw}"}
+    elif streak == 1:
+        leader = {"state": "DIVERGENCE", "confidence": 70, "trace": "single board streak without stable leader confirmation"}
+    else:
+        leader = {"state": "ABSENT", "confidence": 80, "trace": "no anchor, board streak, or seal confirmation"}
+
+    theme_count = len([item for item in source_themes if isinstance(item, dict)])
+    rotation = {
+        "state": "PRIMARY" if is_anchor else ("SECONDARY" if theme_count >= 2 else "TERTIARY"),
+        "confidence": 85,
+        "trace": f"anchor={is_anchor}; source_theme_count={theme_count}",
+    }
+
+    auction_value = raw_value(pool_entry, "auction_change_pct")
+    if auction_value is None:
+        auction = {"state": "UNKNOWN", "confidence": 0, "trace": "real auction input unavailable"}
+    else:
+        change = parse_float(auction_value)
+        state = "LEADING" if change is not None and change >= 2 else "LAGGING" if change is not None and change <= -1 else "NEUTRAL"
+        auction = {"state": state, "confidence": 100, "trace": f"auction_change_pct={format_num(change, percent=True)}"}
+
+    if theme_heat is None:
+        heat = {"state": "UNKNOWN", "confidence": 0, "trace": "comparable theme heat unavailable"}
+    else:
+        heat = {"state": "STABLE", "confidence": 50, "trace": f"single-day theme_heat={format_num(theme_heat)}; no comparable prior heat"}
+    return {"heat": heat, "leader": leader, "auction": auction, "rotation": rotation, "volume": volume}
+
+
+def build_deterministic_mapper_base(
     date: str,
-    annotations: dict[str, Any],
     pool: dict[str, dict[str, Any]],
     theme_stocks_doc: dict[str, Any],
     scope: dict[str, Any] | None = None,
@@ -547,35 +568,29 @@ def build_base_from_annotations(
             theme_stock_by_code[code] = stock
 
     themes = []
-    for i, item in enumerate(annotations.get("themes", []), start=1):
+    for i, item in enumerate(theme_stocks_doc.get("themes", []), start=1):
         if not isinstance(item, dict) or not item.get("name"):
             continue
         themes.append(
             {
                 "name": item.get("name"),
-                "rank": i,
-                "final_heat": parse_float(annotation_value(item.get("emotion"), "value")) or 50,
-                "heat_trace": "from mapper.annotations.json",
+                "rank": parse_int(item.get("rank")) or i,
+                "final_heat": parse_float(item.get("heat")),
+                "direction": clean_text(item.get("direction")),
+                "evidence": clean_text(item.get("evidence")),
+                "heat_trace": "from themes.json via theme_stocks.json",
             }
         )
 
     candidates = []
-    for item in annotations.get("stocks", []):
-        if not isinstance(item, dict):
+    for theme_stock in theme_stocks_doc.get("stocks", []):
+        if not isinstance(theme_stock, dict):
             continue
-        code = clean_text(item.get("code"))
+        code = clean_text(theme_stock.get("code"))
         if not code or not CODE_RE.fullmatch(code):
-            continue
-        theme_stock = theme_stock_by_code.get(code)
-        if theme_stock is None:
-            print(
-                f"[WARN] mapper.annotations stock {code} missing from theme_stocks.json stocks[], skipping annotation",
-                file=sys.stderr,
-            )
             continue
         status = theme_stock_filter(theme_stock)["status"]
         if status != "candidate":
-            print(f"[WARN] mapper.annotations stock {code} ({theme_stock.get('name')}) has filter.status={status!r}, skipping annotation", file=sys.stderr)
             continue
         entry = pool.get(code)
         tech = computed_value(entry, "tech_score")
@@ -584,7 +599,7 @@ def build_base_from_annotations(
         candidates.append(
             {
                 "code": code,
-                "name": clean_text(item.get("name")) or clean_text(theme_stock.get("name") if isinstance(theme_stock, dict) else None) or code,
+                "name": clean_text(theme_stock.get("name")) or code,
                 "role_tags": role_tags_from_theme_stock(theme_stock),
                 "scores": {
                     "composite": score(0, 0, "recomputed after annotation merge"),
@@ -594,17 +609,11 @@ def build_base_from_annotations(
                     "auction": score(50, 100, "base default"),
                     "money_flow": score(50, 50, "base default"),
                 },
-                "major_event": {"polarity": "unknown", "confidence": 0, "trace": "filled from annotations"},
+                "major_event": {"polarity": "none", "confidence": 100, "trace": "no named company-level event in sparse annotation"},
                 "risk_type": {"value": risk if isinstance(risk, list) else [], "confidence": 100 if risk is not None else 0},
-                "pattern": {
-                    "heat": pattern_state(None),
-                    "leader": pattern_state(None),
-                    "auction": pattern_state(None),
-                    "rotation": pattern_state(None),
-                    "volume": pattern_state(None),
-                },
+                "pattern": deterministic_pattern(theme_stock, entry, theme_heat),
                 "anomaly": None,
-                "news_link": None,
+                "news_link": clean_text(theme_stock.get("news_ref")) or None,
                 "strategy_inputs": strategy_inputs_from_pool(code, pool),
             }
         )
@@ -619,7 +628,7 @@ def build_base_from_annotations(
         "schema_version": "daily_mapper_base.v1",
         "date": date,
         "generated_at": utc_now_iso(),
-        "generation_mode": "annotations_base",
+        "generation_mode": "deterministic_theme_stock_base",
         "market_state": {
             "dominant_themes": [{"name": item["name"], "heat": item.get("final_heat")} for item in themes[:3]],
             "financing_flow": None,
@@ -718,19 +727,6 @@ def merge_annotations(base: dict[str, Any], annotations: dict[str, Any], date: s
     doc = normalize_base_doc(base, date)
     doc["annotation_schema_version"] = annotations.get("schema_version")
 
-    theme_annotations = {
-        item.get("name"): item
-        for item in annotations.get("themes", [])
-        if isinstance(item, dict) and isinstance(item.get("name"), str)
-    }
-    for theme in doc.get("themes", []):
-        ann = theme_annotations.get(theme.get("name"))
-        if not ann:
-            continue
-        theme["emotion"] = scored_annotation(ann.get("emotion"))
-        theme["policy_polarity"] = ann.get("policy_polarity")
-        theme["catalyst_exception"] = ann.get("catalyst_exception")
-
     stock_annotations = {
         item.get("code"): item
         for item in annotations.get("stocks", [])
@@ -762,6 +758,11 @@ def merge_annotations(base: dict[str, Any], annotations: dict[str, Any], date: s
             stock["news_link"] = clean_text(ann["news_relevance"].get("evidence"))
 
         recalculate_composite(scores)
+
+    candidate_codes = {stock.get("code") for stock in doc.get("candidate_pool", []) if isinstance(stock, dict)}
+    for code in stock_annotations:
+        if code not in candidate_codes:
+            print(f"[WARN] mapper.annotations stock {code} is not a deterministic candidate; skipping", file=sys.stderr)
 
     doc["candidate_pool"] = sorted(
         doc.get("candidate_pool", []),

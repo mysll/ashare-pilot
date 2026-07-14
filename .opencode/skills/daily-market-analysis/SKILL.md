@@ -10,7 +10,7 @@ description: Use when users request comprehensive daily financial market analysi
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
 | Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
-| Perception | Step 1+2 | macro-strategist + sector-analyst | news.json + news.md -> themes.json -> theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json -> mapper.annotations.json -> mapper.json -> mapper.strategy_view.json |
+| Perception | Step 1+2 | macro-strategist + sector-analyst | news.json -> compact theme evidence -> themes.json -> prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json |
 | Reasoning | Step 3 | portfolio-manager | strategy.json + daily_report.html (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
 
 Step 2 NEVER produces Direction or RiskSeverity (V5 Invariant 1). Step 3 is the sole Reasoning layer.
@@ -78,7 +78,6 @@ digraph workflow {
         "news.json + news.md" [shape=note, style=filled, fillcolor="#fffdeb"];
         "themes.json" [shape=note, style=filled, fillcolor="#fffdeb"];
         "theme_stocks.base.json\n(deterministic)" [shape=note, style=filled, fillcolor="#fffdeb"];
-        "theme_stocks.annotations.json\n(LLM semantic fields)" [shape=note, style=filled, fillcolor="#fffdeb"];
         "theme_stocks.json\n(validated contract)" [shape=note, style=filled, fillcolor="#fffdeb"];
         "mapper.annotations.json" [shape=note, style=filled, fillcolor="#fffdeb"];
         "mapper.json\n(full contract)" [shape=note, style=filled, fillcolor="#fffdeb"];
@@ -97,7 +96,6 @@ digraph workflow {
     "Step 1: News Brief" -> "news.json + news.md";
     "2.1 Theme Extraction" -> "themes.json";
     "2.2 Stock Pool Build" -> "theme_stocks.base.json\n(deterministic)";
-    "2.3 Technical Enrichment\n(Python V5 nested schema)" -> "theme_stocks.annotations.json\n(LLM semantic fields)";
     "2.3 Technical Enrichment\n(Python V5 nested schema)" -> "theme_stocks.json\n(validated contract)";
     "2.4 Structured Dataset" -> "mapper.annotations.json";
     "2.4 Structured Dataset" -> "mapper.json\n(full contract)";
@@ -199,23 +197,16 @@ If this fails, rerun the Step 1 fetch command. Do not dispatch Step 2 with only
 
 **Action:** Load skill `daily-stock-mapping` (V5 Perception) and follow its workflow.
 
-**V5 note:** Step 2 is the Perception Layer per V5 Invariant 1. The LLM writes `themes.json`, `theme_stocks.annotations.json`, and `mapper.annotations.json`; scripts build/validate `theme_stocks.universe.json`, `theme_stocks.base.json`, `theme_stocks.json`, `mapper.json`, and `mapper.strategy_view.json`. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
+**V5 note:** Step 2 has two LLM semantic stages only: `themes.json` and candidate-complete sparse `mapper.annotations.json`. Scripts own membership, source flags, default Pattern, assembly, and validation. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
 
-Then Step 2 MUST validate themes, build the stock-pool base, validate/merge stock-pool annotations, validate mapper annotations, and build/validate JSON contracts:
+Before theme extraction, build the compact high-recall input. After `themes.json`, prepare deterministic inputs; after sparse annotations, finalize:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/validate_themes_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/{YYYY-MM-DD}/theme_stocks.universe.json --json -o predict/{YYYY-MM-DD}/pool_indicators.json
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date {YYYY-MM-DD}
+python .opencode/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py --date {YYYY-MM-DD}
+# LLM writes themes.json from the compact input
+python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py --date {YYYY-MM-DD}
+# LLM writes candidate-complete sparse mapper.annotations.json
+python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py --date {YYYY-MM-DD}
 ```
 
 **Prompt (exact format, MUST NOT deviate):**
@@ -234,7 +225,6 @@ Outputs:
 - predict/{YYYY-MM-DD}/theme_stocks.extra.json (optional supplemental source)
 - predict/{YYYY-MM-DD}/theme_stocks.universe.json
 - predict/{YYYY-MM-DD}/theme_stocks.base.json
-- predict/{YYYY-MM-DD}/theme_stocks.annotations.json
 - predict/{YYYY-MM-DD}/theme_stocks.json
 - predict/{YYYY-MM-DD}/mapper.annotations.json
 - predict/{YYYY-MM-DD}/mapper.json
@@ -243,7 +233,7 @@ Outputs:
 
 **CRITICAL:** Do NOT inline any file content, scoring formulas, filter rules, or analysis. Keep the prompt clean.
 
-**Outputs:** `themes.json`, `theme_stocks.base.json`, `theme_stocks.annotations.json`, `theme_stocks.json`, `mapper.annotations.json`, `mapper.json`, and `mapper.strategy_view.json`
+**Outputs:** `themes.json`, `theme_stocks.json`, `mapper.annotations.json`, `mapper.json`, `mapper.strategy_view.json`, and report-only `step2_timing.json`
 
 ---
 
@@ -290,11 +280,11 @@ Output:
 | `predict/{date}/theme_stocks.extra.json` | Optional LLM supplemental stocks for market/news/LHB sources | Perception (Step 2.2 input) |
 | `predict/{date}/theme_stocks.universe.json` | Script-built pre-indicator stock universe for `fetch_pool_indicators.py` | Perception (Step 2.2 bridge) |
 | `predict/{date}/theme_stocks.base.json` | Script-built deterministic stock-pool base with scope and filters | Perception (Step 2.2-2.3) |
-| `predict/{date}/theme_stocks.annotations.json` | LLM-owned semantic stock-pool annotations (`daily_theme_stocks_annotations.v1`) | Perception (Step 2.3) |
 | `predict/{date}/theme_stocks.json` | Validated stock-pool machine contract (`daily_theme_stocks.v1`) | Perception (Step 2.2-2.3) |
 | `predict/{date}/mapper.annotations.json` | LLM-owned Step 2 perception annotations (`daily_mapper_annotations.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.json` | Full validated Step 2 machine contract (`daily_mapper.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.strategy_view.json` | Compact Step 3 reading contract (`daily_strategy_input.v1`) projected from mapper.json | Perception → Reasoning bridge |
+| `predict/{date}/step2_timing.json` | Report-only stage duration, byte, failure, and count diagnostics | Observability |
 | `predict/{date}/strategy.json` | Conditional pre-open decisions for review/backtests and operation confirmation (`daily_strategy.v2`) | Reasoning (Step 3) |
 | `predict/{date}/daily_report.html` | Daily readable summary rendered from JSON: themes, strategy table, stock details, observation/excluded pools, referenced news | Reasoning (Step 3 readable output) |
 
@@ -303,7 +293,7 @@ Output:
 | Layer | Step | Agent | Input | Output | Key V5 constraint |
 |-------|------|-------|-------|--------|-------------------|
 | Perception | 1 | macro-strategist + daily-news-brief | — | news.json + news.md | news.json must exist before Step 2 |
-| Perception | 2 | sector-analyst + daily-stock-mapping V5 | news.json + news.md | themes.json -> theme_stocks.base.json -> theme_stocks.annotations.json -> theme_stocks.json -> mapper.annotations.json -> mapper.json -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
+| Perception | 2 | sector-analyst + daily-stock-mapping V5 | canonical news.json | compact input -> themes.json -> prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
 | Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.strategy_view.json + news.json + RULES.md | strategy.json + daily_report.html (+ReasoningTrace) | Conditional evidence lookup by `news#<id>` only (Invariant 2) |
 
 Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default, writes `strategy.json`, then renders `daily_report.html`. `mapper.json` is the full source contract.

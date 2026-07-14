@@ -161,6 +161,11 @@ def validate_stock(stock: dict[str, Any], i: int, errors: list[str], schema: str
     if "position_budget" in profile:
         optional_number(errors, profile.get("position_budget"), f"{base}.profile.position_budget")
     if schema == "daily_strategy.v2":
+        reasoning = stock.get("reasoning")
+        if not isinstance(reasoning, dict):
+            err(errors, f"{base}.reasoning", "must be object for daily_strategy.v2")
+        elif not isinstance(reasoning.get("source_basis"), str) or not reasoning.get("source_basis", "").strip():
+            err(errors, f"{base}.reasoning.source_basis", "must be non-empty for every selected stock")
         if stock.get("horizon") != "T+1":
             err(errors, f"{base}.horizon", "daily_strategy.v2 A-share new positions must use T+1")
         validate_preopen_plan(stock, i, errors)
@@ -250,6 +255,9 @@ def validate(doc: dict[str, Any], require_v2: bool = False) -> list[str]:
                 if not isinstance(item, dict):
                     err(errors, base, "must be object")
                     continue
+                extra_keys = sorted(set(item) - {"code", "name", "reason"})
+                if extra_keys:
+                    err(errors, base, f"must contain only code, name, reason; extra={extra_keys}")
                 code = item.get("code")
                 if not isinstance(code, str) or not re.match(r"^(sh|sz)\d{6}$", code):
                     err(errors, f"{base}.code", "must be sh/sz + 6 digits")

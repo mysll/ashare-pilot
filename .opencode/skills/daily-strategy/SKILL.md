@@ -63,6 +63,7 @@ Do **NOT** use `lib/fetch/fetch_indicators.py` — it outputs K-line time-series
    ```
 2. Read `mapper.strategy_view.json` **market_state** — dominant themes, board policy, financing flow, risk flags
 3. Read `mapper.strategy_view.json` **candidates** — `scores.*`, `major_event`, `risk_type`, `pattern`, `anomaly`, `news_link`, `role_tags`
+4. Every stock emitted in `strategy.json.stocks[]` MUST include non-empty Chinese `reasoning.source_basis`. It may use only that candidate's `role_tags`, `news_link`, and evidence actually read in Step 3; never invent an absent source. Coverage follows the regime-dependent selected count, not a fixed ten.
 4. Read `mapper.strategy_view.json` **candidates[*].strategy_inputs** — Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 (**authoritative projection from mapper.json**)
 5. If `mapper.strategy_view.json` is missing but `mapper.json` exists, build it with `build_strategy_view.py`; if both JSON files are missing, stop and fix Step 2
 6. Fetch market indices via `fetch_stock.py sh000001,sz399001,sh000688 --json` — 评 RegimeHint
@@ -503,6 +504,7 @@ expresses SKIP; there is no `SKIP` or `NONE` enum in the machine contract.
       "rules_applied": ["R68", "R37"],
       "profile_trace": "趋势跟随→回踩MA5确认→R68一致",
       "reasoning": {
+        "source_basis": "半导体主题候选，市场活跃，并被 news#87 直接提及",
         "direction_path": "comp=79.8→看多; R68=MA5; final=看多",
         "risk": "—",
         "reread": "—",
