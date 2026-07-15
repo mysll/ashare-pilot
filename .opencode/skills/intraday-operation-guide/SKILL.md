@@ -1,6 +1,6 @@
 ﻿---
 name: intraday-operation-guide
-description: Use when the user wants one-shot intraday human trading instructions based on today's morning strategy and current market data. Reads predict/{date}/strategy.json + mapper.json, fetches current quotes and 5-minute intraday K-lines, then outputs actionable A/B/C/D operation guidance. This skill does NOT place orders.
+description: Use when the user wants one-shot intraday human trading instructions based on today's morning strategy and current market data. Reads predict/{date}/strategy.json + mapper.json, fetches current quotes and 5-minute intraday K-lines, then outputs actionable A/B/C/D operation guidance as operation_guide.html (Bloomberg × IC memo × quant board). This skill does NOT place orders.
 ---
 
 # Intraday Operation Guide
@@ -27,8 +27,10 @@ Optional:
 Write:
 
 ```text
-operation/{YYYY-MM-DD}/operation_guide.md
+operation/{YYYY-MM-DD}/operation_guide.html
 ```
+
+Canonical human board is HTML. Do not write `operation_guide.md` as the primary deliverable.
 
 ## Workflow
 
@@ -125,7 +127,7 @@ predict/{YYYY-MM-DD}/mapper.json
 ```
 
 Use `operation_decision.json` as the source for final class and position. The
-snapshot provides supporting signals only. Markdown must not invent a class or
+snapshot provides supporting signals only. The HTML board must not invent a class or
 position that differs from the validated decision contract.
 
 Before considering any A row, require
@@ -140,7 +142,26 @@ The snapshot also contains `theme_confirmations` derived from the bounded daily
 strategy pool and per-stock `transition` metadata. `FAILED`/`FADING` themes cap
 stocks at C, `NARROW` caps at B, and a D stock cannot upgrade in a later slot.
 
-Write `operation_guide.md` in Chinese.
+### Step 4 - Render HTML Board
+
+After the decision contract is validated, render the human board:
+
+```bash
+python .opencode/skills/intraday-operation-guide/scripts/render_operation_guide_html.py \
+  --date {YYYY-MM-DD} \
+  --decision operation/{YYYY-MM-DD}/operation_decision_0940.json \
+  --snapshot operation/{YYYY-MM-DD}/operation_snapshot_0940.json \
+  --output operation/{YYYY-MM-DD}/operation_guide.html
+```
+
+Style contract (must match renderer): **Bloomberg Terminal × 投委会 Memo × A股量化策略看板**.
+
+- Dark terminal cockpit (indices, regime, global_action, class mix)
+- Investment-committee memo bullets (portfolio call, A/B lists, discipline)
+- Quant board tables + A/B execution cards + C/D watch cards + theme radar + risk limits
+
+Prefer the deterministic renderer. LLM narrative is optional and must not diverge
+from `final_class` / `final_position_max` in the decision JSON.
 
 ## Operation Classes
 
@@ -242,81 +263,23 @@ Use D when:
 
 ## Required Output Format
 
-```markdown
-# 盘中操作说明 - YYYY-MM-DD HH:MM
+Primary deliverable: `operation/{date}/operation_guide.html` via
+`render_operation_guide_html.py`.
 
-## 总结
+HTML sections (fixed by renderer):
 
-| 项目 | 结论 |
-|------|------|
-| 当前市场 | ... |
-| 今日总仓位建议 | ... |
-| 可立即参与(A) | N只 |
-| 等确认(B) | N只 |
-| 只观察(C) | N只 |
-| 放弃(D) | N只 |
+1. **Topbar** — 盘中操作总控台 · date/slot/generated time
+2. **Cockpit** — market regime + indices · portfolio exposure/A-B-C-D counts · class mix
+3. **投委会纪要** — 5-bullet IC memo (call, exposure, A list, B list, discipline)
+4. **一句话操作总表** — class/code/name/sector/morning/price/position/trigger/reason
+5. **A/B 执行卡片** — 30s cards: 早盘意图 / 当前信号 flags / 操作 / 触发或失效 / T+1
+6. **C/D 观察与回避** — short reason cards only
+7. **主题确认雷达** — theme_state / advance / VWAP ratios
+8. **风控与交付** — global_action, delivery gate, portfolio limits, observable risks
 
-## 一句话操作
-
-| 类别 | 代码 | 名称 | 早盘策略 | 当前状态 | 操作说明 | 触发/失效 |
-|------|------|------|----------|----------|----------|-----------|
-| A | ... | ... | ... | ... | ... | ... |
-
-## 操作卡片
-
-Each strategy stock gets one compact card. The card is the primary output for the user.
-
-### A | code name | 现在可参与
-
-| 项目 | 内容 |
-|------|------|
-| 早盘意图 | 方向 / 评级 / 交易策略 |
-| 当前信号 | price vs anchor, VWAP, 5min强弱, volume flag |
-| 操作 | 现在可参与 / 半仓 / 标准仓 |
-| 仓位上限 | from morning strategy, downgraded if needed |
-| 买入前失效 | one clear condition; if triggered before execution, cancel the buy |
-| 成交后T日风险 | new A-share positions cannot be sold the same day; mark T+1 risk instead |
-| T+1退出计划 | gap-up / flat-open / gap-down handling from snapshot controls |
-| 备注 | one sentence only |
-
-### B | code name | 等确认
-
-| 项目 | 内容 |
-|------|------|
-| 早盘意图 | ... |
-| 当前问题 | why not now |
-| 触发后操作 | exact trigger + position |
-| 不买条件 | exact condition |
-
-### C | code name | 只观察
-
-One short paragraph: why it is watch-only.
-
-### D | code name | 放弃/回避
-
-One short paragraph: why it should not be bought today.
-
-## A类 - 可参与
-
-For each A stock:
-- Why now
-- Suggested max position from morning strategy, adjusted by current signal
-- Invalid condition
-
-## B类 - 等确认
-
-For each B stock:
-- Exact trigger
-- Do-not-buy condition
-
-## C/D类 - 不主动买
-
-Short reason per stock.
-
-## 风险提醒
-
-- Mention only risks observable from snapshot or rules.
-```
+All Chinese labels. Style tokens align with `daily_report.html` /
+`overnight_strategy.html` (dark terminal, cyan accent, red-up/green-down A-share
+convention).
 
 ## Card Rules
 
@@ -326,6 +289,7 @@ Short reason per stock.
 - If morning strategy has `不买条件` and snapshot confirms it, class MUST be D.
 - If morning strategy has `锚点`, show current distance to that anchor using `dist_atr`.
 - Keep each card short. Long thesis and reasoning belong in `strategy.json`, not here.
+- Renderer is authoritative for HTML layout; do not hand-author divergent HTML.
 
 ## Constraints
 
