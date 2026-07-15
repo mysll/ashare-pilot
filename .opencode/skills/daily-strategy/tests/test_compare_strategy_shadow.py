@@ -32,12 +32,37 @@ class StrategyShadowTests(unittest.TestCase):
         self.assertFalse(compare(strategy(), strategy(direction="看空"))["passed"])
         self.assertFalse(compare(strategy(), strategy(regime="weak"))["passed"])
 
-    def test_2026_07_14_frozen_source_basis_shadow_preserves_decisions(self):
+    def test_rating_budget_profile_anchor_and_rules_are_locked(self):
+        before = strategy(("sh600001",))
+        before["stocks"][0].update({
+            "rating": "5★", "position_budget": 0.02, "entry_profile": "回调布局",
+            "anchor": "MA20", "rules_applied": ["R70"], "profile": {"playbook": "PULLBACK"},
+        })
+        after = json.loads(json.dumps(before, ensure_ascii=False))
+        after["stocks"][0]["rating"] = "4★"
+        report = compare(before, after)
+        self.assertFalse(report["passed"])
+        self.assertIn("sh600001", report["field_differences"])
+
+    def test_2026_07_14_source_grounding_change_is_reported(self):
         path = Path(__file__).parent / "fixtures" / "strategy_shadow_2026-07-14.json"
         fixture = json.loads(path.read_text(encoding="utf-8"))
         report = compare(fixture["before"], fixture["after"])
-        self.assertTrue(report["passed"])
+        self.assertFalse(report["passed"])
+        self.assertTrue(report["source_grounding_differences"])
         self.assertEqual(len(report["after_codes"]), 10)
+
+    def test_live_mode_ignores_reference_only_profile_noise(self):
+        before = strategy(("sh600001",))
+        before["stocks"][0]["profile"] = {
+            "playbook": "PULLBACK", "preferred_anchor": "MA20", "chase_policy": "NO_CHASE",
+            "entry_window": "ANY", "stop_policy": "ATR_1.5", "time_horizon": "T+1",
+            "position_budget": 0.02, "ref_ma20": 10.0,
+        }
+        after = json.loads(json.dumps(before, ensure_ascii=False))
+        after["stocks"][0]["profile"]["ref_ma20"] = 10.01
+        self.assertFalse(compare(before, after, mode="frozen")["passed"])
+        self.assertTrue(compare(before, after, mode="live")["passed"])
 
 
 if __name__ == "__main__":

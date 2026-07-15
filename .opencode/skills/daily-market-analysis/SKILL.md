@@ -241,30 +241,39 @@ Outputs:
 
 **Agent:** `portfolio-manager`
 
-**Action:** Load skill `daily-strategy` (V5 Reasoning) and follow its workflow.
+**Action:** Execute the following one unambiguous prepare → selected-only LLM draft → finalize sequence.
 
-**Phase 3 JSON-first note:** Step 3 consumes `mapper.strategy_view.json` by default. `mapper.json` remains the full source contract.
+```bash
+python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py \
+  --date {YYYY-MM-DD}
+```
 
-**V5 note:** Step 3 is the sole Reasoning Layer. It consumes V5 JSON computed perceptions (value + confidence + pattern + strategy inputs) and produces Direction、RiskSeverity、OverrideHint application、ReasoningTrace and strategy. Conditional reread resolves `news#<id>` against `news.json` only — never scan `news.md` as an evidence source.
-
-**Prompt (exact format, MUST NOT deviate):**
+**portfolio-manager prompt (exact format, MUST NOT deviate):**
 
 ```
-Load skill `daily-strategy` and execute.
-
 Date: {YYYY-MM-DD}
 
-Inputs:
-- predict/{YYYY-MM-DD}/mapper.strategy_view.json
-- predict/{YYYY-MM-DD}/mapper.json
-- predict/{YYYY-MM-DD}/news.json
+Read only:
+- predict/{YYYY-MM-DD}/.strategy_llm_input.json
+- .opencode/skills/daily-strategy/references/strategy-selection-rubric.md
+- .opencode/skills/daily-strategy/references/strategy-output-contract.md
+- memory/RULES.md
+- memory/SHARED_RULES.md
 
-Output:
-- predict/{YYYY-MM-DD}/strategy.json
-- predict/{YYYY-MM-DD}/daily_report.html
+Consider every compact candidate, deep-reason only the final regime-limited
+selection, and write:
+- predict/{YYYY-MM-DD}/strategy.draft.json
 ```
 
-**CRITICAL:** Do NOT inline any file content, data summaries, stock tables, rules, formulas, or analysis. Keep the prompt clean.
+The LLM must not open full `mapper.json`, `pool_indicators.json`, `news.json`, or any Markdown report. It retains final regime, code set/order, Direction, RiskSeverity application, rating, rule application, and selected execution-plan ownership.
+
+```bash
+python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py \
+  --date {YYYY-MM-DD} \
+  --llm-duration {MEASURED_PORTFOLIO_MANAGER_SECONDS}
+```
+
+If draft validation fails, send only the reported draft errors back to portfolio-manager, rewrite `strategy.draft.json`, increment `--validation-retries`, and rerun finalize with the newly measured cumulative LLM duration. Do not hand-edit `strategy.json`. Runs without an explicit measured LLM duration are diagnostic only and must not enter Gate D P95 samples.
 
 **Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` (`daily_strategy.v2`) and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
 
@@ -285,6 +294,9 @@ Output:
 | `predict/{date}/mapper.json` | Full validated Step 2 machine contract (`daily_mapper.v1`) | Perception (Step 2.4) |
 | `predict/{date}/mapper.strategy_view.json` | Compact Step 3 reading contract (`daily_strategy_input.v1`) projected from mapper.json | Perception → Reasoning bridge |
 | `predict/{date}/step2_timing.json` | Report-only stage duration, byte, failure, and count diagnostics | Observability |
+| `predict/{date}/.strategy_llm_input.json` | Non-contract compact all-candidate Step 3 decision input | Step 3 workflow |
+| `predict/{date}/strategy.draft.json` | Non-contract selected-only LLM decisions linked by content hash | Step 3 workflow |
+| `predict/{date}/step3_timing.json` | Report-only prepare/LLM/finalize timing and artifact fingerprints | Observability |
 | `predict/{date}/strategy.json` | Conditional pre-open decisions for review/backtests and operation confirmation (`daily_strategy.v2`) | Reasoning (Step 3) |
 | `predict/{date}/daily_report.html` | Daily readable summary rendered from JSON: themes, strategy table, stock details, observation/excluded pools, referenced news | Reasoning (Step 3 readable output) |
 
@@ -294,9 +306,9 @@ Output:
 |-------|------|-------|-------|--------|-------------------|
 | Perception | 1 | macro-strategist + daily-news-brief | — | news.json + news.md | news.json must exist before Step 2 |
 | Perception | 2 | sector-analyst + daily-stock-mapping V5 | canonical news.json | compact input -> themes.json -> prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
-| Reasoning | 3 | portfolio-manager + daily-strategy V5 | mapper.strategy_view.json + news.json + RULES.md | strategy.json + daily_report.html (+ReasoningTrace) | Conditional evidence lookup by `news#<id>` only (Invariant 2) |
+| Reasoning | 3 | portfolio-manager + daily-strategy V5 | compact all-candidate input + RULES/SHARED_RULES | selected-only draft -> strategy.json + daily_report.html | Final decisions remain LLM-owned; Python completes deterministic contracts |
 
-Phase 3 override: Step 3 reads `mapper.strategy_view.json + RULES.md` by default, writes `strategy.json`, then renders `daily_report.html`. `mapper.json` is the full source contract.
+Phase 3 uses the exact prepare → portfolio-manager draft → finalize sequence above. Full source JSON remains outside the hot LLM context.
 
 ## Common Usage
 

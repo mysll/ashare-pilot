@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import re
 import sys
 from collections import Counter
@@ -11,6 +13,11 @@ from pathlib import Path
 from typing import Any
 
 from mapper_json_lib import default_predict_dir, ensure_doc_date, read_json, utc_now_iso, write_json
+
+
+def canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
 
 
 def value_conf(item: Any, include_trace: bool = False) -> dict[str, Any]:
@@ -138,6 +145,7 @@ def build_view(doc: dict[str, Any], include_excluded: str = "summary", include_t
             "schema_version": doc.get("schema_version"),
             "generated_at": doc.get("generated_at"),
             "generation_mode": doc.get("generation_mode"),
+            "mapper_sha256": canonical_sha256(doc),
         },
         "market_state": doc.get("market_state") or {},
         "themes": [

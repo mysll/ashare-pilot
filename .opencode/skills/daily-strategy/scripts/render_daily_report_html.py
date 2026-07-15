@@ -453,7 +453,7 @@ def render_report(
 <div class="section-head"><h2>策略总表（{len(stocks)}只）</h2><p>默认仅保留核心决策字段</p></div><section class="panel"><table><thead><tr><th>方向</th><th>代码</th><th>名称</th><th>板块</th><th>评级</th><th>综合分</th><th>主题热度</th><th>策略</th><th>入场条件</th><th>不买条件</th></tr></thead><tbody>{render_strategy_rows(strategy,view)}</tbody></table></section>
 <div class="section-head"><h2>重点策略池</h2><p>按评级与综合分选取前六</p></div><section class="focus-grid">{focus_cards(strategy,view)}</section>
 <div class="section-head"><h2>单股推理链路</h2><p>默认折叠，按需追溯</p></div>{stock_details(strategy,view)}
-<div class="section-head"><h2>观察池</h2><p>按等待原因分组，默认折叠</p></div><section class="pool-stack">{observation_groups(mapper.get('observation_pool'))}</section>
+<div class="section-head"><h2>观察池</h2><p>按等待原因分组，默认折叠</p></div><section class="pool-stack">{observation_groups(strategy.get('observation_pool'))}</section>
 <div class="section-head"><h2>风险过滤 / 排除股票</h2><p>先看聚合原因，完整名单默认折叠</p></div>{excluded_filter(mapper,view)}
 <div class="section-head"><h2>新闻证据链</h2><p>仅展示策略候选真实引用</p></div><section class="news-grid">{news_chain(news_json_path,strategy,view)}</section>
 <footer class="footer">数据源：strategy.json / mapper.strategy_view.json / mapper.json / themes.json / news.json · 本页面仅为中文阅读层，不构成投资建议。</footer>
