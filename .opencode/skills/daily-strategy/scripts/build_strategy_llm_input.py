@@ -39,6 +39,23 @@ def number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
 
 
+def percent_number(value: Any) -> float | None:
+    parsed = number(value)
+    if parsed is not None:
+        return parsed
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if text.endswith("%"):
+        text = text[:-1].strip()
+    if not text or text in {"-", "None"}:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
 def score_value(candidate: dict[str, Any], key: str) -> float | None:
     item = candidate.get("scores", {}).get(key, {})
     return number(item.get("value")) if isinstance(item, dict) else None
@@ -77,7 +94,7 @@ def index_percent(indices: dict[str, Any], code: str) -> float | None:
     if not isinstance(value, dict):
         return None
     for key in ("percent", "change_pct", "pct_change"):
-        parsed = number(value.get(key))
+        parsed = percent_number(value.get(key))
         if parsed is not None:
             return parsed
     return None

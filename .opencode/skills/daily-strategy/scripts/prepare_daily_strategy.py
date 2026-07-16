@@ -23,7 +23,7 @@ from mapper_json_lib import ensure_doc_date, load_pool, load_trading_scope, read
 from validate_mapper_json import check_doc as validate_mapper  # noqa: E402
 
 from build_step3_timing import update_report  # noqa: E402
-from build_strategy_llm_input import build_input, canonical_sha256, compact_write  # noqa: E402
+from build_strategy_llm_input import build_input, canonical_sha256, compact_write, index_percent, percent_number  # noqa: E402
 
 INDEX_CODES = ("sh000001", "sz399001", "sh000688")
 
@@ -42,10 +42,16 @@ def normalize_indices(value: Any) -> dict[str, dict[str, Any]]:
     for item in rows:
         if not isinstance(item, dict) or item.get("code") not in INDEX_CODES:
             continue
-        result[item["code"]] = {
+        normalized = {
             key: item.get(key) for key in ("code", "name", "percent", "change_pct", "pct_change", "open", "close", "prev_close", "error")
             if item.get(key) is not None
         }
+        for key in ("percent", "change_pct", "pct_change"):
+            if key in normalized:
+                parsed = percent_number(normalized[key])
+                if parsed is not None:
+                    normalized[key] = parsed
+        result[item["code"]] = normalized
     for code in INDEX_CODES:
         result.setdefault(code, {"code": code, "error": "missing index quote"})
     return result
@@ -62,7 +68,7 @@ def fetch_indices(path: Path | None) -> tuple[dict[str, dict[str, Any]], float, 
             raise RuntimeError(completed.stderr.strip() or "index fetch failed")
         data = json.loads(completed.stdout)
     indices = normalize_indices(data)
-    failed = any(item.get("error") or not any(isinstance(item.get(key), (int, float)) for key in ("percent", "change_pct", "pct_change")) for item in indices.values())
+    failed = any(item.get("error") or index_percent(indices, code) is None for code, item in indices.items())
     return indices, time.perf_counter() - started, failed
 
 

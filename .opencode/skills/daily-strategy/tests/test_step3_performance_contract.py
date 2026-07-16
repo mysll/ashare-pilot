@@ -11,9 +11,10 @@ sys.path.insert(0, str(SCRIPT_DIR))
 
 from build_step3_timing import update_report  # noqa: E402
 from build_strategy_llm_input import (  # noqa: E402
-    build_input, canonical_sha256, derive_regime, reread_triggers,
+    build_input, canonical_sha256, derive_regime, index_percent, reread_triggers,
 )
 from finalize_daily_strategy import materialize, validate_draft  # noqa: E402
+from prepare_daily_strategy import fetch_indices, normalize_indices  # noqa: E402
 from render_daily_report_html import render_report  # noqa: E402
 from validate_strategy_json import validate  # noqa: E402
 
@@ -190,6 +191,30 @@ class Step3BoundaryTests(unittest.TestCase):
         self.assertEqual("neutral", derive_regime(indices, state, themes))
         indices["sh000001"]["percent"] = 0.2
         self.assertEqual("strong-sector", derive_regime(indices, state, themes))
+
+    def test_fetch_stock_percent_strings_are_normalized_for_regime(self):
+        raw = [
+            {"code": "sh000001", "name": "上证指数", "percent": "-1.09%", "open": "3912.38"},
+            {"code": "sz399001", "name": "深证成指", "percent": "-1.91%", "open": "14497.429"},
+            {"code": "sh000688", "name": "科创50", "percent": "-2.82%", "open": "1869.94"},
+        ]
+        indices = normalize_indices(raw)
+        self.assertEqual(-1.09, indices["sh000001"]["percent"])
+        self.assertEqual(-1.91, index_percent(indices, "sz399001"))
+        self.assertEqual("weak", derive_regime(indices, {}, []))
+
+    def test_fetch_indices_does_not_mark_percent_strings_as_failed(self):
+        raw = [
+            {"code": "sh000001", "percent": "-1.09%"},
+            {"code": "sz399001", "percent": "-1.91%"},
+            {"code": "sh000688", "percent": "-2.82%"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "indices.json"
+            path.write_text(json.dumps(raw), encoding="utf-8")
+            indices, _, failed = fetch_indices(path)
+        self.assertFalse(failed)
+        self.assertEqual(-2.82, indices["sh000688"]["percent"])
 
     def test_not_selected_reason_is_generic_when_limit_not_reached(self):
         date = "2026-07-15"
