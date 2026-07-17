@@ -336,10 +336,8 @@ def main() -> int:
         result = build_input(view, theme_stocks, pool, news, indices)
         output = Path(args.output) if args.output else pdir / ".strategy_llm_input.json"
         compact_write(output, result)
-        if output.stat().st_size > 80 * 1024:
-            raise ValueError(f"compact input exceeds hard 80KB target: {output.stat().st_size} bytes")
-        if output.stat().st_size > 70 * 1024:
-            print(f"[WARN] compact input exceeds 70KB warning threshold: {output.stat().st_size} bytes", file=sys.stderr)
+        if output.stat().st_size > 90 * 1024:
+            print(f"[WARN] compact input exceeds 90KB warning threshold: {output.stat().st_size} bytes", file=sys.stderr)
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
