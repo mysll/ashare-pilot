@@ -8,6 +8,7 @@ into flags that the intraday-operation-guide skill can interpret.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -67,6 +68,10 @@ def atomic_write(path: Path, text: str) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     temporary.write_text(text, encoding="utf-8")
     temporary.replace(path)
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def parse_strategies(doc: dict[str, Any], expected_date: str) -> dict[str, dict[str, Any]]:
@@ -329,6 +334,11 @@ def main() -> int:
     parser.add_argument("--intraday-fixture-dir", help="Directory containing <code>.json bars")
     parser.add_argument("--no-network", action="store_true", help="Fail instead of fetching missing fixture data")
     parser.add_argument("--previous-snapshot", help="Previous slot snapshot for transition checks")
+    parser.add_argument(
+        "--run-mode",
+        choices=["INITIAL_CONFIRMATION", "LATE_INITIAL_CONFIRMATION", "SECOND_CONFIRMATION", "RECHECK", "LATE_OBSERVE_ONLY", "EARLY"],
+        help="Orchestrator-selected lifecycle mode",
+    )
     parser.add_argument("--write-latest", action="store_true", help="Also atomically write operation_snapshot.latest.json")
     parser.add_argument("--json", action="store_true", help="Print JSON")
     parser.add_argument("-o", "--output", help="Output file")
@@ -344,7 +354,7 @@ def main() -> int:
         raise ValueError(f"snapshot date mismatch: expected {args.date}, got {snapshot_time.date()}")
     actual_slot = snapshot_slot(snapshot_time)
     selected_slot = actual_slot if args.slot == "auto" else args.slot
-    slot_minimum = {"09:35": "09:35:05", "09:40": "09:40:05", "09:45": "09:45:05"}
+    slot_minimum = {"09:35": "09:35:10", "09:40": "09:40:10", "09:45": "09:45:10"}
     if selected_slot in slot_minimum and snapshot_time.strftime("%H:%M:%S") < slot_minimum[selected_slot]:
         raise ValueError(f"snapshot time {snapshot_time.time()} is before completed {selected_slot} slot")
     if args.slot != "auto" and actual_slot != selected_slot:
@@ -409,15 +419,47 @@ def main() -> int:
     previous = read_json(Path(args.previous_snapshot)) if args.previous_snapshot else None
     if previous is not None and previous.get("date") != args.date:
         raise ValueError("previous snapshot date mismatch")
+    if previous is not None:
+        previous_time = parse_market_datetime(previous.get("generated_at"))
+        if previous_time is None or previous_time >= snapshot_time:
+            raise ValueError("previous snapshot must have a valid generated_at earlier than current snapshot")
+    if args.run_mode in {"SECOND_CONFIRMATION", "RECHECK"} and previous is None:
+        raise ValueError(f"{args.run_mode} requires --previous-snapshot")
+    if args.run_mode in {"INITIAL_CONFIRMATION", "LATE_INITIAL_CONFIRMATION", "LATE_OBSERVE_ONLY", "EARLY"} and previous is not None:
+        raise ValueError(f"{args.run_mode} must not use --previous-snapshot")
     delivery = apply_delivery_gate(stocks, selected_slot, previous is not None)
     transition_warnings = apply_previous_snapshot(stocks, previous)
     portfolio_allocation = apply_portfolio_limits(stocks, strategy_doc.get("portfolio_limits"))
+
+    run_mode = args.run_mode
+    if run_mode is None:
+        if previous is not None:
+            run_mode = "SECOND_CONFIRMATION" if selected_slot == "09:40" else "RECHECK"
+        elif selected_slot == "09:35":
+            run_mode = "INITIAL_CONFIRMATION"
+        elif selected_slot == "09:40":
+            run_mode = "LATE_INITIAL_CONFIRMATION"
+        elif selected_slot == "EARLY":
+            run_mode = "EARLY"
+        else:
+            run_mode = "LATE_OBSERVE_ONLY"
+    lineage = None
+    if previous is not None and args.previous_snapshot:
+        previous_path = Path(args.previous_snapshot)
+        previous_lineage = previous.get("lineage") if isinstance(previous.get("lineage"), dict) else {}
+        lineage = {
+            "previous_snapshot": str(previous_path),
+            "previous_snapshot_sha256": file_sha256(previous_path),
+            "chain_root": previous_lineage.get("chain_root") or str(previous_path),
+        }
 
     output = {
         "schema_version": "intraday_operation_snapshot.v2",
         "date": args.date,
         "generated_at": iso_market(snapshot_time),
         "snapshot_slot": selected_slot,
+        "run_mode": run_mode,
+        "lineage": lineage,
         "source_files": {
             "strategy": str(strategy_path),
             "mapper": str(mapper_path),

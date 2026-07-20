@@ -1,6 +1,6 @@
 ﻿---
 name: intraday-operation-guide
-description: Use when the user wants one-shot intraday human trading instructions based on today's morning strategy and current market data. Reads predict/{date}/strategy.json + mapper.json, fetches current quotes and 5-minute intraday K-lines, then outputs actionable A/B/C/D operation guidance as operation_guide.html (Bloomberg × IC memo × quant board). This skill does NOT place orders.
+description: Use when the user wants current or repeated intraday human trading instructions based on today's morning strategy and live market data. Automatically discovers today's confirmation state, performs the 09:35/09:40 confirmation chain or a later recheck, and outputs actionable A/B/C/D guidance as operation_guide.html. This skill does NOT place orders.
 ---
 
 # Intraday Operation Guide
@@ -28,40 +28,62 @@ Write:
 
 ```text
 operation/{YYYY-MM-DD}/operation_guide.html
+operation/{YYYY-MM-DD}/operation_run.latest.json
 ```
 
-Canonical human board is HTML. Do not write `operation_guide.md` as the primary deliverable.
+Canonical human board is HTML. `operation_run.latest.json` is the atomic source-of-truth
+pointer to the matching immutable snapshot, decision, and timestamped HTML. The unversioned
+HTML and `*.latest.json` files are convenience projections and must not be used to establish
+cross-file consistency. Do not write `operation_guide.md` as the primary deliverable.
 
 ## Workflow
 
-### Step 1 - Run Intraday Snapshot
+### Step 1 - Run The State-Aware Workflow
 
-Run the first confirmation after the completed opening bar:
-
-```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
-  --date {YYYY-MM-DD} --slot 09:35 --write-latest \
-  -o operation/{YYYY-MM-DD}/operation_snapshot_0935.json
-```
-
-Run the primary second confirmation after 09:40, using the first snapshot for
-state-transition validation:
+Always use the deterministic lifecycle runner. Do not manually infer whether the
+request is an initial run, second confirmation, or recheck from the user's wording:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
-  --date {YYYY-MM-DD} --slot 09:40 --write-latest \
-  --previous-snapshot operation/{YYYY-MM-DD}/operation_snapshot_0935.json \
-  -o operation/{YYYY-MM-DD}/operation_snapshot_0940.json
+python .opencode/skills/intraday-operation-guide/scripts/run_operation_guide.py \
+  --date {YYYY-MM-DD}
 ```
 
-Do not overwrite slot snapshots. `operation_snapshot.latest.json` is only a
-convenience projection for reading.
+The runner determines mode from Shanghai market time plus validated immutable
+snapshots under `operation/{date}`:
+
+| Current state | Required mode |
+|---|---|
+| Before `09:35:10` | wait in the same invocation, run `09:35:10`, then automatically run `09:40:10` |
+| Valid `09:35` exists and `09:40` is due | `SECOND_CONFIRMATION` using `09:35` as previous |
+| First invocation is between `09:40:10` and `09:45:09` | late initial confirmation, then automatically follow up at `09:45:10` |
+| A valid confirmation chain exists later in the day | `RECHECK` using the newest eligible immutable snapshot |
+| No valid chain exists after the opening slots | `LATE_OBSERVE_ONLY` |
+
+An opening snapshot is not automatically a valid all-day chain. A `09:35` snapshot is
+eligible only for the `09:40` second confirmation. A late `09:40`
+`WAIT_SECOND_CONFIRMATION` snapshot is eligible only for the immediate `09:45` follow-up
+window and expires at `09:50:10`. Only a completed confirmation with
+`execution_action=EVALUATE` and `requires_second_confirmation=false` may seed later RECHECK runs.
+
+The user does not need to say "再次确认". Every invocation must perform state
+discovery. Never fall back to an old decision after current market data was
+successfully fetched.
+
+The two opening snapshots are not fetched before `09:35:10` and `09:40:10`.
+The runner also verifies that the expected completed 5-minute bar is actually
+published, retries briefly when necessary, and refuses to publish stale data as
+the current confirmation.
+
+Never overwrite an immutable `09:35`, `09:40`, or timestamped recheck artifact. If a
+canonical opening filename already exists, write a new timestamped artifact instead.
+`operation_snapshot.latest.json` and `operation_decision.latest.json` are convenience projections only. Previous
+state is selected from validated immutable snapshots; an `OBSERVE_ONLY` latest
+projection must not poison an existing confirmation chain.
 
 ### Late delivery policy
 
-Confirmation starts from the first slot available after Step 3 has fully
-generated, normalized, validated, and rendered its outputs. Never backfill a
-missed slot:
+When the runner starts after an opening slot was missed, it uses the first
+currently available slot and never fabricates a historical snapshot:
 
 | First available snapshot | Required handling |
 |---|---|
@@ -86,20 +108,21 @@ The script:
 - applies aggregate `portfolio_limits` after all stock/theme/transition decisions:
   single-stock cap, theme exposure, correlated-name count, then total new exposure
 
-Validate the generated snapshot before writing the guide:
+The runner validates the generated current snapshot and decision automatically.
+For manual diagnostics, validate the current projections with:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py operation/{YYYY-MM-DD}/operation_snapshot_0940.json
+python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py operation/{YYYY-MM-DD}/operation_snapshot.latest.json
 ```
+
+Use `--portable` only when validating a moved archive whose referenced predecessor files
+are intentionally absent. Live workflows always perform strict reference and hash checks.
 
 Then build and validate the deterministic decision contract:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py \
-  --snapshot operation/{YYYY-MM-DD}/operation_snapshot_0940.json \
-  -o operation/{YYYY-MM-DD}/operation_decision_0940.json
 python .opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py \
-  operation/{YYYY-MM-DD}/operation_decision_0940.json
+  operation/{YYYY-MM-DD}/operation_decision.latest.json
 ```
 
 Do not manually judge "放量", "站稳", "高开低走", or "回踩确认" before reading the JSON. The script normalizes these into explicit flags.
@@ -120,8 +143,8 @@ Use rules only to adjust the operation class or caution notes. Do not invent new
 Read:
 
 ```text
-operation/{YYYY-MM-DD}/operation_snapshot_0940.json
-operation/{YYYY-MM-DD}/operation_decision_0940.json
+operation/{YYYY-MM-DD}/operation_snapshot.latest.json
+operation/{YYYY-MM-DD}/operation_decision.latest.json
 predict/{YYYY-MM-DD}/strategy.json
 predict/{YYYY-MM-DD}/mapper.json
 ```
@@ -149,8 +172,8 @@ After the decision contract is validated, render the human board:
 ```bash
 python .opencode/skills/intraday-operation-guide/scripts/render_operation_guide_html.py \
   --date {YYYY-MM-DD} \
-  --decision operation/{YYYY-MM-DD}/operation_decision_0940.json \
-  --snapshot operation/{YYYY-MM-DD}/operation_snapshot_0940.json \
+  --decision operation/{YYYY-MM-DD}/operation_decision.latest.json \
+  --snapshot operation/{YYYY-MM-DD}/operation_snapshot.latest.json \
   --output operation/{YYYY-MM-DD}/operation_guide.html
 ```
 
@@ -171,7 +194,7 @@ Every strategy stock MUST be assigned exactly one class:
 |-------|---------|--------------|
 | A | 现在可参与 | Can buy now if no personal position conflict |
 | B | 等确认 | Wait for the listed trigger; do not buy before trigger |
-| C | 只观察 | Watch only; no new buy today unless later skill rerun upgrades it |
+| C | 只观察 | Watch only; a later rerun may recover it to B, but it cannot jump directly to A |
 | D | 放弃/回避 | Do not buy today |
 
 The snapshot provides `decision_guardrails.mechanical_class` and
@@ -304,7 +327,7 @@ convention).
 - For a new A-share position, never write "跌破即卖出" as a same-day action.
   Express the level as a pre-entry cancellation condition; after execution it
   becomes a T+1 risk alert and next-day exit-plan input.
-- If current time is before 09:35, mark the guide as "early signal, rerun after first 5-minute bar".
+- If current time is before 09:35, keep the same runner invocation alive; automatically execute at `09:35:10` and `09:40:10`. Do not ask the user to rerun.
 - If current time is after 14:45, do not suggest new intraday chase buys; use "尾盘风险" framing.
 - All output in Chinese.
 

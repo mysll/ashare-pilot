@@ -72,6 +72,18 @@ class TransitionTests(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertEqual(current[0]["transition"]["transition"], "B_TO_A")
 
+    def test_c_can_recover_to_b_but_not_jump_to_a(self):
+        current = [stock("sz000001", "银行", 1.0, klass="B")]
+        previous = {"stocks": [stock("sz000001", "银行", -0.2, klass="C")]}
+        self.assertEqual(apply_previous_snapshot(current, previous), [])
+        self.assertEqual(current[0]["transition"]["transition"], "C_TO_B")
+        self.assertEqual(current[0]["decision_guardrails"]["position"]["final_max"], 0.0)
+
+        jumping = [stock("sz000001", "银行", 1.0, klass="A")]
+        warnings = apply_previous_snapshot(jumping, previous)
+        self.assertTrue(warnings)
+        self.assertEqual(jumping[0]["decision_guardrails"]["mechanical_class"], "C")
+
     def test_d_cannot_upgrade(self):
         current = [stock("sz000001", "银行", 1.0, klass="A")]
         previous = {"stocks": [stock("sz000001", "银行", -1.0, klass="D")]}

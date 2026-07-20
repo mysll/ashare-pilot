@@ -20,7 +20,7 @@ def snapshot():
     return {
         "schema_version": "intraday_operation_snapshot.v2",
         "date": "2026-07-10",
-        "generated_at": "2026-07-10T09:40:05+08:00",
+        "generated_at": "2026-07-10T09:40:10+08:00",
         "snapshot_slot": "09:40",
         "market_confirmation": {
             "global_action": "SELECTIVE",
@@ -89,6 +89,21 @@ class SnapshotValidationTests(unittest.TestCase):
             decision = build_decision(snapshot(), path)
             self.assertEqual(validate_decision(decision), [])
             self.assertEqual(decision["portfolio"]["actionable_exposure"], 0.01)
+
+            path.unlink()
+            self.assertEqual(validate_decision(decision), [])
+            self.assertTrue(validate_decision(decision, reference_base=Path(directory), require_references=True))
+
+    def test_snapshot_lineage_can_be_validated_after_archive_move(self):
+        doc = snapshot()
+        doc["run_mode"] = "RECHECK"
+        doc["lineage"] = {
+            "previous_snapshot": "missing/operation_snapshot_0940.json",
+            "previous_snapshot_sha256": "a" * 64,
+            "chain_root": "operation_snapshot_0935.json",
+        }
+        self.assertEqual(validate(doc), [])
+        self.assertTrue(validate(doc, reference_base=Path("/definitely-missing"), require_references=True))
 
     def test_v2_snapshot_requires_preserved_limits_and_t1_plan(self):
         doc = snapshot()

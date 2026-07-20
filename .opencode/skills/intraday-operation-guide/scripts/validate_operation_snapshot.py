@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -18,7 +19,16 @@ def add(errors: list[str], path: str, message: str) -> None:
     errors.append(f"{path}: {message}")
 
 
-def validate(doc: dict[str, Any]) -> list[str]:
+def resolve_reference(value: str, reference_base: Path | None) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() or reference_base is None else reference_base / path
+
+
+def validate(
+    doc: dict[str, Any],
+    reference_base: Path | None = None,
+    require_references: bool = False,
+) -> list[str]:
     errors: list[str] = []
     if doc.get("schema_version") != "intraday_operation_snapshot.v2":
         add(errors, "schema_version", "must be intraday_operation_snapshot.v2")
@@ -28,6 +38,30 @@ def validate(doc: dict[str, Any]) -> list[str]:
     generated = parse_market_datetime(doc.get("generated_at"))
     if generated is None:
         add(errors, "generated_at", "must be timezone-aware ISO datetime")
+    run_mode = doc.get("run_mode")
+    if run_mode is not None and run_mode not in {
+        "INITIAL_CONFIRMATION", "LATE_INITIAL_CONFIRMATION", "SECOND_CONFIRMATION", "RECHECK", "LATE_OBSERVE_ONLY", "EARLY"
+    }:
+        add(errors, "run_mode", "invalid enum")
+    lineage = doc.get("lineage")
+    if run_mode in {"SECOND_CONFIRMATION", "RECHECK"}:
+        if not isinstance(lineage, dict):
+            add(errors, "lineage", "continuation modes require lineage")
+        else:
+            previous_path = lineage.get("previous_snapshot")
+            previous_hash = lineage.get("previous_snapshot_sha256")
+            if not isinstance(previous_path, str) or not previous_path:
+                add(errors, "lineage.previous_snapshot", "must be non-empty path")
+            elif not isinstance(previous_hash, str) or not re.match(r"^[0-9a-f]{64}$", previous_hash):
+                add(errors, "lineage.previous_snapshot_sha256", "must be lowercase SHA256")
+            else:
+                resolved = resolve_reference(previous_path, reference_base)
+                if resolved.exists() and hashlib.sha256(resolved.read_bytes()).hexdigest() != previous_hash:
+                    add(errors, "lineage.previous_snapshot_sha256", "does not match previous snapshot")
+                elif require_references and not resolved.exists():
+                    add(errors, "lineage.previous_snapshot", "file does not exist")
+            if not isinstance(lineage.get("chain_root"), str) or not lineage.get("chain_root"):
+                add(errors, "lineage.chain_root", "must be non-empty path")
     market = doc.get("market_confirmation")
     if not isinstance(market, dict):
         add(errors, "market_confirmation", "must be object")
@@ -173,6 +207,7 @@ def validate(doc: dict[str, Any]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate operation snapshot v2")
     parser.add_argument("path")
+    parser.add_argument("--portable", action="store_true", help="Allow referenced files to be absent")
     args = parser.parse_args()
     path = Path(args.path)
     try:
@@ -183,7 +218,7 @@ def main() -> int:
     if not isinstance(doc, dict):
         print("[ERROR] root must be object", file=sys.stderr)
         return 1
-    errors = validate(doc)
+    errors = validate(doc, reference_base=Path.cwd(), require_references=not args.portable)
     if errors:
         print(f"[ERROR] {path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for item in errors:

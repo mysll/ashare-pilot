@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -13,12 +14,33 @@ from typing import Any
 from mechanical_classification import CLASS_RANK
 
 
-def validate(doc: dict[str, Any]) -> list[str]:
+def resolve_reference(value: str, reference_base: Path | None) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() or reference_base is None else reference_base / path
+
+
+def validate(
+    doc: dict[str, Any],
+    reference_base: Path | None = None,
+    require_references: bool = False,
+) -> list[str]:
     errors: list[str] = []
     if doc.get("schema_version") != "intraday_operation_decision.v1":
         errors.append("schema_version: invalid")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         errors.append("date: invalid")
+    source = doc.get("source_snapshot")
+    source_hash = doc.get("source_snapshot_sha256")
+    if not isinstance(source, str) or not source:
+        errors.append("source_snapshot: invalid")
+    elif not isinstance(source_hash, str) or not re.match(r"^[0-9a-f]{64}$", source_hash):
+        errors.append("source_snapshot_sha256: must be lowercase SHA256")
+    else:
+        source_path = resolve_reference(source, reference_base)
+        if require_references and not source_path.exists():
+            errors.append("source_snapshot: file does not exist")
+        elif source_path.exists() and hashlib.sha256(source_path.read_bytes()).hexdigest() != source_hash:
+            errors.append("source_snapshot_sha256: does not match source snapshot")
     action = doc.get("global_action")
     if action not in {"NORMAL", "SELECTIVE", "WAIT", "NO_NEW_BUY"}:
         errors.append("global_action: invalid")
@@ -75,6 +97,7 @@ def validate(doc: dict[str, Any]) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate operation decision")
     parser.add_argument("path")
+    parser.add_argument("--portable", action="store_true", help="Allow source snapshot to be absent")
     args = parser.parse_args()
     path = Path(args.path)
     try:
@@ -85,7 +108,7 @@ def main() -> int:
     if not isinstance(doc, dict):
         print("[ERROR] root must be object", file=sys.stderr)
         return 1
-    errors = validate(doc)
+    errors = validate(doc, reference_base=Path.cwd(), require_references=not args.portable)
     if errors:
         print(f"[ERROR] {path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for item in errors:

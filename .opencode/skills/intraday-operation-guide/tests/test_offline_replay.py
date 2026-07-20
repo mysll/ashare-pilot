@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -57,6 +58,7 @@ class OfflineReplayTests(unittest.TestCase):
             bars = [
                 {"time": "2026-07-10 09:35:00", "open": 10, "high": 10.2, "low": 9.9, "close": 10.1, "volume": 100},
                 {"time": "2026-07-10 09:40:00", "open": 10.1, "high": 10.3, "low": 10, "close": 10.2, "volume": 160},
+                {"time": "2026-07-10 09:45:00", "open": 10.2, "high": 10.4, "low": 10.1, "close": 10.3, "volume": 180},
             ]
             (predict / "strategy.json").write_text(json.dumps(strategy), encoding="utf-8")
             (predict / "mapper.json").write_text(json.dumps(mapper), encoding="utf-8")
@@ -66,7 +68,7 @@ class OfflineReplayTests(unittest.TestCase):
             output = root / "operation" / "2026-07-10" / "operation_snapshot_0940.json"
             argv = [
                 "build_operation_snapshot.py", "--date", "2026-07-10", "--slot", "09:40",
-                "--as-of", "2026-07-10T09:40:05+08:00", "--quotes-fixture", str(quotes_path),
+                "--as-of", "2026-07-10T09:40:10+08:00", "--quotes-fixture", str(quotes_path),
                 "--intraday-fixture-dir", str(intraday), "--no-network", "-o", str(output),
             ]
             with patch.object(builder, "ROOT", root), patch.object(sys, "argv", argv):
@@ -77,6 +79,25 @@ class OfflineReplayTests(unittest.TestCase):
             self.assertEqual(doc["stocks"][0]["signals"]["completed_bar_count"], 2)
             self.assertEqual(doc["delivery_confirmation"]["execution_action"], "WAIT_SECOND_CONFIRMATION")
             self.assertEqual(doc["stocks"][0]["decision_guardrails"]["position"]["final_max"], 0)
+
+            continuation = root / "operation" / "2026-07-10" / "operation_snapshot_0945.json"
+            argv = [
+                "build_operation_snapshot.py", "--date", "2026-07-10", "--slot", "09:45",
+                "--as-of", "2026-07-10T09:45:10+08:00", "--quotes-fixture", str(quotes_path),
+                "--intraday-fixture-dir", str(intraday), "--no-network",
+                "--previous-snapshot", str(output), "-o", str(continuation),
+            ]
+            with patch.object(builder, "ROOT", root), patch.object(sys, "argv", argv):
+                self.assertEqual(builder.main(), 0)
+            continued = json.loads(continuation.read_text(encoding="utf-8"))
+            self.assertEqual(validate(continued), [])
+            self.assertEqual(continued["run_mode"], "RECHECK")
+            self.assertEqual(continued["delivery_confirmation"]["execution_action"], "EVALUATE")
+            self.assertEqual(continued["lineage"]["previous_snapshot"], str(output))
+            self.assertEqual(
+                continued["lineage"]["previous_snapshot_sha256"],
+                hashlib.sha256(output.read_bytes()).hexdigest(),
+            )
 
 
 if __name__ == "__main__":

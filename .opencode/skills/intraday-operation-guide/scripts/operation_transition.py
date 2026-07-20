@@ -10,7 +10,7 @@ from mechanical_classification import CLASS_RANK, cap_class
 ALLOWED_TRANSITIONS = {
     "A": {"A", "B", "C", "D"},
     "B": {"A", "B", "C", "D"},
-    "C": {"C", "D"},
+    "C": {"B", "C", "D"},
     "D": {"D"},
 }
 
@@ -81,16 +81,18 @@ def apply_previous_snapshot(
         old = old_stock.get("decision_guardrails", {}).get("mechanical_class") if old_stock else None
         adjusted = False
         if old in ALLOWED_TRANSITIONS and current not in ALLOWED_TRANSITIONS[old]:
-            allow_reassessment = bool(stock.get("strategy", {}).get("preopen_plan", {}).get("allow_reassessment"))
-            if not (old == "C" and current == "A" and allow_reassessment):
-                warnings.append(f"{code}:illegal_transition_{old}_to_{current}")
-                current = old
-                guard["mechanical_class"] = old
-                guard["max_allowed_class"] = old
-                if old != "A":
-                    guard["position"]["signal_adjusted_max"] = 0.0
-                    guard["position"]["final_max"] = 0.0
-                adjusted = True
+            warnings.append(f"{code}:illegal_transition_{old}_to_{current}")
+            current = old
+            guard["mechanical_class"] = old
+            guard["max_allowed_class"] = old
+            if old != "A":
+                guard["position"]["signal_adjusted_max"] = 0.0
+                guard["position"]["final_max"] = 0.0
+            adjusted = True
+        if current != "A":
+            position = guard.get("position", {})
+            position["signal_adjusted_max"] = 0.0
+            position["final_max"] = 0.0
         stock["transition"] = {
             "previous_class": old,
             "current_class": current,

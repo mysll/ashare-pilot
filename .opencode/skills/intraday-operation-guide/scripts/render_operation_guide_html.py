@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import sys
@@ -20,6 +21,36 @@ def read_json(path: Path) -> Any | None:
     if not path.exists():
         return None
     return json.loads(path.read_text(encoding="utf-8-sig"))
+
+
+def valid_run_manifest(operation_dir: Path, manifest: Any) -> bool:
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != "intraday_operation_run_manifest.v1":
+        return False
+    for name_key, hash_key in (
+        ("snapshot", "snapshot_sha256"),
+        ("decision", "decision_sha256"),
+        ("html", "html_sha256"),
+    ):
+        name = manifest.get(name_key)
+        expected = manifest.get(hash_key)
+        path = operation_dir / name if isinstance(name, str) else None
+        if path is None or not path.exists() or not isinstance(expected, str):
+            return False
+        if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+            return False
+    return True
+
+
+def latest_run_manifest(operation_dir: Path) -> dict[str, Any] | None:
+    manifests = []
+    for path in operation_dir.glob("operation_run_*.json"):
+        manifest = read_json(path)
+        if valid_run_manifest(operation_dir, manifest):
+            manifests.append(manifest)
+    if manifests:
+        return sorted(manifests, key=lambda item: str(item.get("generated_at") or ""))[-1]
+    projected = read_json(operation_dir / "operation_run.latest.json")
+    return projected if valid_run_manifest(operation_dir, projected) else None
 
 
 def esc(value: Any) -> str:
@@ -624,21 +655,38 @@ def main() -> int:
 
     root = workspace_root()
     odir = root / "operation" / args.date
-    decision_path = Path(args.decision) if args.decision else odir / "operation_decision_0940.json"
+    manifest = latest_run_manifest(odir)
+    if args.decision:
+        decision_path = Path(args.decision)
+    elif manifest and isinstance(manifest.get("decision"), str):
+        decision_path = odir / manifest["decision"]
+    else:
+        decision_path = odir / "operation_decision.latest.json"
     if not decision_path.exists():
         for candidate in sorted(odir.glob("operation_decision_*.json"), reverse=True):
             decision_path = candidate
             break
     snapshot_path = Path(args.snapshot) if args.snapshot else None
     if snapshot_path is None:
-        decision = read_json(decision_path)
-        source = decision.get("source_snapshot") if isinstance(decision, dict) else None
-        if source:
-            snapshot_path = Path(source)
-            if not snapshot_path.is_absolute():
-                snapshot_path = root / snapshot_path
+        if manifest and isinstance(manifest.get("snapshot"), str):
+            snapshot_path = odir / manifest["snapshot"]
         else:
-            snapshot_path = odir / "operation_snapshot.latest.json"
+            decision = read_json(decision_path)
+            source = decision.get("source_snapshot") if isinstance(decision, dict) else None
+            if source:
+                snapshot_path = Path(source)
+                if not snapshot_path.is_absolute():
+                    snapshot_path = root / snapshot_path
+            else:
+                snapshot_path = odir / "operation_snapshot.latest.json"
+
+    if manifest and not args.decision and not args.snapshot:
+        for key, path in (("decision_sha256", decision_path), ("snapshot_sha256", snapshot_path)):
+            expected = manifest.get(key)
+            actual = hashlib.sha256(path.read_bytes()).hexdigest() if path and path.exists() else None
+            if expected != actual:
+                print(f"[ERROR] run manifest {key} mismatch", file=sys.stderr)
+                return 1
 
     decision = read_json(decision_path)
     if not isinstance(decision, dict):
@@ -655,6 +703,15 @@ def main() -> int:
     if snapshot is not None and not isinstance(snapshot, dict):
         print(f"[ERROR] invalid snapshot: {snapshot_path}", file=sys.stderr)
         return 1
+    if isinstance(snapshot, dict):
+        if decision.get("generated_at") != snapshot.get("generated_at"):
+            print("[ERROR] decision and snapshot generated_at differ", file=sys.stderr)
+            return 1
+        expected_hash = decision.get("source_snapshot_sha256")
+        actual_hash = hashlib.sha256(snapshot_path.read_bytes()).hexdigest() if snapshot_path else None
+        if expected_hash != actual_hash:
+            print("[ERROR] decision source snapshot hash mismatch", file=sys.stderr)
+            return 1
 
     output = Path(args.output) if args.output else odir / "operation_guide.html"
     if not output.is_absolute():

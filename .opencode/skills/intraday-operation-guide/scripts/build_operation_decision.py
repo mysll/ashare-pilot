@@ -64,6 +64,8 @@ def build(snapshot: dict[str, Any], source_path: Path) -> dict[str, Any]:
         "date": snapshot.get("date"),
         "generated_at": snapshot.get("generated_at"),
         "snapshot_slot": snapshot.get("snapshot_slot"),
+        "run_mode": snapshot.get("run_mode"),
+        "lineage": snapshot.get("lineage"),
         "source_snapshot": str(source_path),
         "source_snapshot_sha256": file_sha256(source_path),
         "global_action": snapshot.get("market_confirmation", {}).get("global_action"),
