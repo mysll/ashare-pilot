@@ -186,10 +186,14 @@ def fetch_xueqiu() -> list[dict[str, str]]:
     for k in data.get("data", {}).get("items", []):
         if k.get("ad"):
             continue
-        pct = k.get("percent", 0)
-        sign = "+" if pct > 0 else ""
+        pct = k.get("percent")
+        if pct is None:
+            title = f"{k.get('name', '')} (—)"
+        else:
+            sign = "+" if pct > 0 else ""
+            title = f"{k.get('name', '')} ({sign}{pct}%)"
         items.append({
-            "title": f"{k.get('name', '')} ({sign}{pct}%)",
+            "title": title,
             "url": f"https://xueqiu.com/s/{k.get('code', '')}",
             "source": "Xueqiu",
         })
