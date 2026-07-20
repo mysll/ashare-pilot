@@ -85,7 +85,7 @@ compute fields into it. The required schema is:
     "t_plus_1_plan": {
       "auction_condition": "string",
       "open_strategy": "string",
-      "stop_loss": "string",
+      "stop_loss_basis": "day_low|ma5|ma10|ma20|not_applicable",
       "take_profit": "string"
     },
     "rules_applied": ["I01"],
@@ -98,6 +98,11 @@ compute fields into it. The required schema is:
   }
 }
 ```
+
+`stop_loss_basis` is the only stop-loss field authored by the LLM. The mapper
+builder resolves `stop_loss_price` and readable `stop_loss` from the same
+stock's compute-owned quote/technical fields. The LLM must never transcribe a
+stop-loss number. Observation-only stocks use `not_applicable`.
 
 Then run:
 
@@ -216,9 +221,20 @@ annotations → validate → `intraday_mapper.json` → `overnight_strategy.json
 
 Before recommending any stock for **买入/持有** (not Watch), apply these filters:
 
+The deterministic base publishes a compute-owned `execution_state` with
+quote-derived `is_limit_up`, `is_sealed`, `limit_up_price`, `quote_complete`,
+config-derived `board_excluded`, `eligible`, and `exclusion_reason`. Limit-up
+status is calculated from previous close, board/ST limit ratio, and price tick;
+sealed additionally requires `price == high`. Missing quote inputs fail closed
+with `quote_data_missing`. Reasoning must not reproduce or override this state. Actionable
+directions require `execution_state.eligible=true`; tradeability remains governed
+by I01/I05, including their existing Watch sizing semantics.
+
 ### Board Exclusion (config-driven)
 
 Read `.opencode/config/trading-scope.json`. Apply board exclusion.
+Use longest-prefix matching plus explicit code overrides from this file; do not
+hard-code excluded board prefixes in the strategy implementation.
 
 | Board Prefix | Default | Rule |
 |-------------|:-------:|------|
@@ -301,6 +317,8 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 ## Score immutability
 
 - Never recompute OvernightScore, rank_tier, or quality/floor flags in annotations.
+- Never reproduce `execution_state`, `stop_loss_price`, or stop-loss text in annotations.
+  Select only `stop_loss_basis`; Python resolves the price from the same stock.
 - I10/I11/I14 effects appear only via opportunity_pool / base.json fields
   (`regime_snapshot`, `anomaly_flags`, `i14_exemption`, `rank_tier`, `absolute_score`).
 - Rank tier and Tradeability are independent. Never translate A→Suitable or B→Watch mechanically.
@@ -311,6 +329,8 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 - I13 (extreme weak zero position) is Reasoning-only: set all directions to 观望
   and position_cap to 0 when breadth up_ratio < 15%; do not claim scores changed.
 - If annotations disagree with base numeric fields, validation / review treats base as truth.
+- Sealed limit-up or board-excluded stocks must use `direction=观望` and
+  `stop_loss_basis=not_applicable`; any violation fails publication.
 
 ## Constraints
 

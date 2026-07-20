@@ -8,11 +8,21 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from intraday_mapper_json_lib import intraday_dir, read_json, utc_now_iso, write_json
+from intraday_mapper_json_lib import (
+    intraday_dir,
+    read_json,
+    reasoning_invariant_errors,
+    resolved_stop_loss,
+    utc_now_iso,
+    write_json,
+)
 
 
 def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
     reasoning = stock.get("reasoning") if isinstance(stock.get("reasoning"), dict) else {}
+    source_plan = reasoning.get("t_plus_1_plan")
+    plan = dict(source_plan) if isinstance(source_plan, dict) else {}
+    plan.update(resolved_stop_loss(stock, plan.get("stop_loss_basis")))
     return {
         "code": stock.get("code"),
         "name": stock.get("name"),
@@ -25,6 +35,7 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
         "tradeability": reasoning.get("tradeability"),
         "i14_exemption": stock.get("i14_exemption"),
         "anomaly_flags": stock.get("anomaly_flags") or [],
+        "execution_state": stock.get("execution_state"),
         "direction": reasoning.get("direction"),
         "trading_strategy": reasoning.get("trading_strategy"),
         "risk_severity": reasoning.get("risk_severity"),
@@ -32,11 +43,21 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
         "key_reason": reasoning.get("key_reason"),
         "position_plan": reasoning.get("position_plan"),
         "t_plus_1_exit_plan": reasoning.get("t_plus_1_exit_plan"),
-        "t_plus_1_plan": reasoning.get("t_plus_1_plan"),
+        "t_plus_1_plan": plan,
         "rules_applied": reasoning.get("rules_applied") or [],
         "reasoning_trace": reasoning.get("reasoning_trace"),
         "execution_references": {
             "price": stock.get("price"),
+            "high": (
+                stock.get("enriched", {}).get("real_time", {}).get("high")
+                if isinstance(stock.get("enriched"), dict)
+                else None
+            ),
+            "low": (
+                stock.get("enriched", {}).get("real_time", {}).get("low")
+                if isinstance(stock.get("enriched"), dict)
+                else None
+            ),
             "vwap": (
                 stock.get("enriched", {}).get("real_time", {}).get("vwap")
                 if isinstance(stock.get("enriched"), dict)
@@ -50,6 +71,19 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
 
 
 def build(mapper: dict[str, Any]) -> dict[str, Any]:
+    invariant_errors = []
+    for stock in mapper.get("stocks", []):
+        if not isinstance(stock, dict) or not isinstance(stock.get("reasoning"), dict):
+            continue
+        normalized_reasoning = dict(stock["reasoning"])
+        source_plan = normalized_reasoning.get("t_plus_1_plan")
+        normalized_plan = dict(source_plan) if isinstance(source_plan, dict) else {}
+        normalized_plan.update(resolved_stop_loss(stock, normalized_plan.get("stop_loss_basis")))
+        normalized_reasoning["t_plus_1_plan"] = normalized_plan
+        for error in reasoning_invariant_errors(stock, normalized_reasoning):
+            invariant_errors.append(f"{stock.get('code')}: {error}")
+    if invariant_errors:
+        raise ValueError("; ".join(invariant_errors))
     stocks = [
         strategy_stock(stock)
         for stock in mapper.get("stocks", [])
@@ -92,7 +126,12 @@ def main() -> int:
     if mapper.get("date") != args.date:
         print(f"[ERROR] input date must be {args.date}", file=sys.stderr)
         return 1
-    write_json(output_path, build(mapper))
+    try:
+        doc = build(mapper)
+    except ValueError as exc:
+        print(f"[ERROR] execution invariants failed: {exc}", file=sys.stderr)
+        return 1
+    write_json(output_path, doc)
     print(f"OK: wrote {output_path}")
     return 0
 

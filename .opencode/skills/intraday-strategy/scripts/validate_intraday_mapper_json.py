@@ -7,7 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from intraday_mapper_json_lib import intraday_dir, read_json
+from intraday_mapper_json_lib import intraday_dir, read_json, reasoning_invariant_errors
 
 
 def main() -> int:
@@ -30,6 +30,9 @@ def main() -> int:
     if len(codes) != len(set(codes)):
         errors.append("stocks contains duplicate codes")
     annotated = [item for item in stocks if isinstance(item, dict) and isinstance(item.get("reasoning"), dict)]
+    for item in annotated:
+        for error in reasoning_invariant_errors(item, item["reasoning"]):
+            errors.append(f"{item.get('code')}: {error}")
     coverage = doc.get("annotation_coverage", {}) if isinstance(doc, dict) else {}
     if coverage.get("annotated") != len(annotated) or coverage.get("scored") != len(stocks):
         errors.append("annotation_coverage does not match stocks")

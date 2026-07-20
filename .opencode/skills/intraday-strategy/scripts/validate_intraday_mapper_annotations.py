@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from intraday_mapper_json_lib import intraday_dir, read_json
+from intraday_mapper_json_lib import STOP_LOSS_BASES, intraday_dir, read_json, reasoning_invariant_errors
 
 CODE_RE = re.compile(r"^(sh|sz)\d{6}$")
 DIRECTIONS = {"持有偏多", "持有", "谨慎持有", "观望"}
@@ -27,6 +27,7 @@ COMPUTE_OWNED_STOCK_FIELDS = {
     "anomaly_flags",
     "i11_flagged",
     "i11_applied",
+    "execution_state",
 }
 HOLD_DIRECTIONS = {"持有偏多", "持有", "谨慎持有"}
 I14_WATCH_MAX = {"观望"}
@@ -112,11 +113,27 @@ def validate(doc: Any, date: str, allowed_codes: set[str], base: dict | None = N
             if not isinstance(item.get(field), str) or not item[field].strip():
                 errors.append(f"{path}.{field}: must be non-empty string")
 
+        plan = item.get("t_plus_1_plan")
+        if not isinstance(plan, dict):
+            errors.append(f"{path}.t_plus_1_plan: must be object")
+        else:
+            if "stop_loss" in plan or "stop_loss_price" in plan:
+                errors.append(
+                    f"{path}.t_plus_1_plan: stop_loss text/price is compute-owned; use stop_loss_basis"
+                )
+            for field in ("auction_condition", "open_strategy", "take_profit"):
+                if not isinstance(plan.get(field), str) or not plan[field].strip():
+                    errors.append(f"{path}.t_plus_1_plan.{field}: must be non-empty string")
+            if plan.get("stop_loss_basis") not in STOP_LOSS_BASES:
+                errors.append(f"{path}.t_plus_1_plan.stop_loss_basis: invalid or missing enum")
+
         if i13_active and direction in HOLD_DIRECTIONS:
             errors.append(f"{path}.direction: I13 requires 观望 when up_ratio_pct<15")
 
         base_stock = base_by_code.get(code) if isinstance(code, str) else None
-        if isinstance(base_stock, dict):
+        if not isinstance(base_stock, dict):
+            errors.append(f"{path}.code: base join missing for {code}")
+        else:
             exemption = base_stock.get("i14_exemption")
             if exemption == "watch" and direction not in I14_WATCH_MAX and direction in HOLD_DIRECTIONS:
                 errors.append(f"{path}.direction: i14_exemption=watch caps tradeability at 观望")
@@ -127,6 +144,8 @@ def validate(doc: Any, date: str, allowed_codes: set[str], base: dict | None = N
                     errors.append(
                         f"{path}.direction: i14_exemption=cautious_hold caps direction at 谨慎持有"
                     )
+            for error in reasoning_invariant_errors(base_stock, item):
+                errors.append(f"{path}: {error}")
 
     strategy = doc.get("strategy")
     if not isinstance(strategy, dict):

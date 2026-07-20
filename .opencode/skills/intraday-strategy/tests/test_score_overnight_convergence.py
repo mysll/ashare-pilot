@@ -338,6 +338,12 @@ def convergence_annotation(tradeability="Watch", direction="观望", position_ca
             "expected_premium": "test",
             "key_reason": "test",
             "reasoning_trace": "test",
+            "t_plus_1_plan": {
+                "auction_condition": "test",
+                "open_strategy": "test",
+                "stop_loss_basis": "not_applicable",
+                "take_profit": "test",
+            },
         }],
         "strategy": {"position_cap": position_cap},
     }
@@ -424,3 +430,190 @@ def test_overnight_projection_preserves_convergence_fields():
     assert projected["tradeability"] == "Watch"
     assert projected["i14_exemption"] == "cautious_hold"
     assert projected["anomaly_flags"] == [{"dim": "tail", "reason": "test"}]
+
+
+def execution_base_stock(
+    *, code="sz000767", name="晋控电力", source_pool="limit_up", price=3.76,
+    high=3.76, low=3.34, yestclose=3.42
+):
+    return {
+        "code": code,
+        "name": name,
+        "source_pool": source_pool,
+        "price": str(price),
+        "enriched": {"real_time": {
+            "price": str(price),
+            "high": None if high is None else str(high),
+            "low": str(low),
+            "yestclose": str(yestclose),
+        }},
+        "technicals": {"ma5": 3.36, "ma10": 3.4, "ma20": 3.7},
+    }
+
+
+def execution_annotation(*, tradeability="Extended", direction="观望", basis="not_applicable"):
+    item = convergence_annotation(tradeability=tradeability, direction=direction)
+    item["stocks"][0]["code"] = "sz000767"
+    item["stocks"][0]["t_plus_1_plan"]["stop_loss_basis"] = basis
+    return item
+
+
+def test_994_percent_limit_up_is_deterministically_sealed():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock()
+    state = mod.execution_state(stock)
+    assert state["is_limit_up"] is True
+    assert state["is_sealed"] is True
+    assert state["limit_up_price"] == 3.76
+    assert state["quote_complete"] is True
+    assert state["board_rule"] == "boards.sz"
+    assert state["eligible"] is False
+    assert state["exclusion_reason"] == "sealed_limit_up"
+
+
+def test_sealed_detection_uses_quote_not_source_pool_tag():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock(source_pool="turnover")
+    state = mod.execution_state(stock)
+    assert state["source_pool_limit_up"] is False
+    assert state["is_limit_up"] is True
+    assert state["is_sealed"] is True
+    assert state["eligible"] is False
+
+
+def test_missing_high_fails_closed():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock(source_pool="turnover", high=None)
+    state = mod.execution_state(stock)
+    assert state["quote_complete"] is False
+    assert state["eligible"] is False
+    assert state["exclusion_reason"] == "quote_data_missing"
+
+
+def test_board_exclusion_uses_scope_override_and_longest_prefix():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock(code="sh688001", source_pool="turnover", price=10, high=10.2)
+    scope = {
+        "boards": {"sh": {"exclude": False}, "sh688": {"exclude": True, "reason": "scope-star"}},
+        "overrides": [{"code": "sh688001", "allowed": True, "reason": "test override"}],
+    }
+    state = mod.execution_state(stock, scope=scope)
+    assert state["board_excluded"] is False
+    assert state["board_rule"] == "overrides.sh688001"
+    scope["overrides"] = []
+    state = mod.execution_state(stock, scope=scope)
+    assert state["board_excluded"] is True
+    assert state["board_rule"] == "boards.sh688"
+    assert state["board_reason"] == "scope-star"
+
+
+def test_annotation_validator_rejects_actionable_sealed_limit_up():
+    mod = load_script_mod("validate_intraday_mapper_annotations")
+    base_stock = execution_base_stock()
+    doc = execution_annotation(tradeability="Suitable", direction="谨慎持有", basis="day_low")
+    base = {"pool_summary": {}, "stocks": [base_stock]}
+    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base=base)
+    assert any("sealed limit-up requires direction=观望" in error for error in errors)
+    assert any("execution_state.eligible=true" in error for error in errors)
+
+
+def test_annotation_validator_rejects_actionable_excluded_board():
+    mod = load_script_mod("validate_intraday_mapper_annotations")
+    base_stock = execution_base_stock(
+        code="sh688001", source_pool="turnover", price=10.0, high=10.2, low=9.5
+    )
+    doc = execution_annotation(tradeability="Suitable", direction="谨慎持有", basis="day_low")
+    doc["stocks"][0]["code"] = "sh688001"
+    base = {"pool_summary": {}, "stocks": [base_stock]}
+    errors = mod.validate(doc, "2026-07-13", {"sh688001"}, base=base)
+    assert any("board-policy exclusion requires direction=观望" in error for error in errors)
+
+
+def test_execution_state_cannot_be_tampered_to_bypass_filter():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock()
+    stock["execution_state"] = {
+        "is_limit_up": False,
+        "is_sealed": False,
+        "board_excluded": False,
+        "eligible": True,
+        "exclusion_reason": None,
+    }
+    reasoning = {
+        "tradeability": "Suitable",
+        "direction": "谨慎持有",
+        "t_plus_1_plan": {"stop_loss_basis": "day_low"},
+    }
+    errors = mod.reasoning_invariant_errors(stock, reasoning)
+    assert any("differs from deterministic compute fields" in error for error in errors)
+    assert any("sealed limit-up requires direction=观望" in error for error in errors)
+
+
+def test_annotation_validator_rejects_free_text_stop_but_preserves_watch_position_semantics():
+    mod = load_script_mod("validate_intraday_mapper_annotations")
+    base_stock = execution_base_stock(source_pool="turnover", price=6.0, high=6.1, low=5.5)
+    doc = execution_annotation(tradeability="Watch", direction="谨慎持有", basis="day_low")
+    doc["stocks"][0]["t_plus_1_plan"]["stop_loss"] = "今日最低价5.67"
+    base = {"pool_summary": {}, "stocks": [base_stock]}
+    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base=base)
+    assert not any("tradeability=Suitable" in error for error in errors)
+    assert any("stop_loss text/price is compute-owned" in error for error in errors)
+
+
+def test_annotation_validator_requires_stop_basis_even_when_base_join_is_missing():
+    mod = load_script_mod("validate_intraday_mapper_annotations")
+    doc = execution_annotation()
+    del doc["stocks"][0]["t_plus_1_plan"]["stop_loss_basis"]
+    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base={"stocks": []})
+    assert any("stop_loss_basis: invalid or missing enum" in error for error in errors)
+    assert any("base join missing" in error for error in errors)
+
+
+def test_stop_loss_is_resolved_from_same_stock_and_must_be_below_price():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock(source_pool="turnover", price=3.76, high=3.8, low=3.34)
+    assert mod.resolved_stop_loss(stock, "day_low")["stop_loss_price"] == 3.34
+    bad = copy.deepcopy(stock)
+    bad["enriched"]["real_time"]["low"] = "5.67"
+    reasoning = {
+        "tradeability": "Suitable",
+        "direction": "谨慎持有",
+        "t_plus_1_plan": {"stop_loss_basis": "day_low"},
+    }
+    assert any("below current price" in error for error in mod.reasoning_invariant_errors(bad, reasoning))
+
+
+def test_overnight_builder_fails_closed_on_invalid_actionable_stock():
+    mod = load_script_mod("build_overnight_strategy_json")
+    stock = execution_base_stock()
+    stock["reasoning"] = {
+        "tradeability": "Suitable",
+        "direction": "谨慎持有",
+        "t_plus_1_plan": {"stop_loss_basis": "day_low"},
+    }
+    try:
+        mod.build({"stocks": [stock]})
+    except ValueError as exc:
+        assert "sealed limit-up" in str(exc)
+    else:
+        raise AssertionError("invalid sealed position must fail publication")
+
+
+def test_overnight_builder_re_resolves_tampered_stop_fields():
+    mod = load_script_mod("build_overnight_strategy_json")
+    stock = execution_base_stock(
+        source_pool="turnover", price=6.0, high=6.1, low=5.5, yestclose=5.8
+    )
+    stock["reasoning"] = {
+        "tradeability": "Watch",
+        "direction": "谨慎持有",
+        "t_plus_1_plan": {
+            "stop_loss_basis": "day_low",
+            "stop_loss_price": 5.67,
+            "stop_loss": "今日最低价5.67",
+        },
+    }
+    built = mod.build({"stocks": [stock]})
+    plan = built["positions"][0]["t_plus_1_plan"]
+    assert plan["stop_loss_price"] == 5.5
+    assert plan["stop_loss"] == "今日最低价 5.5"
