@@ -225,8 +225,8 @@ Spearman rank correlation: score rank vs actual return
 
 评估 `ReasoningTrace` 中应用的每条规则:
 
-| 规则 | 触发标的 | 规则动作 | T+1结果 | 判断 | 累计 |
-|------|----------|----------|---------|:----:|:----:|
+| 规则/分支 | Eligible | Triggered | Regime | 触发标的 | 规则动作 | 对照动作 | T+1结果 | 经济效果 | 判断 | 证据引用 |
+|-----------|:--------:|:---------:|--------|----------|----------|----------|---------|----------|:----:|----------|
 
 判断:
 - ✅ 规则正确: 规则指引与实际结果一致
@@ -241,7 +241,7 @@ Spearman rank correlation: score rank vs actual return
 - I08 (轮动判定): 轮动信号是否有效
 
 以及共享规则:
-- R74 (恐慌模式 MA20 缓冲区)
+- R42.d (原 R74，恐慌模式 MA20 缓冲区)
 - R45 (防御板块失效)
 - R36 (非主线降级)
 
@@ -253,7 +253,7 @@ Spearman rank correlation: score rank vs actual return
 |------|----------|----------|
 | Ixx | 今天 X 股票 Y 现象导致 Z 结果 | 何时触发 |
 
-新规则的验证计数从 0 开始，纳入 `INTRADAY_RULES.md` 或 `SHARED_RULES.md`。
+单日新发现只能进入 `INTRADAY_RULES.md` 或 `SHARED_RULES.md` 的候选区，不执行、不计容量。满足两个独立交易日、预注册字段和碰撞检查后，才能进入观察中。未触发不得计为正向验证。
 
 ---
 
@@ -297,7 +297,7 @@ Spearman rank correlation: score rank vs actual return
 
 ## 六、规则有效性
 
-| 规则 | 触发标的 | 判断 | 说明 |
+| 规则/分支 | Eligible | Triggered | Regime | 触发标的 | 规则动作 | 对照动作 | 判断 | 经济效果 | 证据引用 |
 ...
 
 ## 七、关键教训
@@ -331,12 +331,10 @@ Spearman rank correlation: score rank vs actual return
 
 #### 4c. Update Rule Files
 
-- **新规则**: 添加到 `memory/INTRADAY_RULES.md` (尾盘专属) 或 `memory/SHARED_RULES.md` (通用)
-  - 状态: `🆕 首验` 或 `⚠️ 观察中` (验证次数=1)
-- **已有规则**: 更新验证次数和状态
-  - ✅ 有效: 连续验证通过
-  - ❌ 待退役: 连续 3 次失败
-- **规则修正**: 规则内容调整时标注版本号 (e.g., I07 → I07-v2)
+- **新发现**: 添加到对应文件候选区，不执行；单日事件不得直接成为观察规则
+- **已有规则**: 按合格触发机会更新证据和状态；未触发不进入分母
+- **规则修正**: 先读 `memory/RULE_GOVERNANCE.md`，更新预注册、旧编号映射和退役摘要
+- **版本替代**: 新版本仍为候选时旧版继续执行；新版本获准后旧版退出正文
 
 #### 4d. Update PERFORMANCE.md
 
@@ -377,12 +375,13 @@ Spearman rank correlation: score rank vs actual return
 
 - **Execute after market open (9:30+) on T+1**, not same-day after close
 - **BEFORE** generating analysis → READ `memory/INTRADAY_RULES.md` (尾盘规则) **AND** `memory/SHARED_RULES.md` (通用规则) to understand existing rules and cumulative validation counts
+- **BEFORE** changing any rule or lifecycle status → READ `memory/RULE_GOVERNANCE.md`
 - **AFTER** generating review:
    - Write verification to `memory/intraday/{YYYY-MM-DD}/intraday_verification.md` (使用策略日期)
   - Update `memory/intraday/INDEX.md` with review results
   - Update `memory/INTRADAY_RULES.md` (尾盘规则) or `memory/SHARED_RULES.md` (通用规则) depending on rule scope
 - The strategy date (T) and review date (T+1) are different — verification file uses the strategy date
 - If the strategy file does not exist, report error and suggest running intraday-market-analysis first
-- Cumulative rule counts should be tracked
+- Track eligible opportunities, triggered outcomes, economic effect, and evidence references; do not count non-triggered days as positive validation
 - Output in Chinese (中文)
 - Unlike Morning review, Intraday review focuses on **overnight holding P&L** and **T+1 exit plan execution**, not multi-day swing trading

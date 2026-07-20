@@ -16,7 +16,7 @@
 
 ## 2. 市场 regime
 
-以 `market_inputs.regime_hint` 为 advisory，结合三个指数、dominant themes、融资和风险标记，最终选择 `panic|weak|neutral|strong-sector`。`RULES.md` 的 R85/R88 等匹配规则可改变最终判断，原因写入 `market.notes`。
+以 `market_inputs.regime_hint` 为 advisory，结合三个指数、dominant themes、融资和风险标记，最终选择 `panic|weak|neutral|strong-sector`。`RULES.md` 的 R85 与 `SHARED_RULES.md` 的 R88 等匹配规则可改变最终判断，原因写入 `market.notes`。
 
 主列表上限：panic 5、weak 7、neutral 10、strong-sector 10。可以少于上限，但不得用中性/看空/暂不参与行凑数。
 

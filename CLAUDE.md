@@ -50,6 +50,7 @@ memory/intraday/{date}/  Intraday verification (intraday_verification.md)
 memory/RULES.md          Morning trading rules — MUST read before generating strategy
 memory/INTRADAY_RULES.md Intraday trading rules — MUST read before generating overnight strategy
 memory/SHARED_RULES.md   Shared rules (both agents)
+memory/RULE_GOVERNANCE.md Rule lifecycle/governance — MUST read before changing rules
 memory/PERFORMANCE.md    Cumulative performance & key dates
 memory/MEMORY.md         Memory system navigation
 .opencode/agents/        Custom subagent definitions (financial-news-analyst, financial-news-mapper, intraday-market-observer, trading-strategist)
@@ -116,7 +117,7 @@ python .opencode/skills/theme-library/scripts/build_library.py         # 3. Buil
 
 ## Memory & Rules System
 
-Before generating morning strategy, MUST read `memory/RULES.md`. Before generating overnight strategy (`intraday_mapper.annotations.json` / mapper), MUST read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, Intraday writes to `memory/intraday/{date}/intraday_verification.md`. New rule discoveries update the corresponding rules file with verification history.
+Before generating morning strategy, MUST read `memory/RULES.md` + `memory/SHARED_RULES.md`. Before generating overnight strategy (`intraday_mapper.annotations.json` / mapper), MUST read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, Intraday writes to `memory/intraday/{date}/intraday_verification.md`. Before adding, changing, merging, upgrading, sleeping, or retiring any rule, MUST read `memory/RULE_GOVERNANCE.md`; single-day discoveries go to the candidate section and are not executable.
 
 ## Automation
 
@@ -124,4 +125,5 @@ Before generating morning strategy, MUST read `memory/RULES.md`. Before generati
 auto.bat                        # Cron daemon (default: 9:20 weekday daily-market-analysis)
 python .opencode/scripts/cron-daemon.py --dry-run    # Check next run
 python .opencode/scripts/cron-daemon.py --once        # Run once immediately
+python .opencode/scripts/check_rule_governance.py     # Validate rule IDs, capacity, lifecycle sections, and references
 ```

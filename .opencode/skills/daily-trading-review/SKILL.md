@@ -19,6 +19,7 @@ Use after market close or when the user asks for 复盘 / verification / review.
 - `predict/{date}/strategy.md` — fallback human report if `strategy.json` is missing.
 - `predict/{date}/pool_indicators.json` — used automatically by scripts when present for MA/ATR and technical context.
 - `memory/RULES.md` and `memory/SHARED_RULES.md` — read before judging rule performance.
+- `memory/RULE_GOVERNANCE.md` — read before adding, changing, merging, upgrading, sleeping, or retiring rules.
 
 ## Step 1: Load Strategy
 
@@ -101,8 +102,8 @@ Required sections:
 
 ## 规则触发记录
 
-| 规则编号 | 规则名称 | 触发标的 | 结果 | 累计验证次数 |
-|----------|----------|----------|------|:----------:|
+| 规则/分支 | Eligible | Triggered | Regime | 触发标的 | 规则动作 | 对照动作 | 结果 | 经济效果 | 证据引用 |
+|-----------|:--------:|:---------:|--------|----------|----------|----------|------|----------|----------|
 
 ## 关键教训
 
@@ -130,12 +131,7 @@ Update only when there is evidence:
 - `memory/INTRADAY_RULES.md` — tail/T+1 rules.
 - `memory/PERFORMANCE.md` — periodically update summary stats and key dates.
 
-New rules start in observation status. Include:
-
-- rule statement
-- evidence
-- how to apply
-- validation count/status
+New discoveries start in the candidate section and are not executable. Before changing a rule file, read `memory/RULE_GOVERNANCE.md`. A candidate may enter observation only after two independent trading-day observations, preregistration, and collision checks. Record eligible/triggered separately; non-triggered days do not count as positive validation.
 
 ## Output Files
 
@@ -150,4 +146,5 @@ New rules start in observation status. Include:
 
 - If `predict/{date}/strategy.json` is missing, stop and ask to run daily-market-analysis first.
 - Always read `memory/RULES.md` and `memory/SHARED_RULES.md` before assessing rule performance.
+- Always read `memory/RULE_GOVERNANCE.md` before modifying rule content or lifecycle status.
 - Output review content in Chinese.
