@@ -122,8 +122,15 @@ Before generating morning strategy, MUST read `memory/RULES.md` + `memory/SHARED
 ## Automation
 
 ```bash
-auto.bat                        # Cron daemon (default: 9:20 weekday daily-market-analysis)
-python .opencode/scripts/cron-daemon.py --dry-run    # Check next run
-python .opencode/scripts/cron-daemon.py --once        # Run once immediately
+auto.bat                        # Start the configured trading-day task daemon
+python .opencode/scripts/cron-daemon.py --dry-run                 # Validate config and show upcoming runs
+python .opencode/scripts/cron-daemon.py --once daily-analysis     # Run one configured task now
+python .opencode/scripts/cron-daemon.py --config path/to/tasks.json
 python .opencode/scripts/check_rule_governance.py     # Validate rule IDs, capacity, lifecycle sections, and references
 ```
+
+Scheduler tasks are defined in `.opencode/config/cron-tasks.json`. Times use
+the `Asia/Shanghai` timezone from `.opencode/config/trading-calendar.json` and
+run only on configured A-share trading days. `T0` means the trigger trading
+day; `TP1` means the previous trading day. Config changes require a daemon
+restart, and schedules missed while the daemon was stopped are not replayed.
