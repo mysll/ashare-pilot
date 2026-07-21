@@ -8,8 +8,15 @@ from typing import Any
 import requests
 
 from .base import BaseDataSource, RateLimitConfig
-from .kline_cache import load_cache, save_cache, merge_dedup, _fmt_to_date
+from .kline_cache import (
+    cache_checked_recently,
+    load_cache,
+    save_cache,
+    merge_dedup,
+    _fmt_to_date,
+)
 from .utils import calc_price_precision, format_price, format_amount, parse_range_days
+from ..trading_calendar import expected_latest_bar
 
 
 SINA_URL = "https://hq.sinajs.cn/list="
@@ -429,12 +436,19 @@ class SinaDataSource(BaseDataSource):
 
         # ── Cache check ──────────────────────────────────────
         if use_cache:
-            cache_data = load_cache(code)
+            cache_data = load_cache(code, source="sina")
             if cache_data:
                 cached = cache_data["records"]
-                cov_to = cache_data.get("coverage_to", cached[-1]["date"])
-                end_dashed = now.strftime("%Y-%m-%d")
-                if cov_to >= end_dashed:
+                cov_from = cache_data.get("coverage_from", cached[0]["date"])
+                stored_cov_to = cache_data.get("coverage_to", cached[-1]["date"])
+                # A non-empty series can still lag the latest trading day, so
+                # the request date is not a safe cache watermark.
+                cov_to = min(stored_cov_to, cached[-1]["date"])
+                end_dashed = expected_latest_bar(now=now).isoformat()
+                covers_start = cov_from <= cutoff_date
+                if covers_start and cov_to >= end_dashed:
+                    return [r for r in cached if r["date"] >= cutoff_date]
+                if covers_start and cache_checked_recently(cache_data, end_dashed):
                     return [r for r in cached if r["date"] >= cutoff_date]
 
         results = None
@@ -456,6 +470,16 @@ class SinaDataSource(BaseDataSource):
                 results = [r for r in results if r["date"] >= cutoff_date]
 
         if not results:
+            if use_cache and cache_data:
+                cached = cache_data["records"]
+                cov_from = cache_data.get("coverage_from", cached[0]["date"])
+                if cov_from <= cutoff_date:
+                    checked_to = expected_latest_bar(now=now).isoformat()
+                    save_cache(code, cached,
+                               coverage_from=cached[0]["date"],
+                               coverage_to=cached[-1]["date"], source="sina",
+                               checked_to=checked_to)
+                    return [r for r in cached if r["date"] >= cutoff_date]
             return None
 
         # ── Update cache ──────────────────────────────────────
@@ -464,10 +488,10 @@ class SinaDataSource(BaseDataSource):
                 merged = merge_dedup(cache_data["records"], results)
             else:
                 merged = results
-            now_str = now.strftime("%Y-%m-%d")
             save_cache(code, merged,
                        coverage_from=merged[0]["date"],
-                       coverage_to=now_str)
+                       coverage_to=merged[-1]["date"], source="sina",
+                       checked_to=expected_latest_bar(now=now).isoformat())
 
         return results
 

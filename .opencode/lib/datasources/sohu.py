@@ -8,6 +8,7 @@ import requests
 
 from .base import BaseDataSource, RateLimitConfig
 from .kline_cache import (
+    cache_checked_recently,
     load_cache,
     save_cache,
     next_day,
@@ -124,11 +125,16 @@ class SohuDataSource(BaseDataSource):
 
         # ── Cache check ──────────────────────────────────────
         if use_cache:
-            cache_data = load_cache(code)
+            cache_data = load_cache(code, source="sohu")
             if cache_data:
                 cached = cache_data["records"]
                 cov_from = cache_data["coverage_from"]
-                cov_to = cache_data["coverage_to"]
+                stored_cov_to = cache_data["coverage_to"]
+                # coverage_to must describe records actually present in the
+                # cache.  Older versions advanced it to the requested end date
+                # even when Sohu returned no rows, which could permanently hide
+                # a delayed trading day behind a false cache hit.
+                cov_to = min(stored_cov_to, cached[-1]["date"])
                 start_dashed = _fmt_to_date(start)
                 end_dashed = _fmt_to_date(end)
 
@@ -140,15 +146,18 @@ class SohuDataSource(BaseDataSource):
                 merged = list(cached)
                 new_from = cov_from
                 new_to = cov_to
+                checked_newer = False
 
                 # Gap: newer data (coverage_to hasn't reached end)
-                if cov_to < end_dashed:
+                if (cov_to < end_dashed
+                        and not cache_checked_recently(cache_data, end_dashed)):
                     gap_start = _date_to_fmt(next_day(cov_to))
                     new_recs = self._fetch_raw(sohu_code, gap_start, end)
                     if new_recs is not None:
+                        checked_newer = True
                         if new_recs:
                             merged = merge_dedup(merged, new_recs)
-                        new_to = end_dashed
+                            new_to = max(new_to, new_recs[-1]["date"])
 
                 # Gap: older data (coverage_from hasn't reached start)
                 if cov_from > start_dashed:
@@ -157,16 +166,23 @@ class SohuDataSource(BaseDataSource):
                     if old_recs is not None:
                         if old_recs:
                             merged = merge_dedup(old_recs, merged)
-                        new_from = start_dashed
+                            new_from = min(new_from, old_recs[0]["date"])
 
-                if new_from != cov_from or new_to != cov_to:
-                    save_cache(code, merged, coverage_from=new_from, coverage_to=new_to)
+                if (new_from != cov_from or new_to != cov_to
+                        or cov_to != stored_cov_to or checked_newer):
+                    save_cache(code, merged, coverage_from=new_from,
+                               coverage_to=new_to, source="sohu",
+                               checked_at=(None if checked_newer
+                                           else cache_data.get("checked_at")),
+                               checked_to=(end_dashed if checked_newer
+                                           else cache_data.get("checked_to")))
                 return [r for r in merged if start_dashed <= r["date"] <= end_dashed]
 
         # ── No cache — fetch full range ──────────────────────
         records = self._fetch_raw(sohu_code, start, end)
         if records and use_cache:
             save_cache(code, records,
-                       coverage_from=_fmt_to_date(start),
-                       coverage_to=_fmt_to_date(end))
+                       coverage_from=records[0]["date"],
+                       coverage_to=records[-1]["date"], source="sohu",
+                       checked_to=_fmt_to_date(end))
         return records

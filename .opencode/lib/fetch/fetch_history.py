@@ -2,7 +2,7 @@
 """Fetch historical stock daily K-line data (前复权).
 
 Supports: A stocks (sh/sz only).
-Data sources: Sohu Finance (搜狐财经) / Sina Finance (新浪财经).
+Data sources: Sohu Finance (搜狐财经), with Sina Finance (新浪财经) fallback.
 
 Usage:
     python fetch_history.py sh600519                    # Last 3 months (default)
@@ -16,15 +16,59 @@ import argparse
 import io
 import json
 import sys
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from lib.datasources import SohuDataSource, SinaDataSource
-from lib.datasources.utils import RANGE_PATTERN
+from lib.datasources.utils import RANGE_PATTERN, parse_range_days
+from lib.trading_calendar import expected_latest_bar
 _sohu = SohuDataSource()
 _sina = SinaDataSource()
+
+
+def _dashed(value: str | None) -> str | None:
+    if value and len(value) == 8 and "-" not in value:
+        return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
+    return value
+
+
+def _filter_dates(records: list, start: str = None, end: str = None) -> list:
+    start_date = _dashed(start)
+    end_date = _dashed(end)
+    return [
+        row for row in records
+        if (not start_date or row["date"] >= start_date)
+        and (not end_date or row["date"] <= end_date)
+    ]
+
+
+def _sina_range(start: str, range_str: str) -> str:
+    """Ensure Sina fetches far enough back for an explicit start date."""
+    if not start:
+        return range_str
+    try:
+        start_date = datetime.strptime(_dashed(start), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return range_str
+    required_days = max(1, (date.today() - start_date).days + 1)
+    return f"{max(required_days, parse_range_days(range_str))}d"
+
+
+def _needs_fallback(records: list, start: str = None, end: str = None) -> bool:
+    """Detect an empty or stale Sohu result using A-share sessions."""
+    if not records:
+        return True
+    try:
+        expected = expected_latest_bar(_dashed(end))
+    except (TypeError, ValueError):
+        return False
+    start_date = _dashed(start)
+    if start_date and expected.isoformat() < start_date:
+        return False
+    return max(row["date"] for row in records) < expected.isoformat()
 
 
 def fetch_history(
@@ -32,8 +76,35 @@ def fetch_history(
     use_cache: bool = True, source: str = "sohu",
 ) -> list:
     if source == "sina":
-        return _sina.fetch_daily_history(stock_code, range_str, use_cache=use_cache) or []
-    return _sohu.fetch_history(stock_code, start, end, range_str, use_cache=use_cache)
+        records = _sina.fetch_daily_history(
+            stock_code, _sina_range(start, range_str), use_cache=use_cache
+        ) or []
+        return _filter_dates(records, start, end)
+
+    # Do not ask the daily endpoint for bars that should not exist yet (before
+    # the publication cutoff or during an exchange holiday).
+    effective_end = expected_latest_bar(_dashed(end)).strftime("%Y%m%d")
+    primary = _sohu.fetch_history(
+        stock_code, start, effective_end, range_str, use_cache=use_cache
+    ) or []
+    if not _needs_fallback(primary, start, end):
+        return primary
+
+    fallback = _sina.fetch_daily_history(
+        stock_code, _sina_range(start, range_str), use_cache=use_cache
+    ) or []
+    fallback = _filter_dates(fallback, start, end)
+    if not fallback:
+        return primary
+    if not primary:
+        return fallback
+    # Never splice vendors in one adjusted-price series. Use the complete Sina
+    # series only when it advances beyond the stale Sohu series.
+    if max(row["date"] for row in fallback) > max(
+        row["date"] for row in primary
+    ):
+        return fallback
+    return primary
 
 
 def print_table(records: list, stock_code: str) -> None:
@@ -86,7 +157,7 @@ def main():
     parser.add_argument("--no-cache", action="store_true", help="Skip cache, fetch directly from API")
     parser.add_argument(
         "--source", choices=["sohu", "sina"], default="sohu",
-        help="Data source (default: sohu)"
+        help="Primary data source (default: sohu; automatically falls back to sina)"
     )
 
     args = parser.parse_args()
