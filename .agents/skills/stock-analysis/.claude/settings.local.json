@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(python fetch_stock.py sh600519 -o test_output.txt)",
-      "Bash(python fetch_history.py sh600519 --range 1w -o test_history.txt)",
-      "Bash(python fetch_special.py lhb -o test_lhb.txt)"
-    ]
-  }
-}
