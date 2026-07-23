@@ -1,4 +1,4 @@
-﻿---
+---
 name: intraday-stock-discovery
 description: Use when dispatched as Step 2 perception of the intraday overnight pipeline. Reads enriched ComputePool and bottom-up ThemeRanking JSON (stock→theme, NOT news). NEVER outputs Direction, RiskSeverity, or trading recommendations.
 ---

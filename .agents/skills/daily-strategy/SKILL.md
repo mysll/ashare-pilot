@@ -30,8 +30,8 @@ uv run --frozen ashare-pilot strategy daily prepare --date YYYY-MM-DD
 portfolio-manager 的热阶段只读取：
 
 - `predict/YYYY-MM-DD/.strategy_llm_input.json`
-- `.opencode/skills/daily-strategy/references/strategy-selection-rubric.md`
-- `.opencode/skills/daily-strategy/references/strategy-output-contract.md`
+- `.agents/skills/daily-strategy/references/strategy-selection-rubric.md`
+- `.agents/skills/daily-strategy/references/strategy-output-contract.md`
 - `memory/RULES.md`（存在时）
 - `memory/SHARED_RULES.md`（存在时）
 

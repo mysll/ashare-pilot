@@ -184,9 +184,9 @@ finalize_daily_mapping.py                  # one command
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
 - Add mapper membership and coverage tests under the skill test directory
 
 ### Implementation
@@ -226,9 +226,9 @@ set(theme_stocks.json stocks where filter.status == candidate)
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py`
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-market-analysis/SKILL.md`
+- Create: `.agents/skills/daily-stock-mapping/scripts/build_step2_timing.py`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-market-analysis/SKILL.md`
 
 ### Output
 
@@ -283,13 +283,13 @@ not become another mandatory LLM-authored file.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Delete: `.opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-market-analysis/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Delete: `.agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-market-analysis/SKILL.md`
 
 ### New rule
 
@@ -363,7 +363,7 @@ growth before mapper annotation generation.
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py`
 - Add retrieval/deduplication tests
 - Modify the theme extraction section of `daily-stock-mapping/SKILL.md`
 
@@ -430,8 +430,8 @@ For 2026-07-09, 2026-07-13, and 2026-07-14:
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py`
 - Add deterministic pattern tests
 
 Do not create a mandatory `pattern_defaults.json` sidecar. Write defaults
@@ -470,12 +470,12 @@ directly into the script-owned mapper base and overlay sparse LLM overrides.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-strategy/SKILL.md`
-- Modify: `.opencode/skills/daily-strategy/scripts/validate_strategy_json.py`
-- Modify: `.opencode/skills/daily-strategy/scripts/render_daily_report_html.py`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-strategy/SKILL.md`
+- Modify: `.agents/skills/daily-strategy/scripts/validate_strategy_json.py`
+- Modify: `.agents/skills/daily-strategy/scripts/render_daily_report_html.py`
 - Add sparse annotation contract tests
 
 ### Required per candidate
@@ -562,15 +562,15 @@ Expected LLM stage reduction: roughly 40–70% depending on candidate count.
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py`
-- Create: `.opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py`
 - Modify both workflow skill documents
 - Add orchestration smoke tests
 
 ### Prepare command
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py \
+python .agents/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py \
   --date YYYY-MM-DD
 ```
 
@@ -586,7 +586,7 @@ Runs, with explicit stage error reporting:
 ### Finalize command
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py \
+python .agents/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py \
   --date YYYY-MM-DD
 ```
 
@@ -617,7 +617,7 @@ normal runs without changing scoring semantics.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
 - Create small phase-specific references only where necessary
 
 ### Goal

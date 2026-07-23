@@ -64,18 +64,18 @@ Review修复：
 
 | 文件 | 当前职责 |
 |---|---|
-| `.opencode/skills/daily-market-analysis/SKILL.md` | 编排新闻、mapper、strategy 三阶段 |
-| `.opencode/skills/daily-strategy/SKILL.md` | 指导 LLM 生成 `strategy.json` |
-| `.opencode/skills/daily-strategy/scripts/validate_strategy_json.py` | 只接受 `daily_strategy.v1` |
-| `.opencode/skills/daily-strategy/scripts/compute_trade_profile.py` | 生成交易画像、锚点和仓位建议 |
-| `.opencode/skills/daily-strategy/scripts/render_daily_report_html.py` | 渲染盘前报告 |
+| `.agents/skills/daily-market-analysis/SKILL.md` | 编排新闻、mapper、strategy 三阶段 |
+| `.agents/skills/daily-strategy/SKILL.md` | 指导 LLM 生成 `strategy.json` |
+| `.agents/skills/daily-strategy/scripts/validate_strategy_json.py` | 只接受 `daily_strategy.v1` |
+| `.agents/skills/daily-strategy/scripts/compute_trade_profile.py` | 生成交易画像、锚点和仓位建议 |
+| `.agents/skills/daily-strategy/scripts/render_daily_report_html.py` | 渲染盘前报告 |
 
 ### 2.2 二次确认阶段
 
 | 文件 | 当前职责 | 已知问题 |
 |---|---|---|
-| `.opencode/skills/intraday-operation-guide/SKILL.md` | 指导 A/B/C/D 人工操作卡生成 | 市场级确认不够结构化 |
-| `.opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py` | 读取策略、mapper、行情和分时，计算逐股 flags | 使用最新返回 K 线，未排除未完成 K；首根 K 语义错误；无机械类别 |
+| `.agents/skills/intraday-operation-guide/SKILL.md` | 指导 A/B/C/D 人工操作卡生成 | 市场级确认不够结构化 |
+| `.agents/skills/intraday-operation-guide/scripts/build_operation_snapshot.py` | 读取策略、mapper、行情和分时，计算逐股 flags | 使用最新返回 K 线，未排除未完成 K；首根 K 语义错误；无机械类别 |
 | `.opencode/lib/fetch/fetch_stock.py` | 提供批量报价和单股分时接口 | 不负责 K 线完整性判断 |
 
 ### 2.3 下游消费者
@@ -131,7 +131,7 @@ K 线完整性筛选放在 `intraday-operation-guide` 层。
 第一阶段允许保留单文件实现；完成 P0 后建议结构如下：
 
 ```text
-.opencode/skills/intraday-operation-guide/
+.agents/skills/intraday-operation-guide/
 ├── SKILL.md
 ├── scripts/
 │   ├── build_operation_snapshot.py
@@ -164,8 +164,8 @@ K 线完整性筛选放在 `intraday-operation-guide` 层。
 ### 5.1 修改文件
 
 ```text
-.opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
-.opencode/skills/intraday-operation-guide/tests/test_completed_bars.py
+.agents/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
+.agents/skills/intraday-operation-guide/tests/test_completed_bars.py
 ```
 
 ### 5.2 时间模型
@@ -359,7 +359,7 @@ def test_lunch_break_is_not_counted_as_bar(): ...
 
 ```bash
 python -m unittest discover \
-  -s .opencode/skills/intraday-operation-guide/tests \
+  -s .agents/skills/intraday-operation-guide/tests \
   -p 'test_completed_bars.py'
 ```
 
@@ -376,9 +376,9 @@ python -m unittest discover \
 ### 6.1 修改文件
 
 ```text
-.opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
-.opencode/skills/intraday-operation-guide/scripts/market_confirmation.py
-.opencode/skills/intraday-operation-guide/tests/test_market_confirmation.py
+.agents/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
+.agents/skills/intraday-operation-guide/scripts/market_confirmation.py
+.agents/skills/intraday-operation-guide/tests/test_market_confirmation.py
 ```
 
 ### 6.2 指数抓取
@@ -558,9 +558,9 @@ def test_market_breadth_missing_never_yields_normal(): ...
 ### 7.1 新增模块
 
 ```text
-.opencode/skills/intraday-operation-guide/scripts/mechanical_classification.py
-.opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py
-.opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py
+.agents/skills/intraday-operation-guide/scripts/mechanical_classification.py
+.agents/skills/intraday-operation-guide/scripts/build_operation_decision.py
+.agents/skills/intraday-operation-guide/scripts/validate_operation_decision.py
 ```
 
 ### 7.2 数据模型
@@ -744,7 +744,7 @@ validator 检查禁止词不能简单全局扫描“止损”，因为历史规�
 
 ### 7.8 Skill 文档更新
 
-修改 `.opencode/skills/intraday-operation-guide/SKILL.md`：
+修改 `.agents/skills/intraday-operation-guide/SKILL.md`：
 
 - 快照命令增加 `--slot`；
 - 先验证 snapshot，再生成 decision；
@@ -762,12 +762,12 @@ validator 检查禁止词不能简单全局扫描“止损”，因为历史规�
 ### 8.1 修改文件
 
 ```text
-.opencode/skills/daily-market-analysis/SKILL.md
-.opencode/skills/daily-strategy/SKILL.md
-.opencode/skills/daily-strategy/scripts/validate_strategy_json.py
-.opencode/skills/daily-strategy/scripts/render_daily_report_html.py
-.opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
-.opencode/skills/daily-trading-review/scripts/generate_verification_json.py
+.agents/skills/daily-market-analysis/SKILL.md
+.agents/skills/daily-strategy/SKILL.md
+.agents/skills/daily-strategy/scripts/validate_strategy_json.py
+.agents/skills/daily-strategy/scripts/render_daily_report_html.py
+.agents/skills/intraday-operation-guide/scripts/build_operation_snapshot.py
+.agents/skills/daily-trading-review/scripts/generate_verification_json.py
 ```
 
 ### 8.2 兼容策略
@@ -878,8 +878,8 @@ uv run --frozen ashare-pilot operations snapshot build \
   --date 2026-07-10 \
   --slot 09:40 \
   --as-of 2026-07-10T09:40:05+08:00 \
-  --quotes-fixture .opencode/skills/intraday-operation-guide/tests/fixtures/2026-07-10/quotes_0940.json \
-  --intraday-fixture-dir .opencode/skills/intraday-operation-guide/tests/fixtures/2026-07-10/intraday \
+  --quotes-fixture .agents/skills/intraday-operation-guide/tests/fixtures/2026-07-10/quotes_0940.json \
+  --intraday-fixture-dir .agents/skills/intraday-operation-guide/tests/fixtures/2026-07-10/intraday \
   --no-network \
   -o /tmp/operation_snapshot_2026-07-10_0940.json
 ```
@@ -1335,12 +1335,12 @@ uv run --frozen ashare-pilot operations decision validate \
 
 ```bash
 python -m unittest discover \
-  -s .opencode/skills/intraday-operation-guide/tests \
+  -s .agents/skills/intraday-operation-guide/tests \
   -p 'test_*.py'
 
 python -m py_compile \
-  .opencode/skills/intraday-operation-guide/scripts/*.py \
-  .opencode/skills/daily-strategy/scripts/validate_strategy_json.py
+  .agents/skills/intraday-operation-guide/scripts/*.py \
+  .agents/skills/daily-strategy/scripts/validate_strategy_json.py
 ```
 
 ---

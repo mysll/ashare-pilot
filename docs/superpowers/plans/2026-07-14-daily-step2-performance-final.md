@@ -237,10 +237,10 @@ No natural-language source trace is stored in intermediate contracts.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_json.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
 - Add ownership and coverage tests
 
 ### 6.1 Stock membership refactor
@@ -303,7 +303,7 @@ themes.json tradeable theme name/rank/heat
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/build_step2_timing.py`
 - Modify both workflow skills
 
 Write a report-only diagnostic:
@@ -334,13 +334,13 @@ contracts.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Delete: `.opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-market-analysis/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Delete: `.agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-market-analysis/SKILL.md`
 - Add source-flag and deletion-equivalence tests
 
 ### 8.1 Mandatory source flag generation
@@ -461,7 +461,7 @@ Approximately 30–130 seconds per run, with about 129 seconds observed on
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py`
 - Add retrieval and recall tests
 - Modify the theme extraction skill section
 
@@ -498,8 +498,8 @@ Any miss is a reviewed test failure. Do not silently trade recall for bytes.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py`
 - Add Pattern boundary and merge tests
 
 Do not create `pattern_defaults.json`. Write deterministic states directly into
@@ -530,9 +530,9 @@ leader combinations, and sparse merge precedence.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
 - Add sparse annotation tests
 
 ### 11.1 Required for every candidate
@@ -579,9 +579,9 @@ Step 2 time.
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-strategy/SKILL.md`
-- Modify: `.opencode/skills/daily-strategy/scripts/validate_strategy_json.py`
-- Modify: `.opencode/skills/daily-strategy/scripts/render_daily_report_html.py`
+- Modify: `.agents/skills/daily-strategy/SKILL.md`
+- Modify: `.agents/skills/daily-strategy/scripts/validate_strategy_json.py`
+- Modify: `.agents/skills/daily-strategy/scripts/render_daily_report_html.py`
 - Add strategy validation/render tests
 
 Step 3 generates one concise Chinese selection/source explanation inside the
@@ -619,15 +619,15 @@ and strategy-schema changes remain reviewable independently.
 
 **Files:**
 
-- Create: `.opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py`
-- Create: `.opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py`
 - Modify both workflow skills
 - Add orchestration smoke tests
 
 ### 13.1 Prepare
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py \
+python .agents/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py \
   --date YYYY-MM-DD
 ```
 
@@ -646,7 +646,7 @@ Runs:
 ### 13.2 Finalize
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py \
+python .agents/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py \
   --date YYYY-MM-DD
 ```
 
@@ -675,7 +675,7 @@ Requirements:
 
 **Files:**
 
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
 - Add phase-specific references only when needed
 
 Keep the main skill focused on:

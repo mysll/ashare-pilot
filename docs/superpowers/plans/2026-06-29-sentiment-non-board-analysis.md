@@ -2,8 +2,8 @@
 
 > 日期：2026-06-29  
 > 背景：评估 `fetch_pool_indicators.py` 中 Sentiment 评分公式对「有潜力但未涨停」股票是否存在系统性偏见。  
-> 相关实现：`.opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py`  
-> 相关文档：`.opencode/skills/daily-stock-mapping/SKILL.md` § Scoring
+> 相关实现：`.agents/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py`
+> 相关文档：`.agents/skills/daily-stock-mapping/SKILL.md` § Scoring
 
 ---
 
@@ -252,7 +252,7 @@ Market Sentiment 缺因子时默认 50 → 改为 35~40，与 traditional 侧「
 
 | 文件 | 说明 |
 |------|------|
-| `.opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py` | Sentiment 计算实现 |
-| `.opencode/skills/daily-stock-mapping/SKILL.md` | 公式文档与 rubric |
+| `.agents/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py` | Sentiment 计算实现 |
+| `.agents/skills/daily-stock-mapping/SKILL.md` | 公式文档与 rubric |
 | `SKILL_bak.md` | V3 旧版公式（含断板 40 分等） |
 | `predict/2026-06-24/v5_indicators.json` | 实证数据快照 |

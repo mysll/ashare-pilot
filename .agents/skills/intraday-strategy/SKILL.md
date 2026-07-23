@@ -1,4 +1,4 @@
-﻿---
+---
 name: intraday-strategy
 description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes a deterministic mapper base, writes semantic annotations, and publishes validated intraday_mapper.json. This is the sole Reasoning layer.
 ---

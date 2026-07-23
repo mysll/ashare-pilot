@@ -1,5 +1,5 @@
 {
-  "source": ".opencode/skills/daily-stock-mapping/tests/test_step2_performance_contract.py",
+  "source": ".agents/skills/daily-stock-mapping/tests/test_step2_performance_contract.py",
   "date": "2026-07-14",
   "pool": {
     "sz000001": {

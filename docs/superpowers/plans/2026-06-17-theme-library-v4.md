@@ -25,7 +25,7 @@
 ### Task 1: Create theme_library_config.json
 
 **Files:**
-- Create: `.opencode/skills/theme-library/scripts/theme_library_config.json`
+- Create: `.agents/skills/theme-library/scripts/theme_library_config.json`
 
 - [ ] **Step 1: Create the configuration file**
 
@@ -56,7 +56,7 @@
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .opencode/skills/theme-library/scripts/theme_library_config.json
+git add .agents/skills/theme-library/scripts/theme_library_config.json
 git commit -m "feat(theme-library): add V4 configuration file with scoring weights and thresholds"
 ```
 
@@ -65,7 +65,7 @@ git commit -m "feat(theme-library): add V4 configuration file with scoring weigh
 ### Task 2: Add min_coverage/min_concepts to theme_config.json
 
 **Files:**
-- Modify: `.opencode/skills/theme-library/scripts/theme_config.json`
+- Modify: `.agents/skills/theme-library/scripts/theme_config.json`
 
 Broad themes (>5 concepts, high stock count) get `min_coverage: 20`. Narrow themes (1-2 concepts) get `min_coverage: 10`. All others keep defaults.
 
@@ -105,14 +105,14 @@ Apply this pattern to every theme in `theme_config.json`:
 
 - [ ] **Step 2: Verify JSON is valid**
 
-Run: `python -c "import json; json.load(open('.opencode/skills/theme-library/scripts/theme_config.json', encoding='utf-8')); print('OK')"`
+Run: `python -c "import json; json.load(open('.agents/skills/theme-library/scripts/theme_config.json', encoding='utf-8')); print('OK')"`
 
 Expected: `OK`
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add .opencode/skills/theme-library/scripts/theme_config.json
+git add .agents/skills/theme-library/scripts/theme_config.json
 git commit -m "feat(theme-library): add min_coverage/min_concepts thresholds per theme"
 ```
 
@@ -121,7 +121,7 @@ git commit -m "feat(theme-library): add min_coverage/min_concepts thresholds per
 ### Task 3: Refactor build_library.py scoring pipeline
 
 **Files:**
-- Modify: `.opencode/skills/theme-library/scripts/build_library.py`
+- Modify: `.agents/skills/theme-library/scripts/build_library.py`
 
 This is the largest task. The changes are:
 
@@ -661,14 +661,14 @@ Change `"leader_ranking_version": "v3"` to `"leader_ranking_version": "v4"`.
 
 - [ ] **Step 9: Verify the script runs without errors**
 
-Run: `python .opencode/skills/theme-library/scripts/build_library.py`
+Run: `python .agents/skills/theme-library/scripts/build_library.py`
 
 Expected: Script executes, builds theme/stock/concept/index files. Check output for errors.
 
 - [ ] **Step 10: Commit**
 
 ```bash
-git add .opencode/skills/theme-library/scripts/build_library.py
+git add .agents/skills/theme-library/scripts/build_library.py
 git commit -m "feat(theme-library): implement V4 multi-dimensional scoring pipeline
 
 - Replace single leader score with purity_score, leader_score, candidate_score
@@ -686,7 +686,7 @@ git commit -m "feat(theme-library): implement V4 multi-dimensional scoring pipel
 ### Task 4: Update query_theme.py for V4 subcommands
 
 **Files:**
-- Modify: `.opencode/skills/theme-library/scripts/query_theme.py`
+- Modify: `.agents/skills/theme-library/scripts/query_theme.py`
 
 - [ ] **Step 1: Add `leaders`, `pure`, `candidates` subcommands**
 
@@ -928,32 +928,32 @@ In the `main()` function, after the `stats` handler (around line 386), add:
 
 - [ ] **Step 6: Test the new subcommands**
 
-Run: `python .opencode/skills/theme-library/scripts/query_theme.py leaders AI算力`
+Run: `python .agents/skills/theme-library/scripts/query_theme.py leaders AI算力`
 
 Expected: Shows leader stocks table with leader_score, purity_score, liquidity_score, market_cap_score, anchor.
 
-Run: `python .opencode/skills/theme-library/scripts/query_theme.py pure AI算力`
+Run: `python .agents/skills/theme-library/scripts/query_theme.py pure AI算力`
 
 Expected: Shows pure stocks table with purity_score.
 
-Run: `python .opencode/skills/theme-library/scripts/query_theme.py candidates AI算力`
+Run: `python .agents/skills/theme-library/scripts/query_theme.py candidates AI算力`
 
 Expected: Shows candidate stocks table with candidate_score, purity_score, liquidity_score, market_cap_score.
 
 - [ ] **Step 7: Test existing commands still work**
 
-Run: `python .opencode/skills/theme-library/scripts/query_theme.py theme AI算力`
+Run: `python .agents/skills/theme-library/scripts/query_theme.py theme AI算力`
 
 Expected: Shows theme with pure_stocks, leader_stocks, candidate_stocks sections.
 
-Run: `python .opencode/skills/theme-library/scripts/query_theme.py stock sz000977`
+Run: `python .agents/skills/theme-library/scripts/query_theme.py stock sz000977`
 
 Expected: Shows stock with purity_score, leader_score, candidate_score per theme, no core_theme.
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add .opencode/skills/theme-library/scripts/query_theme.py
+git add .agents/skills/theme-library/scripts/query_theme.py
 git commit -m "feat(theme-library): add leaders/pure/candidates subcommands and V4 display"
 ```
 
@@ -962,7 +962,7 @@ git commit -m "feat(theme-library): add leaders/pure/candidates subcommands and 
 ### Task 5: Update SKILL.md documentation
 
 **Files:**
-- Modify: `.opencode/skills/theme-library/SKILL.md`
+- Modify: `.agents/skills/theme-library/SKILL.md`
 
 - [ ] **Step 1: Update SKILL.md with V4 scoring documentation**
 
@@ -1003,7 +1003,7 @@ python query_theme.py candidates AI算力     # Top candidate stocks
 - [ ] **Step 2: Commit**
 
 ```bash
-git add .opencode/skills/theme-library/SKILL.md
+git add .agents/skills/theme-library/SKILL.md
 git commit -m "docs(theme-library): update SKILL.md for V4 ranking system"
 ```
 
@@ -1013,29 +1013,29 @@ git commit -m "docs(theme-library): update SKILL.md for V4 ranking system"
 
 - [ ] **Step 1: Rebuild the entire library**
 
-Run: `python .opencode/skills/theme-library/scripts/build_library.py --clean`
+Run: `python .agents/skills/theme-library/scripts/build_library.py --clean`
 
 Expected: All files regenerated successfully with V4 structure.
 
 - [ ] **Step 2: Verify theme file structure**
 
-Run: `python -c "import json; d=json.load(open('.opencode/skills/theme-library/themes/AI算力.json','r',encoding='utf-8')); print('pure_stocks' in d, 'leader_stocks' in d, 'candidate_stocks' in d, 'qualified_stock_count' in d, 'anchors' in d, 'leaders' not in d)"`
+Run: `python -c "import json; d=json.load(open('.agents/skills/theme-library/themes/AI算力.json','r',encoding='utf-8')); print('pure_stocks' in d, 'leader_stocks' in d, 'candidate_stocks' in d, 'qualified_stock_count' in d, 'anchors' in d, 'leaders' not in d)"`
 
 Expected: `True True True True True True`
 
 - [ ] **Step 3: Verify stock file structure**
 
-Run: `python -c "import json; d=json.load(open('.opencode/skills/theme-library/stocks/sz000977.json','r',encoding='utf-8')); t=d['themes'][0]; print('purity_score' in t, 'leader_score' in t, 'candidate_score' in t, 'core_theme' not in d)"`
+Run: `python -c "import json; d=json.load(open('.agents/skills/theme-library/stocks/sz000977.json','r',encoding='utf-8')); t=d['themes'][0]; print('purity_score' in t, 'leader_score' in t, 'candidate_score' in t, 'core_theme' not in d)"`
 
 Expected: `True True True True`
 
 - [ ] **Step 4: Verify query commands**
 
 ```bash
-python .opencode/skills/theme-library/scripts/query_theme.py stats
-python .opencode/skills/theme-library/scripts/query_theme.py leaders 半导体
-python .opencode/skills/theme-library/scripts/query_theme.py pure 半导体 --top 10
-python .opencode/skills/theme-library/scripts/query_theme.py candidates 半导体 --top 10 --json
+python .agents/skills/theme-library/scripts/query_theme.py stats
+python .agents/skills/theme-library/scripts/query_theme.py leaders 半导体
+python .agents/skills/theme-library/scripts/query_theme.py pure 半导体 --top 10
+python .agents/skills/theme-library/scripts/query_theme.py candidates 半导体 --top 10 --json
 ```
 
 Expected: All commands return valid data without errors.

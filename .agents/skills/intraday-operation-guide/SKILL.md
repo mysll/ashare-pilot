@@ -1,4 +1,4 @@
-﻿---
+---
 name: intraday-operation-guide
 description: Use when the user wants current or repeated intraday human trading instructions based on today's morning strategy and live market data. Automatically discovers today's confirmation state, performs the 09:35/09:40 confirmation chain or a later recheck, and outputs actionable A/B/C/D guidance as operation_guide.html. This skill does NOT place orders.
 ---

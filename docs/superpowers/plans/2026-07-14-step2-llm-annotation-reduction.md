@@ -6,7 +6,7 @@
 
 **Architecture:** Keep V5 Compute → Perception → Reasoning boundaries. Scripts still own universe build, hard/soft filters, composite math, and mapper assembly. LLM still owns `themes.json` and **candidate-only** `mapper.annotations.json` semantic fields that affect strategy (`news_relevance`, sparse `major_event` / `anomaly`). Move deterministic pattern sub-dimensions to Python where possible; slim or optionalize `theme_stocks.annotations.json` semantic fluff. Do **not** default-downgrade candidate `news_impact`.
 
-**Tech Stack:** Python 3 scripts under `.opencode/skills/daily-stock-mapping/scripts/`, skill markdown contracts, existing validate/build pipeline, optional pytest under skill tests.
+**Tech Stack:** Python 3 scripts under `.agents/skills/daily-stock-mapping/scripts/`, skill markdown contracts, existing validate/build pipeline, optional pytest under skill tests.
 
 ---
 
@@ -43,17 +43,17 @@ Recent pool sizes (for regression baselines):
 
 | File | Responsibility after change |
 |------|-----------------------------|
-| `.opencode/skills/daily-stock-mapping/SKILL.md` | Perception contract: candidate-only mapper annotations; sparse event rules; pattern ownership split |
-| `.opencode/skills/daily-market-analysis/SKILL.md` | Step 2 prompt/IO notes aligned with reduced annotation surface |
-| `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py` | Optional tighter defaults for top-N expansion (P1) |
-| `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py` | Unchanged filter ownership; may emit `annotation_targets[]` helper field or sidecar |
-| `.opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py` (**create**) | Deterministic list of codes that **must** receive full LLM mapper annotations |
-| `.opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py` (**create**) | Deterministic `pattern.auction` / `pattern.volume` (+ optional leader) from pool + theme_stocks |
-| `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py` | Merge defaults + annotations; preserve news_impact recalculation; never invent news_impact |
-| `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py` / `build_mapper_json.py` | Wire pattern defaults before/while merge |
-| `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py` | Allow partial stock list (candidates subset); still require full fields **for listed stocks** |
-| `.opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py` | Allow minimal / empty stocks[] when generation_mode = slim |
-| Tests under `.opencode/skills/daily-stock-mapping/scripts/tests/` or existing test dirs | Contract tests for targets, defaults, merge, validation |
+| `.agents/skills/daily-stock-mapping/SKILL.md` | Perception contract: candidate-only mapper annotations; sparse event rules; pattern ownership split |
+| `.agents/skills/daily-market-analysis/SKILL.md` | Step 2 prompt/IO notes aligned with reduced annotation surface |
+| `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py` | Optional tighter defaults for top-N expansion (P1) |
+| `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py` | Unchanged filter ownership; may emit `annotation_targets[]` helper field or sidecar |
+| `.agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py` (**create**) | Deterministic list of codes that **must** receive full LLM mapper annotations |
+| `.agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py` (**create**) | Deterministic `pattern.auction` / `pattern.volume` (+ optional leader) from pool + theme_stocks |
+| `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py` | Merge defaults + annotations; preserve news_impact recalculation; never invent news_impact |
+| `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py` / `build_mapper_json.py` | Wire pattern defaults before/while merge |
+| `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py` | Allow partial stock list (candidates subset); still require full fields **for listed stocks** |
+| `.agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py` | Allow minimal / empty stocks[] when generation_mode = slim |
+| Tests under `.agents/skills/daily-stock-mapping/scripts/tests/` or existing test dirs | Contract tests for targets, defaults, merge, validation |
 
 ---
 
@@ -126,8 +126,8 @@ Recent pool sizes (for regression baselines):
 ### Task 1: Spec lock in skill docs (contract first)
 
 **Files:**
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md`
-- Modify: `.opencode/skills/daily-market-analysis/SKILL.md`
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md`
+- Modify: `.agents/skills/daily-market-analysis/SKILL.md`
 
 - [ ] **Step 1: Edit daily-stock-mapping skill — Technical Enrichment / Structured Dataset sections**
 
@@ -154,8 +154,8 @@ Add an explicit subsection **“Annotation Budget (P0)”** after Technical Enri
 Update the long script sequence block to insert:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date {YYYY-MM-DD}
+python .agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date {YYYY-MM-DD}
+python .agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date {YYYY-MM-DD}
 ```
 
 after `build_theme_stocks_base.py` / validated `theme_stocks.json` as appropriate (targets from base or final theme_stocks — prefer **base candidate set** so annotations can be written before theme_stocks merge if needed).
@@ -175,7 +175,7 @@ Keep existing outputs; note Step 2 agent must load annotation_targets before wri
 - [ ] **Step 3: Commit docs-only contract**
 
 ```bash
-git add .opencode/skills/daily-stock-mapping/SKILL.md .opencode/skills/daily-market-analysis/SKILL.md
+git add .agents/skills/daily-stock-mapping/SKILL.md .agents/skills/daily-market-analysis/SKILL.md
 git commit -m "docs(daily-step2): lock candidate-only annotation budget contract"
 ```
 
@@ -184,8 +184,8 @@ git commit -m "docs(daily-step2): lock candidate-only annotation budget contract
 ### Task 2: `build_annotation_targets.py` + tests
 
 **Files:**
-- Create: `.opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py`
-- Create: `.opencode/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -230,7 +230,7 @@ def test_empty_candidates_ok():
 - [ ] **Step 2: Run tests — expect fail (module missing)**
 
 ```bash
-python -m pytest .opencode/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py -v
+python -m pytest .agents/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py -v
 ```
 
 Expected: import / collection failure.
@@ -347,13 +347,13 @@ Adjust field paths (`filter.status`, `technical.*`, `source`) to match **actual*
 - [ ] **Step 4: Run tests — expect pass**
 
 ```bash
-python -m pytest .opencode/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py -v
+python -m pytest .agents/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py -v
 ```
 
 - [ ] **Step 5: Smoke on real day**
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
 ```
 
 Expected: `candidates` count ≈ current candidate count for that date; `force_full` ≤ candidates.
@@ -361,7 +361,7 @@ Expected: `candidates` count ≈ current candidate count for that date; `force_f
 - [ ] **Step 6: Commit**
 
 ```bash
-git add .opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py .opencode/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py
+git add .agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py .agents/skills/daily-stock-mapping/scripts/tests/test_build_annotation_targets.py
 git commit -m "feat(daily-step2): build candidate-only annotation targets"
 ```
 
@@ -370,10 +370,10 @@ git commit -m "feat(daily-step2): build candidate-only annotation targets"
 ### Task 3: Pattern defaults script + merge wiring
 
 **Files:**
-- Create: `.opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py`
-- Create: `.opencode/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py` and/or `build_mapper_json.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py`
+- Create: `.agents/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py` and/or `build_mapper_json.py`
 
 - [ ] **Step 1: Write failing tests for auction/volume defaults**
 
@@ -440,14 +440,14 @@ Wire load of `pattern_defaults.json` in `build_mapper_base.py` / `build_mapper_j
 - [ ] **Step 4: Tests green + dry-run merge on 2026-07-14**
 
 ```bash
-python -m pytest .opencode/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py -v
-python .opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date 2026-07-14
+python -m pytest .agents/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py -v
+python .agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date 2026-07-14
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py .opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py .opencode/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py
+git add .agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py .agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py .agents/skills/daily-stock-mapping/scripts/build_mapper_base.py .agents/skills/daily-stock-mapping/scripts/build_mapper_json.py .agents/skills/daily-stock-mapping/scripts/tests/test_compute_pattern_defaults.py
 git commit -m "feat(daily-step2): script pattern defaults with LLM overlay"
 ```
 
@@ -456,8 +456,8 @@ git commit -m "feat(daily-step2): script pattern defaults with LLM overlay"
 ### Task 4: Validation updates for partial / slim annotations
 
 **Files:**
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py`
+- Modify: `.agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py`
 - Create tests if missing
 
 - [ ] **Step 1: Mapper annotations validation**
@@ -498,8 +498,8 @@ Still require schema_version + date. Theme notes optional.
 - [ ] **Step 3: Tests + commit**
 
 ```bash
-python -m pytest .opencode/skills/daily-stock-mapping/scripts/tests/ -k "annotation" -v
-git add .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py
+python -m pytest .agents/skills/daily-stock-mapping/scripts/tests/ -k "annotation" -v
+git add .agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py .agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py
 git commit -m "fix(daily-step2): validate candidate coverage and slim theme-stock annotations"
 ```
 
@@ -508,7 +508,7 @@ git commit -m "fix(daily-step2): validate candidate coverage and slim theme-stoc
 ### Task 5: Skill agent procedure rewrite (token budget)
 
 **Files:**
-- Modify: `.opencode/skills/daily-stock-mapping/SKILL.md` (mapper annotation authoring section)
+- Modify: `.agents/skills/daily-stock-mapping/SKILL.md` (mapper annotation authoring section)
 - Optionally: `.opencode/agents/*` if sector-analyst embeds step2 instructions
 
 - [ ] **Step 1: Replace “annotate every pool stock” language**
@@ -533,7 +533,7 @@ Authoring checklist for agent:
 - [ ] **Step 3: Commit**
 
 ```bash
-git add .opencode/skills/daily-stock-mapping/SKILL.md
+git add .agents/skills/daily-stock-mapping/SKILL.md
 git commit -m "docs(daily-step2): agent procedure for reduced annotation budget"
 ```
 
@@ -542,7 +542,7 @@ git commit -m "docs(daily-step2): agent procedure for reduced annotation budget"
 ### Task 6: Optional P1 universe top-N tighten (separate commit)
 
 **Files:**
-- Modify: `.opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py` defaults
+- Modify: `.agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py` defaults
 - Modify: skill docs defaults text
 
 **Only if** candidate counts still >> 50 after Task 1–5.
@@ -560,7 +560,7 @@ Hard cap optional: after merge, keep top K by library score per theme — **do n
 - [ ] **Step 1: Measure before/after on 2026-07-09 and 2026-07-14**
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date 2026-07-14 --top-candidates 10 --top-leaders 8 --top-pure 8
+python .agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date 2026-07-14 --top-candidates 10 --top-leaders 8 --top-pure 8
 # compare len(stocks) vs previous universe
 ```
 
@@ -577,7 +577,7 @@ If top names churn >20% vs old universe for 3 sample days, **abort defaults chan
 ### Task 7: Regression harness (strategy-safe check)
 
 **Files:**
-- Create: `.opencode/skills/daily-stock-mapping/scripts/tests/test_annotation_budget_regression.py` (optional offline)
+- Create: `.agents/skills/daily-stock-mapping/scripts/tests/test_annotation_budget_regression.py` (optional offline)
 - Or a small shell/python compare script under `docs/superpowers/plans/` tools — prefer skill tests using frozen fixtures.
 
 - [ ] **Step 1: Offline compare using existing predict artifacts**
@@ -596,7 +596,7 @@ For date `2026-07-14`:
 | major_event non-none codes | identical set |
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
 # filter annotations to targets, rebuild mapper, diff composites
 ```
 
@@ -618,21 +618,21 @@ Run:
 
 ```bash
 set PYTHONIOENCODING=utf-8
-python .opencode/skills/daily-stock-mapping/scripts/validate_themes_json.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/2026-07-14/theme_stocks.universe.json --json -o predict/2026-07-14/pool_indicators.json
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/validate_themes_json.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_theme_stocks_universe.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py --codes-file predict/2026-07-14/theme_stocks.universe.json --json -o predict/2026-07-14/pool_indicators.json
+python .agents/skills/daily-stock-mapping/scripts/build_theme_stocks_base.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_annotation_targets.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/compute_pattern_defaults.py --date 2026-07-14
 # use existing annotations filtered to targets OR re-author slim file
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date 2026-07-14
-python .opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_annotations.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_theme_stocks_json.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/validate_theme_stocks_json.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_mapper_base.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_mapper_json.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/validate_mapper_json.py --date 2026-07-14
+python .agents/skills/daily-stock-mapping/scripts/build_strategy_view.py --date 2026-07-14
 ```
 
 - [ ] **Step 2: Confirm**

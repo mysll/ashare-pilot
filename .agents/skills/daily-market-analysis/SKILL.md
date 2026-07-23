@@ -255,8 +255,8 @@ Date: {YYYY-MM-DD}
 
 Read only:
 - predict/{YYYY-MM-DD}/.strategy_llm_input.json
-- .opencode/skills/daily-strategy/references/strategy-selection-rubric.md
-- .opencode/skills/daily-strategy/references/strategy-output-contract.md
+- .agents/skills/daily-strategy/references/strategy-selection-rubric.md
+- .agents/skills/daily-strategy/references/strategy-output-contract.md
 - memory/RULES.md (when present)
 - memory/SHARED_RULES.md (when present)
 

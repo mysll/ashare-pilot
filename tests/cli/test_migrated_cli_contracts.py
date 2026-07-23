@@ -29,11 +29,11 @@ def legacy_path(entry_id: str, filename: str) -> Path:
     elif entry_id == "IN01":
         base = ".opencode/lib/fetch"
     elif entry_id == "IN02":
-        base = ".opencode/skills/daily-stock-mapping/scripts"
+        base = ".agents/skills/daily-stock-mapping/scripts"
     elif entry_id == "IN03":
-        base = ".opencode/skills/intraday-stock-discovery/scripts"
+        base = ".agents/skills/intraday-stock-discovery/scripts"
     elif entry_id == "NW01":
-        base = ".opencode/skills/daily-news-brief/scripts"
+        base = ".agents/skills/daily-news-brief/scripts"
     elif entry_id.startswith("TH"):
         skill = {
             1: "theme-library",
@@ -43,7 +43,7 @@ def legacy_path(entry_id: str, filename: str) -> Path:
             5: "intraday-market-scan",
             6: "intraday-stock-discovery",
         }[number]
-        base = f".opencode/skills/{skill}/scripts"
+        base = f".agents/skills/{skill}/scripts"
     elif entry_id.startswith("MP"):
         if number <= 15:
             skill = "daily-stock-mapping"
@@ -53,14 +53,14 @@ def legacy_path(entry_id: str, filename: str) -> Path:
             skill = "intraday-stock-discovery"
         else:
             skill = "intraday-strategy"
-        base = f".opencode/skills/{skill}/scripts"
+        base = f".agents/skills/{skill}/scripts"
     elif entry_id.startswith("ST"):
         skill = "daily-strategy" if number <= 10 else "intraday-strategy"
-        base = f".opencode/skills/{skill}/scripts"
+        base = f".agents/skills/{skill}/scripts"
     elif entry_id.startswith("OP"):
-        base = ".opencode/skills/intraday-operation-guide/scripts"
+        base = ".agents/skills/intraday-operation-guide/scripts"
     elif entry_id.startswith("RV"):
-        base = ".opencode/skills/daily-trading-review/scripts"
+        base = ".agents/skills/daily-trading-review/scripts"
     elif entry_id.startswith("AU"):
         base = ".opencode/scripts"
     else:  # pragma: no cover - guarded by ENTRY_ROW

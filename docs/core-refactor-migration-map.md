@@ -28,8 +28,8 @@
 | `.opencode/lib/fetch/fetch_turnover_ranking.py` | `market_data` | `market-data ranking turnover` |
 | `.opencode/lib/fetch/fetch_limit_up_pool.py` | `market_data` | `market-data pool limit-up` |
 | `.opencode/lib/fetch/fetch_indicators.py` | `indicators` | `indicators calculate` |
-| `.opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py` | `indicators` | `indicators pool fetch` |
-| `.opencode/skills/intraday-stock-discovery/scripts/enrich_technicals.py` | `indicators` | `indicators pool enrich` |
+| `.agents/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py` | `indicators` | `indicators pool fetch` |
+| `.agents/skills/intraday-stock-discovery/scripts/enrich_technicals.py` | `indicators` | `indicators pool enrich` |
 | `.opencode/scripts/get_cookie.py` | `market_data` | `market-data auth update-cookie` |
 
 以下旧模块迁入 `market_data` 内部实现，不单独暴露 CLI：
@@ -41,15 +41,15 @@
 
 | 旧入口 | 新归属 | 新 CLI |
 |--------|--------|--------|
-| `.opencode/skills/daily-news-brief/scripts/fetch_news.py` | `news` | `news fetch` |
-| `.opencode/skills/theme-library/scripts/fetch_concepts.py` | `themes` | `themes concepts fetch` |
-| `.opencode/skills/theme-library/scripts/fetch_concept_stocks.py` | `themes` | `themes concepts fetch-stocks` |
-| `.opencode/skills/theme-library/scripts/build_library.py` | `themes` | `themes library build` |
-| `.opencode/skills/theme-library/scripts/query_theme.py` | `themes` | `themes query` |
-| `.opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py` | `themes` | `themes dashboard build` |
-| `.opencode/skills/intraday-stock-discovery/scripts/compute_theme_ranking.py` | `themes` | `themes ranking compute` |
+| `.agents/skills/daily-news-brief/scripts/fetch_news.py` | `news` | `news fetch` |
+| `.agents/skills/theme-library/scripts/fetch_concepts.py` | `themes` | `themes concepts fetch` |
+| `.agents/skills/theme-library/scripts/fetch_concept_stocks.py` | `themes` | `themes concepts fetch-stocks` |
+| `.agents/skills/theme-library/scripts/build_library.py` | `themes` | `themes library build` |
+| `.agents/skills/theme-library/scripts/query_theme.py` | `themes` | `themes query` |
+| `.agents/skills/intraday-market-scan/scripts/build_concept_dashboard.py` | `themes` | `themes dashboard build` |
+| `.agents/skills/intraday-stock-discovery/scripts/compute_theme_ranking.py` | `themes` | `themes ranking compute` |
 
-`.opencode/skills/theme-library/scripts/datasource.py` 迁入 `themes` 内部实现，不单独
+`.agents/skills/theme-library/scripts/datasource.py` 迁入 `themes` 内部实现，不单独
 暴露 CLI。
 
 ## Mapping
@@ -74,19 +74,19 @@
 | `finalize_daily_mapping.py` | `mapping daily finalize` |
 | `compare_step2_regression.py` | `mapping daily compare-regression` |
 
-以上文件切换前位于 `.opencode/skills/daily-stock-mapping/scripts/`。
+以上文件切换前位于 `.agents/skills/daily-stock-mapping/scripts/`。
 `mapper_json_lib.py` 迁入 `mapping` 内部实现，不单独暴露 CLI。
 
 ### Intraday mapping
 
 | 旧入口 | 新 CLI |
 |--------|--------|
-| `.opencode/skills/intraday-market-scan/scripts/build_scan_pool.py` | `mapping intraday build-scan-pool` |
-| `.opencode/skills/intraday-stock-discovery/scripts/enrich_compute_pool.py` | `mapping intraday enrich-compute-pool` |
-| `.opencode/skills/intraday-strategy/scripts/build_intraday_mapper_base.py` | `mapping intraday build-mapper-base` |
-| `.opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py` | `mapping intraday validate-annotations` |
-| `.opencode/skills/intraday-strategy/scripts/build_intraday_mapper_json.py` | `mapping intraday build-mapper` |
-| `.opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_json.py` | `mapping intraday validate-mapper` |
+| `.agents/skills/intraday-market-scan/scripts/build_scan_pool.py` | `mapping intraday build-scan-pool` |
+| `.agents/skills/intraday-stock-discovery/scripts/enrich_compute_pool.py` | `mapping intraday enrich-compute-pool` |
+| `.agents/skills/intraday-strategy/scripts/build_intraday_mapper_base.py` | `mapping intraday build-mapper-base` |
+| `.agents/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py` | `mapping intraday validate-annotations` |
+| `.agents/skills/intraday-strategy/scripts/build_intraday_mapper_json.py` | `mapping intraday build-mapper` |
+| `.agents/skills/intraday-strategy/scripts/validate_intraday_mapper_json.py` | `mapping intraday validate-mapper` |
 
 `intraday_mapper_json_lib.py` 迁入 `mapping` 内部实现，不单独暴露 CLI。
 
@@ -107,7 +107,7 @@
 | `render_daily_report_html.py` | `strategy daily render-report` |
 | `compare_strategy_shadow.py` | `strategy daily compare-shadow` |
 
-以上文件切换前位于 `.opencode/skills/daily-strategy/scripts/`。
+以上文件切换前位于 `.agents/skills/daily-strategy/scripts/`。
 
 ### Overnight strategy
 
@@ -118,7 +118,7 @@
 | `validate_overnight_strategy_json.py` | `strategy overnight validate` |
 | `render_overnight_strategy_html.py` | `strategy overnight render-report` |
 
-以上文件切换前位于 `.opencode/skills/intraday-strategy/scripts/`。Mapper 相关入口
+以上文件切换前位于 `.agents/skills/intraday-strategy/scripts/`。Mapper 相关入口
 归入前述 `mapping intraday`，不因原目录名而归入 strategy。
 
 ## Operations
@@ -132,7 +132,7 @@
 | `render_operation_guide_html.py` | `operations guide render` |
 | `run_operation_guide.py` | `operations guide run` |
 
-以上文件切换前位于 `.opencode/skills/intraday-operation-guide/scripts/`。
+以上文件切换前位于 `.agents/skills/intraday-operation-guide/scripts/`。
 `market_confirmation.py`、`mechanical_classification.py`、`operation_time.py`、
 `operation_transition.py`、`portfolio_allocation.py` 和 `theme_confirmation.py`
 迁入 `operations` 内部实现，不单独暴露 CLI。
@@ -141,9 +141,9 @@
 
 | 旧入口 | 新 CLI |
 |--------|--------|
-| `.opencode/skills/daily-trading-review/scripts/generate_verification_json.py` | `review daily verify` |
-| `.opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py` | `review daily backtest-entry-band` |
-| `.opencode/skills/daily-trading-review/scripts/entry_quality_backtest.py` | `review daily backtest-entry-quality` |
+| `.agents/skills/daily-trading-review/scripts/generate_verification_json.py` | `review daily verify` |
+| `.agents/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py` | `review daily backtest-entry-band` |
+| `.agents/skills/daily-trading-review/scripts/entry_quality_backtest.py` | `review daily backtest-entry-quality` |
 
 ## Automation
 

@@ -1,5 +1,5 @@
 {
-  "source": ".opencode/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py",
+  "source": ".agents/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py",
   "date": "2026-07-14",
   "base": {
     "schema_version": "intraday_mapper_base.v1",

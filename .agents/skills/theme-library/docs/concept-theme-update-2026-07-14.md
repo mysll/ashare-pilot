@@ -235,7 +235,7 @@ python - <<'PY'
 import json
 from pathlib import Path
 
-skill_dir = Path(".opencode/skills/theme-library")
+skill_dir = Path(".agents/skills/theme-library")
 config = json.loads(
     (skill_dir / "scripts/theme_config.json").read_text(encoding="utf-8")
 )

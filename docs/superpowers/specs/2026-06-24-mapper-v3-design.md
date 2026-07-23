@@ -12,8 +12,8 @@ Two files modified:
 
 | File | Change |
 |------|--------|
-| `.opencode/skills/daily-stock-mapping/SKILL.md` | Rewrite Impact Analysis, delete S/R extraction, add data contract rules |
-| `.opencode/skills/daily-strategy/SKILL.md` | Update workflow, formulas, coverage, data source rules |
+| `.agents/skills/daily-stock-mapping/SKILL.md` | Rewrite Impact Analysis, delete S/R extraction, add data contract rules |
+| `.agents/skills/daily-strategy/SKILL.md` | Update workflow, formulas, coverage, data source rules |
 
 ## Output Structure (mapper.md)
 

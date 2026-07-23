@@ -97,7 +97,7 @@ config/themes/theme-config.json
 config/themes/theme-library-config.json
 .opencode/agents/
 .opencode/commands/
-.opencode/skills/
+.agents/skills/
 resources/schemas/
 resources/templates/
 data/theme-library/
@@ -292,7 +292,7 @@ uv run --frozen ashare-pilot themes query list --json
 ## 8. OpenCode 与自动调度
 
 使用 OpenCode Desktop 时，它必须打开仓库根目录，并读取 `AGENTS.md`、`opencode.json` 和
-`.opencode/skills/`。Agent 执行业务命令时使用 `uv run --frozen ashare-pilot`，不得调用
+`.agents/skills/`。Agent 执行业务命令时使用 `uv run --frozen ashare-pilot`，不得调用
 已经迁移删除的 `.opencode/**/scripts/*.py`。
 
 如需定时任务，先确认 OpenCode CLI 可被子进程找到：

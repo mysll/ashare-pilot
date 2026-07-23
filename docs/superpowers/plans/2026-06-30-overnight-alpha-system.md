@@ -15,27 +15,27 @@
 ### New files to create:
 
 **Datasource (extends existing infrastructure):**
-- `.opencode/skills/stock-analysis/scripts/datasources/intraday.py` — `EastMoneyIntradayDataSource`: market breadth, limit-up pool, turnover ranking, concept ranking, north-bound capital
+- `.agents/skills/stock-analysis/scripts/datasources/intraday.py` — `EastMoneyIntradayDataSource`: market breadth, limit-up pool, turnover ranking, concept ranking, north-bound capital
 
 **CLI Entry-point Scripts:**
-- `.opencode/skills/stock-analysis/scripts/fetch_market_breadth.py` — daily market width (涨跌家数, 涨停/跌停统计)
-- `.opencode/skills/stock-analysis/scripts/fetch_limit_up_pool.py` — detailed limit-up board (涨停池)
-- `.opencode/skills/stock-analysis/scripts/fetch_turnover_ranking.py` — top-N turnover stocks (成交额排行)
-- `.opencode/skills/stock-analysis/scripts/fetch_concept_ranking.py` — concept board real-time ranking (概念排行)
-- `.opencode/skills/stock-analysis/scripts/fetch_north_bound.py` — north-bound capital flow (北向资金)
+- `.agents/skills/stock-analysis/scripts/fetch_market_breadth.py` — daily market width (涨跌家数, 涨停/跌停统计)
+- `.agents/skills/stock-analysis/scripts/fetch_limit_up_pool.py` — detailed limit-up board (涨停池)
+- `.agents/skills/stock-analysis/scripts/fetch_turnover_ranking.py` — top-N turnover stocks (成交额排行)
+- `.agents/skills/stock-analysis/scripts/fetch_concept_ranking.py` — concept board real-time ranking (概念排行)
+- `.agents/skills/stock-analysis/scripts/fetch_north_bound.py` — north-bound capital flow (北向资金)
 
 **Pipeline Scripts:**
-- `.opencode/skills/stock-analysis/scripts/build_scan_pool.py` — multi-source merge → Scan Pool (300-500)
-- `.opencode/skills/stock-analysis/scripts/enrich_compute_pool.py` — batch indicator enrichment → Compute Pool (80-150)
-- `.opencode/skills/stock-analysis/scripts/score_overnight.py` — 5-dimension scoring → Opportunity Pool (20-40)
+- `.agents/skills/stock-analysis/scripts/build_scan_pool.py` — multi-source merge → Scan Pool (300-500)
+- `.agents/skills/stock-analysis/scripts/enrich_compute_pool.py` — batch indicator enrichment → Compute Pool (80-150)
+- `.agents/skills/stock-analysis/scripts/score_overnight.py` — 5-dimension scoring → Opportunity Pool (20-40)
 
 **Skill Definitions:**
-- `.opencode/skills/intraday-market-scan/SKILL.md` — Skill 1: Market Scan
-- `.opencode/skills/intraday-stock-discovery/SKILL.md` — Skill 2: Stock Discovery
-- `.opencode/skills/overnight-strategy/SKILL.md` — Skill 3: Overnight Strategy
+- `.agents/skills/intraday-market-scan/SKILL.md` — Skill 1: Market Scan
+- `.agents/skills/intraday-stock-discovery/SKILL.md` — Skill 2: Stock Discovery
+- `.agents/skills/overnight-strategy/SKILL.md` — Skill 3: Overnight Strategy
 
 ### Files to modify:
-- `.opencode/skills/stock-analysis/scripts/datasources/__init__.py` — export `EastMoneyIntradayDataSource`
+- `.agents/skills/stock-analysis/scripts/datasources/__init__.py` — export `EastMoneyIntradayDataSource`
 
 ---
 
@@ -44,7 +44,7 @@
 ### Task 1: Create `EastMoneyIntradayDataSource` — market breadth fetch
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/datasources/intraday.py`
+- Create: `.agents/skills/stock-analysis/scripts/datasources/intraday.py`
 
 - [ ] **Step 1: Write the datasource class with market breadth method**
 
@@ -493,20 +493,20 @@ class EastMoneyIntradayDataSource(BaseDataSource):
 
 - [ ] **Step 2: Verify the class imports correctly**
 
-Run: `python -c "import sys; sys.path.insert(0, '.opencode/skills/stock-analysis/scripts'); from datasources.intraday import EastMoneyIntradayDataSource; ds = EastMoneyIntradayDataSource(); print('OK')"`
+Run: `python -c "import sys; sys.path.insert(0, '.agents/skills/stock-analysis/scripts'); from datasources.intraday import EastMoneyIntradayDataSource; ds = EastMoneyIntradayDataSource(); print('OK')"`
 Expected: prints `OK`
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/datasources/intraday.py
+git add .agents/skills/stock-analysis/scripts/datasources/intraday.py
 git commit -m "feat: add EastMoneyIntradayDataSource with market breadth, limit-up, turnover, concept ranking, north-bound"
 ```
 
 ### Task 2: Register `EastMoneyIntradayDataSource` in `__init__.py`
 
 **Files:**
-- Modify: `.opencode/skills/stock-analysis/scripts/datasources/__init__.py`
+- Modify: `.agents/skills/stock-analysis/scripts/datasources/__init__.py`
 
 - [ ] **Step 1: Read current init**
 
@@ -524,13 +524,13 @@ And add `"EastMoneyIntradayDataSource"` to the `__all__` list if one exists.
 
 - [ ] **Step 3: Verify**
 
-Run: `python -c "import sys; sys.path.insert(0, '.opencode/skills/stock-analysis/scripts'); from datasources import EastMoneyIntradayDataSource; print('exported OK')"`
+Run: `python -c "import sys; sys.path.insert(0, '.agents/skills/stock-analysis/scripts'); from datasources import EastMoneyIntradayDataSource; print('exported OK')"`
 Expected: `exported OK`
 
 - [ ] **Step 4: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/datasources/__init__.py
+git add .agents/skills/stock-analysis/scripts/datasources/__init__.py
 git commit -m "feat: export EastMoneyIntradayDataSource from datasources"
 ```
 
@@ -541,7 +541,7 @@ git commit -m "feat: export EastMoneyIntradayDataSource from datasources"
 ### Task 3: `fetch_market_breadth.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/fetch_market_breadth.py`
+- Create: `.agents/skills/stock-analysis/scripts/fetch_market_breadth.py`
 
 - [ ] **Step 1: Write the CLI script**
 
@@ -611,21 +611,21 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test the script live**
 
-Run: `python .opencode/skills/stock-analysis/scripts/fetch_market_breadth.py --json`
+Run: `python .agents/skills/stock-analysis/scripts/fetch_market_breadth.py --json`
 
 Expected: valid JSON with up_count, down_count, limit_up_count, limit_down_count during market hours. During non-market hours, data will reflect last close.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/fetch_market_breadth.py
+git add .agents/skills/stock-analysis/scripts/fetch_market_breadth.py
 git commit -m "feat: add fetch_market_breadth.py CLI script"
 ```
 
 ### Task 4: `fetch_limit_up_pool.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/fetch_limit_up_pool.py`
+- Create: `.agents/skills/stock-analysis/scripts/fetch_limit_up_pool.py`
 
 - [ ] **Step 1: Write the CLI script**
 
@@ -712,20 +712,20 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test**
 
-Run: `python .opencode/skills/stock-analysis/scripts/fetch_limit_up_pool.py --json`
+Run: `python .agents/skills/stock-analysis/scripts/fetch_limit_up_pool.py --json`
 Expected: valid JSON array of limit-up stocks during market hours.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/fetch_limit_up_pool.py
+git add .agents/skills/stock-analysis/scripts/fetch_limit_up_pool.py
 git commit -m "feat: add fetch_limit_up_pool.py CLI script"
 ```
 
 ### Task 5: `fetch_turnover_ranking.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/fetch_turnover_ranking.py`
+- Create: `.agents/skills/stock-analysis/scripts/fetch_turnover_ranking.py`
 
 - [ ] **Step 1: Write the CLI script**
 
@@ -807,20 +807,20 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test**
 
-Run: `python .opencode/skills/stock-analysis/scripts/fetch_turnover_ranking.py --json --top 20`
+Run: `python .agents/skills/stock-analysis/scripts/fetch_turnover_ranking.py --json --top 20`
 Expected: valid JSON array of 20 stocks sorted by turnover.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/fetch_turnover_ranking.py
+git add .agents/skills/stock-analysis/scripts/fetch_turnover_ranking.py
 git commit -m "feat: add fetch_turnover_ranking.py CLI script"
 ```
 
 ### Task 6: `fetch_concept_ranking.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/fetch_concept_ranking.py`
+- Create: `.agents/skills/stock-analysis/scripts/fetch_concept_ranking.py`
 
 - [ ] **Step 1: Write the CLI script**
 
@@ -906,20 +906,20 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test**
 
-Run: `python .opencode/skills/stock-analysis/scripts/fetch_concept_ranking.py --json --top 10`
+Run: `python .agents/skills/stock-analysis/scripts/fetch_concept_ranking.py --json --top 10`
 Expected: valid JSON array of 10 concept boards with change_pct, up_count, lead_stock.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/fetch_concept_ranking.py
+git add .agents/skills/stock-analysis/scripts/fetch_concept_ranking.py
 git commit -m "feat: add fetch_concept_ranking.py CLI script"
 ```
 
 ### Task 7: `fetch_north_bound.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/fetch_north_bound.py`
+- Create: `.agents/skills/stock-analysis/scripts/fetch_north_bound.py`
 
 - [ ] **Step 1: Write the CLI script**
 
@@ -988,13 +988,13 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test**
 
-Run: `python .opencode/skills/stock-analysis/scripts/fetch_north_bound.py --json`
+Run: `python .agents/skills/stock-analysis/scripts/fetch_north_bound.py --json`
 Expected: valid JSON with hgt/sgt net flow values. During market hours these will be real-time; off-hours they will be last session data.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/fetch_north_bound.py
+git add .agents/skills/stock-analysis/scripts/fetch_north_bound.py
 git commit -m "feat: add fetch_north_bound.py CLI script"
 ```
 
@@ -1005,7 +1005,7 @@ git commit -m "feat: add fetch_north_bound.py CLI script"
 ### Task 8: `build_scan_pool.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/build_scan_pool.py`
+- Create: `.agents/skills/stock-analysis/scripts/build_scan_pool.py`
 
 - [ ] **Step 1: Write the pipeline script**
 
@@ -1175,20 +1175,20 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Test the pipeline end-to-end**
 
-Run: `python .opencode/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 20 --json 2>&1`
+Run: `python .agents/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 20 --json 2>&1`
 Expected: stderr shows Scan Pool size and Compute Pool size, stdout is valid JSON with compute_pool array.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/build_scan_pool.py
+git add .agents/skills/stock-analysis/scripts/build_scan_pool.py
 git commit -m "feat: add build_scan_pool.py multi-source merge + QuickScore pipeline"
 ```
 
 ### Task 9: `enrich_compute_pool.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/enrich_compute_pool.py`
+- Create: `.agents/skills/stock-analysis/scripts/enrich_compute_pool.py`
 
 - [ ] **Step 1: Write the batch enrichment script**
 
@@ -1356,25 +1356,25 @@ if __name__ == "__main__":
 
 First generate a sample pool:
 ```powershell
-python .opencode/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 10 --json -o .cache/test_pool.json
+python .agents/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 10 --json -o .cache/test_pool.json
 ```
 Then enrich it:
 ```powershell
-python .opencode/skills/stock-analysis/scripts/enrich_compute_pool.py .cache/test_pool.json --json -o .cache/test_enriched.json
+python .agents/skills/stock-analysis/scripts/enrich_compute_pool.py .cache/test_pool.json --json -o .cache/test_enriched.json
 ```
 Expected: valid JSON with enriched compute_pool array, each stock has enriched.money_flow and enriched.real_time.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/enrich_compute_pool.py
+git add .agents/skills/stock-analysis/scripts/enrich_compute_pool.py
 git commit -m "feat: add enrich_compute_pool.py batch enrichment script"
 ```
 
 ### Task 10: `score_overnight.py`
 
 **Files:**
-- Create: `.opencode/skills/stock-analysis/scripts/score_overnight.py`
+- Create: `.agents/skills/stock-analysis/scripts/score_overnight.py`
 
 - [ ] **Step 1: Write the scoring script**
 
@@ -1609,14 +1609,14 @@ if __name__ == "__main__":
 - [ ] **Step 2: Test with enriched sample**
 
 ```powershell
-python .opencode/skills/stock-analysis/scripts/score_overnight.py .cache/test_enriched.json --json --opportunity-pool-size 10
+python .agents/skills/stock-analysis/scripts/score_overnight.py .cache/test_enriched.json --json --opportunity-pool-size 10
 ```
 Expected: valid JSON with opportunity_pool array, each entry has overnight_score, score_breakdown, tier.
 
 - [ ] **Step 3: Commit**
 
 ```powershell
-git add .opencode/skills/stock-analysis/scripts/score_overnight.py
+git add .agents/skills/stock-analysis/scripts/score_overnight.py
 git commit -m "feat: add score_overnight.py 5-dimension overnight scoring (V1 Rule Based)"
 ```
 
@@ -1627,7 +1627,7 @@ git commit -m "feat: add score_overnight.py 5-dimension overnight scoring (V1 Ru
 ### Task 11: Skill 1 — `intraday-market-scan`
 
 **Files:**
-- Create: `.opencode/skills/intraday-market-scan/SKILL.md`
+- Create: `.agents/skills/intraday-market-scan/SKILL.md`
 
 - [ ] **Step 1: Write the skill**
 
@@ -1669,11 +1669,11 @@ Skill 3: overnight-strategy
 Run these scripts in parallel:
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/fetch_market_breadth.py --json
-python .opencode/skills/stock-analysis/scripts/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
-python .opencode/skills/stock-analysis/scripts/fetch_concept_ranking.py --json --top 20
-python .opencode/skills/stock-analysis/scripts/fetch_north_bound.py --json
-python .opencode/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 120 --json
+python .agents/skills/stock-analysis/scripts/fetch_market_breadth.py --json
+python .agents/skills/stock-analysis/scripts/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json
+python .agents/skills/stock-analysis/scripts/fetch_concept_ranking.py --json --top 20
+python .agents/skills/stock-analysis/scripts/fetch_north_bound.py --json
+python .agents/skills/stock-analysis/scripts/build_scan_pool.py --compute-pool-size 120 --json
 ```
 
 Save outputs to intermediate files under `.cache/intraday/`.
@@ -1721,14 +1721,14 @@ Save to: `.cache/intraday/market_state.md` and `.cache/intraday/scan_pool.json`
 - [ ] **Step 2: Commit**
 
 ```powershell
-git add .opencode/skills/intraday-market-scan/SKILL.md
+git add .agents/skills/intraday-market-scan/SKILL.md
 git commit -m "feat: add intraday-market-scan skill definition (Skill 1)"
 ```
 
 ### Task 12: Skill 2 — `intraday-stock-discovery`
 
 **Files:**
-- Create: `.opencode/skills/intraday-stock-discovery/SKILL.md`
+- Create: `.agents/skills/intraday-stock-discovery/SKILL.md`
 
 - [ ] **Step 1: Write the skill**
 
@@ -1749,7 +1749,7 @@ This is the Perception layer — output is structured data with confidence, neve
 ## Execute: Data Enrichment
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/enrich_compute_pool.py .cache/intraday/scan_pool.json --json -o .cache/intraday/compute_pool_enriched.json
+python .agents/skills/stock-analysis/scripts/enrich_compute_pool.py .cache/intraday/scan_pool.json --json -o .cache/intraday/compute_pool_enriched.json
 ```
 
 ## Theme Detection (Bottom-Up)
@@ -1763,12 +1763,12 @@ Process:
 4. Select top 10-15 themes
 
 ```bash
-python .opencode/skills/theme-library/scripts/query_theme.py list --json
+python .agents/skills/theme-library/scripts/query_theme.py list --json
 ```
 
 For each stock in Compute Pool, query its themes:
 ```bash
-python .opencode/skills/theme-library/scripts/query_theme.py stock {code} --roles --json
+python .agents/skills/theme-library/scripts/query_theme.py stock {code} --roles --json
 ```
 
 ## Theme Heat Computation
@@ -1807,14 +1807,14 @@ Also produce `intraday/{date}/theme_ranking.md`:
 - [ ] **Step 2: Commit**
 
 ```powershell
-git add .opencode/skills/intraday-stock-discovery/SKILL.md
+git add .agents/skills/intraday-stock-discovery/SKILL.md
 git commit -m "feat: add intraday-stock-discovery skill definition (Skill 2)"
 ```
 
 ### Task 13: Skill 3 — `overnight-strategy`
 
 **Files:**
-- Create: `.opencode/skills/overnight-strategy/SKILL.md`
+- Create: `.agents/skills/overnight-strategy/SKILL.md`
 
 - [ ] **Step 1: Write the skill**
 
@@ -1842,7 +1842,7 @@ This step consumes structured computed perception from Skill 2 and produces:
 ## Execute: Compute Overnight Scores
 
 ```bash
-python .opencode/skills/stock-analysis/scripts/score_overnight.py .cache/intraday/compute_pool_enriched.json --json -o .cache/intraday/opportunity_pool.json
+python .agents/skills/stock-analysis/scripts/score_overnight.py .cache/intraday/compute_pool_enriched.json --json -o .cache/intraday/opportunity_pool.json
 ```
 
 This produces the `opportunity_pool.json` containing:
@@ -1907,7 +1907,7 @@ Stocks in Compute Pool that were excluded from Opportunity Pool, with reason.
 - [ ] **Step 2: Commit**
 
 ```powershell
-git add .opencode/skills/overnight-strategy/SKILL.md
+git add .agents/skills/overnight-strategy/SKILL.md
 git commit -m "feat: add overnight-strategy skill definition (Skill 3)"
 ```
 
@@ -1918,7 +1918,7 @@ git commit -m "feat: add overnight-strategy skill definition (Skill 3)"
 ### Task 14: End-to-End Dry Run
 
 **Files:**
-- Create: `.opencode/skills/intraday-market-scan/scripts/run_pipeline.py` (orchestrator)
+- Create: `.agents/skills/intraday-market-scan/scripts/run_pipeline.py` (orchestrator)
 
 - [ ] **Step 1: Write pipeline orchestrator**
 
@@ -2050,7 +2050,7 @@ if __name__ == "__main__":
 - [ ] **Step 2: Run dry-run test**
 
 ```powershell
-python .opencode/skills/intraday-market-scan/scripts/run_pipeline.py --date 2026-06-30
+python .agents/skills/intraday-market-scan/scripts/run_pipeline.py --date 2026-06-30
 ```
 
 Expected: pipeline runs all phases, outputs JSON files to `intraday/2026-06-30/`, prints summary with top 5 stocks.
@@ -2066,7 +2066,7 @@ Check that:
 - [ ] **Step 4: Commit**
 
 ```powershell
-git add .opencode/skills/intraday-market-scan/scripts/run_pipeline.py
+git add .agents/skills/intraday-market-scan/scripts/run_pipeline.py
 git commit -m "feat: add run_pipeline.py end-to-end orchestrator"
 ```
 

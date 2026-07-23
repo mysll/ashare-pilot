@@ -37,13 +37,13 @@ Thumbs.db
 *.zip
 
 # Theme Library generated data
-.opencode/skills/theme-library/cache/
-.opencode/skills/theme-library/concepts/
-.opencode/skills/theme-library/themes/
-.opencode/skills/theme-library/stocks/
-.opencode/skills/theme-library/aliases/
-.opencode/skills/theme-library/index/
-.opencode/skills/theme-library/metadata/
+.agents/skills/theme-library/cache/
+.agents/skills/theme-library/concepts/
+.agents/skills/theme-library/themes/
+.agents/skills/theme-library/stocks/
+.agents/skills/theme-library/aliases/
+.agents/skills/theme-library/index/
+.agents/skills/theme-library/metadata/
 
 data/theme-library/cache/
 data/theme-library/concepts/

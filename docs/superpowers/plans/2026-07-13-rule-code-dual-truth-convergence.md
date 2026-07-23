@@ -49,16 +49,16 @@
 ## File Structure Map
 
 ### Create
-- `.opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py` — unit tests for I10/I11/I14 + tier consistency
-- `.opencode/skills/intraday-strategy/scripts/score_overnight_lib.py` *(optional extract)* — only if `score_overnight.py` grows unwieldy; prefer keeping functions in `score_overnight.py` unless file exceeds maintainability
+- `.agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py` — unit tests for I10/I11/I14 + tier consistency
+- `.agents/skills/intraday-strategy/scripts/score_overnight_lib.py` *(optional extract)* — only if `score_overnight.py` grows unwieldy; prefer keeping functions in `score_overnight.py` unless file exceeds maintainability
 
 ### Modify
-- `.opencode/skills/intraday-strategy/scripts/score_overnight.py` — I10, I11-v2, I14; expose regime inputs; fix dual tier path; emit provenance fields
-- `.opencode/skills/intraday-strategy/scripts/build_intraday_mapper_base.py` — carry `regime_snapshot` and scoring provenance into base contract
-- `.opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py` — reject compute-owned fields in annotations; validate tradeability behavior
-- `.opencode/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py` — only if contract propagation helpers need adjustment
-- `.opencode/skills/intraday-strategy/SKILL.md` — scoring table, filters, ownership
-- `.opencode/skills/intraday-market-analysis/SKILL.md` — one-line pointer to code-owned score rules
+- `.agents/skills/intraday-strategy/scripts/score_overnight.py` — I10, I11-v2, I14; expose regime inputs; fix dual tier path; emit provenance fields
+- `.agents/skills/intraday-strategy/scripts/build_intraday_mapper_base.py` — carry `regime_snapshot` and scoring provenance into base contract
+- `.agents/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py` — reject compute-owned fields in annotations; validate tradeability behavior
+- `.agents/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py` — only if contract propagation helpers need adjustment
+- `.agents/skills/intraday-strategy/SKILL.md` — scoring table, filters, ownership
+- `.agents/skills/intraday-market-analysis/SKILL.md` — one-line pointer to code-owned score rules
 - `memory/INTRADAY_RULES.md` — I02 rewrite; I10/I11/I14 mark code-owned; I13 mark reasoning-only
 - `AGENTS.md` / `CLAUDE.md` — optional one line under Memory: score rules must match `score_overnight.py`
 
@@ -207,12 +207,12 @@ git commit -m "docs: declare code vs reasoning ownership for overnight rules"
 > 但最终 JSON 还应提供 `rank_tier`。`tradeability` 继续由 Reasoning 输出。
 
 **Files:**
-- Modify: `.opencode/skills/intraday-strategy/scripts/score_overnight.py`
-- Test: `.opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py`
+- Modify: `.agents/skills/intraday-strategy/scripts/score_overnight.py`
+- Test: `.agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py`
 
 - [ ] **Step 1: Create test file with failing tier test**
 
-Create `.opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py`:
+Create `.agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py`:
 
 ```python
 import importlib.util
@@ -281,7 +281,7 @@ def test_compute_scores_sets_only_rank_tier_by_percentile():
 
 ```bash
 cd E:\ashare-pilot
-python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py::test_compute_scores_sets_only_rank_tier_by_percentile -v
+python -m pytest .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py::test_compute_scores_sets_only_rank_tier_by_percentile -v
 ```
 
 Expected: FAIL (absolute tier vs rank tier).
@@ -306,14 +306,14 @@ stock["absolute_score"] = overnight_score
 - [ ] **Step 4: Re-run tests — PASS**
 
 ```bash
-python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py -v
+python -m pytest .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py -v
 ```
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .opencode/skills/intraday-strategy/scripts/score_overnight.py \
-        .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py
+git add .agents/skills/intraday-strategy/scripts/score_overnight.py \
+        .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py
 git commit -m "fix: single rank-percentile tier assignment in score_overnight"
 ```
 
@@ -321,12 +321,12 @@ git commit -m "fix: single rank-percentile tier assignment in score_overnight"
 
 **Files:**
 - Modify: `memory/INTRADAY_RULES.md` (I02 row)
-- Modify: `.opencode/skills/intraday-strategy/SKILL.md` (Scoring Dimensions + Tiers)
+- Modify: `.agents/skills/intraday-strategy/SKILL.md` (Scoring Dimensions + Tiers)
 
 - [ ] **Step 1: Replace I02 text**
 
 ```markdown
-| I02 | **OvernightScore V1.2 (code-owned)**<br>实现: `.opencode/skills/intraday-strategy/scripts/score_overnight.py` (`weights_version=V1.2_TrendQuality`)<br>九维百分位: Theme18% Capital18% Tail14% Position9% Risk-10% Intensity9% Conviction9% Consistency5% TrendQuality8%<br>`rank_tier`: **池内 rank 百分位** A=top10% B=top40% C=top70% (非绝对75/60/45门槛)<br>`tradeability`: I01/I05 的 Suitable/Watch/Extended/Avoid，独立于 rank_tier，由 Reasoning 产生 | n | ✅ 与代码对齐 |
+| I02 | **OvernightScore V1.2 (code-owned)**<br>实现: `.agents/skills/intraday-strategy/scripts/score_overnight.py` (`weights_version=V1.2_TrendQuality`)<br>九维百分位: Theme18% Capital18% Tail14% Position9% Risk-10% Intensity9% Conviction9% Consistency5% TrendQuality8%<br>`rank_tier`: **池内 rank 百分位** A=top10% B=top40% C=top70% (非绝对75/60/45门槛)<br>`tradeability`: I01/I05 的 Suitable/Watch/Extended/Avoid，独立于 rank_tier，由 Reasoning 产生 | n | ✅ 与代码对齐 |
 ```
 
 - [ ] **Step 2: Fix SKILL.md tier line**
@@ -365,7 +365,7 @@ Add: “I01/I05 的 Suitable/Watch/Extended/Avoid 是 `tradeability`，可读取
 - [ ] **Step 4: Commit**
 
 ```bash
-git add memory/INTRADAY_RULES.md .opencode/skills/intraday-strategy/SKILL.md
+git add memory/INTRADAY_RULES.md .agents/skills/intraday-strategy/SKILL.md
 git commit -m "docs: align I02 and tier semantics with score_overnight V1.2"
 ```
 
@@ -499,7 +499,7 @@ def test_i11_tail_zero_high_turnover_flagged():
 - [ ] **Step 2: Run — FAIL**
 
 ```bash
-python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py -k i11 -v
+python -m pytest .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py -k i11 -v
 ```
 
 - [ ] **Step 3: Implement helpers in `score_overnight.py`**
@@ -604,8 +604,8 @@ if not money_flow_available(pool):
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .opencode/skills/intraday-strategy/scripts/score_overnight.py \
-        .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py
+git add .agents/skills/intraday-strategy/scripts/score_overnight.py \
+        .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py
 git commit -m "feat: implement I11-v2 median replacement in overnight scoring"
 ```
 
@@ -784,9 +784,9 @@ parser.add_argument("--indices")
 - [ ] **Step 4: Tests PASS + dry-run on all four fixed cache dates**
 
 ```bash
-python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py -k i10 -v
+python -m pytest .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py -k i10 -v
 # required historical replay; always write trial files, never overwrite canonical cache
-python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/2026-07-09/compute_pool_enriched.json --json \
+python .agents/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/2026-07-09/compute_pool_enriched.json --json \
   --breadth .cache/intraday/2026-07-09/market_breadth.json \
   --indices .cache/intraday/2026-07-09/indices.json \
   -o .cache/intraday/2026-07-09/opportunity_pool.i10trial.json
@@ -800,9 +800,9 @@ Repeat for `2026-07-07`, `2026-07-10`, and `2026-07-13`. Assert:
 - [ ] **Step 5: Commit**
 
 ```bash
-git add .opencode/skills/intraday-strategy/scripts/score_overnight.py \
+git add .agents/skills/intraday-strategy/scripts/score_overnight.py \
         .opencode/scripts/run_intraday_pipeline.py \
-        .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py
+        .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py
 git commit -m "feat: implement I10-v2 capital scale in overnight scoring"
 ```
 
@@ -940,7 +940,7 @@ git commit -m "feat: implement I14 VWAP micro-deviation exemption in quality fil
 
 ### Task 9: Harden `intraday-strategy` SKILL Reasoning rules
 
-**Files:** `.opencode/skills/intraday-strategy/SKILL.md`
+**Files:** `.agents/skills/intraday-strategy/SKILL.md`
 
 - [ ] **Step 1: Add “Score immutability” section**
 
@@ -989,13 +989,13 @@ git commit -m "docs: score immutability for intraday-strategy reasoning"
 # Should NOT find old 6-factor I02 formula as active truth
 rg "主线地位×0.25" memory/INTRADAY_RULES.md
 # Should find implementation symbols
-rg "apply_i11_median|i10_capital_scale|i14_exemption|rank_tier|absolute_score" .opencode/skills/intraday-strategy
+rg "apply_i11_median|i10_capital_scale|i14_exemption|rank_tier|absolute_score" .agents/skills/intraday-strategy
 ```
 
 - [ ] Run full unit file:
 
 ```bash
-python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py -v
+python -m pytest .agents/skills/intraday-strategy/tests/test_score_overnight_convergence.py -v
 ```
 
 - [ ] Re-score four fixed historical days: `2026-07-07`, `2026-07-09`,

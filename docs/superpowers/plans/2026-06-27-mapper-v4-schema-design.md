@@ -31,8 +31,8 @@ This revision keeps V3's structure and reproducibility, but **rebalances**:
 
 Companion updates (when implemented, not in this doc):
 
-- `.opencode/skills/daily-stock-mapping/SKILL.md` — column definitions + rubrics
-- `.opencode/skills/daily-strategy/SKILL.md` — read new columns, explicit RULE overrides
+- `.agents/skills/daily-stock-mapping/SKILL.md` — column definitions + rubrics
+- `.agents/skills/daily-strategy/SKILL.md` — read new columns, explicit RULE overrides
 - `memory/RULES.md` — map RULE IDs to `RiskType` / `OverrideHint` tokens
 
 ---

@@ -48,7 +48,7 @@ def test_daily_mapper_contract_and_candidate_order_match_legacy(
 ) -> None:
     old = load_old(
         "legacy_daily_contract_batch4",
-        ROOT / ".opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
+        ROOT / ".agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
     )
     data = fixture("daily_contract.json")
     monkeypatch.setattr(old, "utc_now_iso", lambda: "2026-07-14T06:30:00+00:00")
@@ -71,11 +71,11 @@ def test_daily_mapper_contract_and_candidate_order_match_legacy(
 def test_daily_validation_error_order_and_text_match_legacy() -> None:
     old_contract = load_old(
         "legacy_daily_contract_for_validation_batch4",
-        ROOT / ".opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
+        ROOT / ".agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
     )
     old_validator = load_old(
         "legacy_daily_validator_batch4",
-        ROOT / ".opencode/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py",
+        ROOT / ".agents/skills/daily-stock-mapping/scripts/validate_mapper_annotations.py",
         {"mapper_json_lib": old_contract},
     )
     invalid = {
@@ -95,11 +95,11 @@ def test_intraday_merge_and_validation_match_legacy(
 ) -> None:
     old_contract = load_old(
         "legacy_intraday_contract_batch4",
-        ROOT / ".opencode/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py",
+        ROOT / ".agents/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py",
     )
     old_validator = load_old(
         "legacy_intraday_validator_batch4",
-        ROOT / ".opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py",
+        ROOT / ".agents/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py",
         {"intraday_mapper_json_lib": old_contract},
     )
     data = fixture("intraday_contract.json")
@@ -123,7 +123,7 @@ def test_intraday_merge_and_validation_match_legacy(
 def test_scan_pool_scoring_and_order_match_legacy() -> None:
     old = load_old(
         "legacy_scan_pool_batch4",
-        ROOT / ".opencode/skills/intraday-market-scan/scripts/build_scan_pool.py",
+        ROOT / ".agents/skills/intraday-market-scan/scripts/build_scan_pool.py",
     )
     rows = [
         {"code": "sz000001", "change_pct": "+3.0%", "amount": "100", "turnover": "8%", "volume_ratio": "2"},
@@ -140,7 +140,7 @@ def test_scan_pool_scoring_and_order_match_legacy() -> None:
 def test_json_serialization_has_identical_content_hash(tmp_path: Path) -> None:
     old = load_old(
         "legacy_daily_writer_batch4",
-        ROOT / ".opencode/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
+        ROOT / ".agents/skills/daily-stock-mapping/scripts/mapper_json_lib.py",
     )
     value = {"schema_version": "hash.v1", "stocks": [{"code": "sz000001", "name": "平安银行"}]}
     old_path = tmp_path / "old.json"

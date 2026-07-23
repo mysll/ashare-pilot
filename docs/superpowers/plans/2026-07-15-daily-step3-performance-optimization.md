@@ -223,7 +223,7 @@ The following are non-contract workflow artifacts:
 
 **Add:**
 
-- `.opencode/skills/daily-strategy/scripts/build_step3_timing.py`
+- `.agents/skills/daily-strategy/scripts/build_step3_timing.py`
 - timing tests
 
 Record these stages:
@@ -264,7 +264,7 @@ Requirements:
 
 **Add:**
 
-- `.opencode/skills/daily-strategy/scripts/build_strategy_llm_input.py`
+- `.agents/skills/daily-strategy/scripts/build_strategy_llm_input.py`
 - schema/coverage tests
 
 ### 6.1 Top-level fields
@@ -362,13 +362,13 @@ hash as `source.strategy_input_sha256`.
 
 **Add:**
 
-- `.opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py`
+- `.agents/skills/daily-strategy/scripts/prepare_daily_strategy.py`
 - orchestration tests
 
 Run:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py \
+python .agents/skills/daily-strategy/scripts/prepare_daily_strategy.py \
   --date YYYY-MM-DD
 ```
 
@@ -398,8 +398,8 @@ supports the three codes in one request.
 
 **Modify:**
 
-- `.opencode/skills/daily-strategy/SKILL.md`
-- `.opencode/skills/daily-market-analysis/SKILL.md`
+- `.agents/skills/daily-strategy/SKILL.md`
+- `.agents/skills/daily-market-analysis/SKILL.md`
 
 **Add references:**
 
@@ -446,19 +446,19 @@ The `daily-market-analysis` workflow must expose one unambiguous Step 3
 sequence and exact `portfolio-manager` paths:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py \
+python .agents/skills/daily-strategy/scripts/prepare_daily_strategy.py \
   --date YYYY-MM-DD
 
 # portfolio-manager reads:
 #   predict/YYYY-MM-DD/.strategy_llm_input.json
-#   .opencode/skills/daily-strategy/references/strategy-selection-rubric.md
-#   .opencode/skills/daily-strategy/references/strategy-output-contract.md
+#   .agents/skills/daily-strategy/references/strategy-selection-rubric.md
+#   .agents/skills/daily-strategy/references/strategy-output-contract.md
 #   memory/RULES.md
 #   memory/SHARED_RULES.md
 # and writes:
 #   predict/YYYY-MM-DD/strategy.draft.json
 
-python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py \
+python .agents/skills/daily-strategy/scripts/finalize_daily_strategy.py \
   --date YYYY-MM-DD
 ```
 
@@ -545,13 +545,13 @@ Requirements:
 
 **Add:**
 
-- `.opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py`
+- `.agents/skills/daily-strategy/scripts/finalize_daily_strategy.py`
 - finalization tests
 
 Run:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py \
+python .agents/skills/daily-strategy/scripts/finalize_daily_strategy.py \
   --date YYYY-MM-DD
 ```
 

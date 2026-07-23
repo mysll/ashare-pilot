@@ -20,7 +20,7 @@ V3 成功地形式化了 Step 2 → Step 3 的数据契约（结构化表、无 
 
 | In scope | Out of scope |
 |----------|----------------|
-| `.opencode/skills/daily-stock-mapping/SKILL.md` 全文修订 | Theme Library 重建 |
+| `.agents/skills/daily-stock-mapping/SKILL.md` 全文修订 | Theme Library 重建 |
 | `fetch_pool_indicators.py` 公式对齐（6 项） | backtest 自动化 |
 | `config/trading-scope.json` 板排除配置 | themes.md / theme_stocks.md 表头改造 |
 | Step 3 read contract 同步说明 | mapper.json 二进制 schema（future） |

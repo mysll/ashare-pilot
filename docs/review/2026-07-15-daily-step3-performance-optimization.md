@@ -25,12 +25,12 @@ Out-of-scope noise: `intraday-operation-guide` HTML cutover is present in the sa
 
 | Path | Role |
 |---|---|
-| `.opencode/skills/daily-strategy/SKILL.md` | Slimmed to ownership + prepare/LLM/finalize sequence |
-| `.opencode/skills/daily-market-analysis/SKILL.md` | Step 3 wired to prepare → draft → finalize |
-| `.opencode/skills/daily-stock-mapping/scripts/build_strategy_view.py` | Adds `source.mapper_sha256` for view↔mapper linkage |
-| `.opencode/skills/daily-strategy/scripts/compare_strategy_shadow.py` | Locks rating / budget / entry / anchor / rules / profile |
-| `.opencode/skills/daily-strategy/scripts/render_daily_report_html.py` | Observation pool reads `strategy.observation_pool` |
-| `.opencode/skills/daily-strategy/tests/test_compare_strategy_shadow.py` | Shadow field-lock tests |
+| `.agents/skills/daily-strategy/SKILL.md` | Slimmed to ownership + prepare/LLM/finalize sequence |
+| `.agents/skills/daily-market-analysis/SKILL.md` | Step 3 wired to prepare → draft → finalize |
+| `.agents/skills/daily-stock-mapping/scripts/build_strategy_view.py` | Adds `source.mapper_sha256` for view↔mapper linkage |
+| `.agents/skills/daily-strategy/scripts/compare_strategy_shadow.py` | Locks rating / budget / entry / anchor / rules / profile |
+| `.agents/skills/daily-strategy/scripts/render_daily_report_html.py` | Observation pool reads `strategy.observation_pool` |
+| `.agents/skills/daily-strategy/tests/test_compare_strategy_shadow.py` | Shadow field-lock tests |
 
 ### Added (in plan)
 
@@ -50,8 +50,8 @@ Out-of-scope noise: `intraday-operation-guide` HTML cutover is present in the sa
 
 | Path | Note |
 |---|---|
-| `.opencode/skills/intraday-operation-guide/SKILL.md` | HTML board cutover |
-| `.opencode/skills/intraday-operation-guide/scripts/render_operation_guide_html.py` | New renderer |
+| `.agents/skills/intraday-operation-guide/SKILL.md` | HTML board cutover |
+| `.agents/skills/intraday-operation-guide/scripts/render_operation_guide_html.py` | New renderer |
 
 ---
 

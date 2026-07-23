@@ -1,4 +1,4 @@
-﻿---
+---
 name: intraday-market-scan
 description: Use when dispatched at ~14:30 as Step 1 perception of the intraday overnight pipeline. Reads compute-layer market JSON and checks breadth, indices, capital direction, and active concepts. NEVER outputs stock-level scoring, Direction, RiskSeverity, or trading recommendations.
 ---

@@ -187,7 +187,7 @@ predict/{date}/mapper.md
 Create:
 
 ```text
-.opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py
+.agents/skills/daily-stock-mapping/scripts/validate_mapper_json.py
 ```
 
 Required checks:
@@ -214,7 +214,7 @@ Required checks:
 ### 1. Build Base
 
 ```text
-.opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py
+.agents/skills/daily-stock-mapping/scripts/build_mapper_base.py
 ```
 
 Inputs:
@@ -236,7 +236,7 @@ This script should own all deterministic computation and partitioning.
 ### 2. Merge Annotations
 
 ```text
-.opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py
+.agents/skills/daily-stock-mapping/scripts/build_mapper_json.py
 ```
 
 Inputs:
@@ -255,7 +255,7 @@ It should recompute composite scores after merging LLM perception fields.
 ### 3. Render Markdown
 
 ```text
-.opencode/skills/daily-stock-mapping/scripts/render_mapper_md.py
+.agents/skills/daily-stock-mapping/scripts/render_mapper_md.py
 ```
 
 Input:
@@ -414,11 +414,11 @@ Legacy dates may only have `mapper.md`. Keep fallback readers for historical rev
 The refactor is complete when this command sequence works for a current date:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py predict/{YYYY-MM-DD}/mapper.json
-python .opencode/skills/daily-stock-mapping/scripts/render_mapper_md.py --date {YYYY-MM-DD}
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py predict/{YYYY-MM-DD}/strategy.json
+python .agents/skills/daily-stock-mapping/scripts/build_mapper_base.py --date {YYYY-MM-DD}
+python .agents/skills/daily-stock-mapping/scripts/build_mapper_json.py --date {YYYY-MM-DD}
+python .agents/skills/daily-stock-mapping/scripts/validate_mapper_json.py predict/{YYYY-MM-DD}/mapper.json
+python .agents/skills/daily-stock-mapping/scripts/render_mapper_md.py --date {YYYY-MM-DD}
+python .agents/skills/daily-strategy/scripts/validate_strategy_json.py predict/{YYYY-MM-DD}/strategy.json
 ```
 
 And the normal daily pipeline uses:

@@ -502,14 +502,14 @@ vwap_day, tail_low_30m, tail_vwap_30m, tail_vol_ratio
 
 ```bash
 # Morning：Trade Profile（无价格）
-python .opencode/skills/daily-stock-mapping/scripts/compute_trade_profile.py \
+python .agents/skills/daily-stock-mapping/scripts/compute_trade_profile.py \
   sh603986,sz000977 --regime neutral --date 2026-06-25 --json
 
 # Decision：Entry Plan（含价格）
-python .opencode/skills/daily-stock-mapping/scripts/compute_entry_plan.py \
+python .agents/skills/daily-stock-mapping/scripts/compute_entry_plan.py \
   sh603986,sz000977 --session open --profile predict/2026-06-25/strategy.md --json
 
-python .opencode/skills/daily-stock-mapping/scripts/compute_entry_plan.py \
+python .agents/skills/daily-stock-mapping/scripts/compute_entry_plan.py \
   sh603986,sz000977 --session intraday --profile predict/2026-06-25/strategy.md --json
 ```
 

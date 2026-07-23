@@ -102,7 +102,7 @@ tests/
 
 - 指标缺失值、权重归一化、排序和精度严格等价。
 - 主题查询、候选股顺序、索引和动态市场视图等价。
-- 新实现不读取 `.opencode/skills/theme-library`。
+- 新实现不读取 `.agents/skills/theme-library`。
 
 ## Batch 4：Mapping
 

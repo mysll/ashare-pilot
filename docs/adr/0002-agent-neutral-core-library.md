@@ -3,14 +3,14 @@
 - 状态：Accepted
 - 日期：2026-07-21
 - 修订：2026-07-22（第二阶段完成统一 CLI 切换）
-- 范围：`.opencode/lib/`、`.opencode/scripts/`、`.opencode/skills/*/scripts/`
+- 范围：`.opencode/lib/`、`.opencode/scripts/`、`.agents/skills/*/scripts/`
 - 关联：[术语表](../glossary.md)
 - 实施方案：[核心工程实施计划](../core-refactor-plan.md)
 
 ## 背景
 
 当前 Python 实现分散在 `.opencode/lib/`、`.opencode/scripts/` 和各个
-`.opencode/skills/*/scripts/` 目录。大量模块通过修改 `sys.path` 互相调用，
+`.agents/skills/*/scripts/` 目录。大量模块通过修改 `sys.path` 互相调用，
 使通用 Python 能力依附于 OpenCode 和具体 Skill 的物理目录。
 
 现有 Skill 功能流本身不需要改造成 Python 工作流引擎。问题在于 Skill 调用的
@@ -19,7 +19,7 @@ Python 脚本不是项目级公共实现，因此 Codex 或其他 Agent 难以�
 ## 已确认决策
 
 项目将在仓库根级建立一个工程化、Agent 无关的 Python 核心工程。现有
-`.opencode/lib/`、`.opencode/scripts/` 和 `.opencode/skills/*/scripts/` 中的
+`.opencode/lib/`、`.opencode/scripts/` 和 `.agents/skills/*/scripts/` 中的
 Python 实现迁入该工程，并按照业务功能而不是 Skill 名称划分模块。
 
 现有 `.opencode` Skill 的功能、步骤、LLM 职责和 JSON 合同保持不变，所有 Python
@@ -84,7 +84,7 @@ Python 模块同时保留可导入 API，供单元测试和其他程序调用。
 迁移采用旁路建设，不对正在运行的 OpenCode 工作流做原地修改：
 
 1. 第一阶段只新增 `src/ashare_pilot/`、公共 CLI 及其测试。现有
-   `.opencode/lib/`、`.opencode/scripts/`、`.opencode/skills/*/scripts/`
+   `.opencode/lib/`、`.opencode/scripts/`、`.agents/skills/*/scripts/`
    和全部 Skill 内容保持原样，生产执行继续使用旧入口。
 2. 新核心工程通过约定的等价性验收后，在单一切换中把现有 Skill、批处理、配置
    和命令文档改为调用公共 CLI，并删除旧 Python、重复测试与主题数据副本。
@@ -279,7 +279,7 @@ CLI 适配层负责 JSON、CSV、文本和文件输出，并把业务异常映�
 
 - `.opencode/lib/**/*.py`；
 - `.opencode/scripts/*.py`；
-- `.opencode/skills/*/scripts/*.py`。
+- `.agents/skills/*/scripts/*.py`。
 
 第一阶段新测试写入根级 `tests/`；第二阶段删除旧目录内的重复测试。依赖旧实现的
 等价测试保留为验收证据，在旧基线不存在时明确跳过；新核心的独立测试继续执行。
@@ -339,7 +339,7 @@ Agent Skill 目录，也不隐式绑定 Python 源文件路径。
 
 ### 第二阶段 Skill 适配原则
 
-第二阶段获得明确授权后，修改 `.opencode/skills/` 下所有 Skill 对旧脚本的依赖，
+第二阶段获得明确授权后，修改 `.agents/skills/` 下所有 Skill 对旧脚本的依赖，
 统一使用新接口，并清理旧 Python、旧重复测试与主题数据副本。该切换已于
 2026-07-22 完成。
 

@@ -177,7 +177,7 @@ Run the following to confirm methods work. Open a Python REPL from the project r
 ```bash
 python -c "
 import sys
-sys.path.insert(0, r'.opencode/skills/stock-analysis/scripts')
+sys.path.insert(0, r'.agents/skills/stock-analysis/scripts')
 from datasources import EastMoneyDataSource
 ds = EastMoneyDataSource()
 concepts = ds.fetch_concept_list()
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 
 Run:
 ```bash
-cd .opencode/skills/stock-analysis/scripts
+cd .agents/skills/stock-analysis/scripts
 python fetch_concept.py
 ```
 
@@ -604,14 +604,14 @@ Open `AGENTS.md` and find the "### Stock Data Scripts" section. Add a new subsec
 ### Concept Sectors (概念板块)
 ```bash
 # List all concept sectors (~500+)
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --json
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --search "新" --top 20
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --csv -o concepts.csv
+python .agents/skills/stock-analysis/scripts/fetch_concept.py
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --json
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --search "新" --top 20
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --csv -o concepts.csv
 
 # Get stocks in a specific concept
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --code BK0486
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --name "元宇宙"
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --code BK0486
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --name "元宇宙"
 ```
 
 ```
@@ -635,22 +635,22 @@ From the project root, run each of the following and confirm expected behavior:
 
 ```bash
 # 1. List all concepts
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --top 5
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --top 5
 
 # 2. JSON output
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --json --top 3
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --json --top 3
 
 # 3. Search filter
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --search "AI"
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --search "AI"
 
 # 4. Fetch by code (use a real code from the list output)
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --code BK0486
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --code BK0486
 
 # 5. Fetch by name
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --name "元宇宙"
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --name "元宇宙"
 
 # 6. CSV output
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --csv --top 3 -o /tmp/test_concepts.csv
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --csv --top 3 -o /tmp/test_concepts.csv
 cat /tmp/test_concepts.csv
 ```
 
@@ -660,15 +660,15 @@ cat /tmp/test_concepts.csv
 
 ```bash
 # Invalid code
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --code BK99999
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --code BK99999
 echo "Exit code: $?"
 
 # Invalid name
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --name "不存在的概念"
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --name "不存在的概念"
 echo "Exit code: $?"
 
 # Conflicting flags
-python .opencode/skills/stock-analysis/scripts/fetch_concept.py --code BK0486 --name "test"
+python .agents/skills/stock-analysis/scripts/fetch_concept.py --code BK0486 --name "test"
 echo "Exit code: $?"
 ```
 
