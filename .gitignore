@@ -52,3 +52,8 @@ data/theme-library/stocks/
 data/theme-library/aliases/
 data/theme-library/index/
 data/theme-library/metadata/
+
+
+# debug
+update_cookie_debug.bat
+update_theme_stock_debug.bat
