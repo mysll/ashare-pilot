@@ -280,7 +280,7 @@ def test_compute_scores_sets_only_rank_tier_by_percentile():
 - [ ] **Step 2: Run test — expect FAIL on absolute-tier mismatch**
 
 ```bash
-cd E:\trading-office
+cd E:\ashare-pilot
 python -m pytest .opencode/skills/intraday-strategy/tests/test_score_overnight_convergence.py::test_compute_scores_sets_only_rank_tier_by_percentile -v
 ```
 

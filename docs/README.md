@@ -1,6 +1,6 @@
 # docs — 项目文档索引
 
-A-Share Pilot（当前仓库名 Trading Office）的纪要、设计与决策文档归档处。
+A-Share Pilot 项目的纪要、设计与决策文档归档处。
 新增文档时在下表登记一行。
 
 ## 纪要 / 设计

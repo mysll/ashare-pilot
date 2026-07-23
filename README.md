@@ -77,8 +77,8 @@ uv --version
 ## 3. 获取仓库并检查完整性
 
 ```bash
-git clone <repository-url> trading-office
-cd trading-office
+git clone <repository-url> ashare-pilot
+cd ashare-pilot
 ```
 
 Agent 必须确认以下受版本控制的入口存在：
@@ -109,7 +109,7 @@ data/theme-library/
 CLI 默认从当前目录向父目录查找工作区。若必须从仓库外运行，使用以下任一种方式：
 
 ```bash
-uv run --project /path/to/trading-office --frozen ashare-pilot --workspace /path/to/trading-office --version
+uv run --project /path/to/ashare-pilot --frozen ashare-pilot --workspace /path/to/ashare-pilot --version
 ```
 
 或者设置 `ASHARE_PILOT_WORKSPACE` 为仓库绝对路径。
