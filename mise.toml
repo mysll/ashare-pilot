@@ -60,6 +60,7 @@ opencode --version
 [tasks.auto]
 description = "启动 cron 守护进程（同 auto.sh）"
 run = "env -u VIRTUAL_ENV uv run --frozen ashare-pilot automation scheduler run"
+run_windows = "set \"VIRTUAL_ENV=\" && uv run --frozen ashare-pilot automation scheduler run"
 
 [tasks.update-cli]
 run = [
