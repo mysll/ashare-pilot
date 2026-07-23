@@ -13,6 +13,7 @@ __pycache__/
 *.egg-info/
 .eggs/
 .venv/
+.venv-windows/
 dist/
 build/
 logs/
