@@ -1,0 +1,16 @@
+{
+  "fixture_metadata": {
+    "source_date": "2026-07-21",
+    "legacy_command": "compute_theme_ranking.py compute_pool_enriched.json --json",
+    "scenario": "two stocks sharing one theme and one distinct theme",
+    "sensitive_fields_removed": true
+  },
+  "compute_pool": [
+    {"code":"sh600000","name":"样本银行","quick_score":90,"change_pct":"+2.00%","enriched":{"money_flow":{"main_net_inflow":"1.20"}}},
+    {"code":"sz000001","name":"样本股份","quick_score":80,"change_pct":"+1.00%","enriched":{"money_flow":{"main_net_inflow":"0.80"}}}
+  ],
+  "stock_themes": {
+    "sh600000":{"themes":[{"name":"共同主题"},{"name":"独立主题"}]},
+    "sz000001":{"themes":[{"name":"共同主题"}]}
+  }
+}

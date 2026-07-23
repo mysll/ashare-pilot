@@ -10,7 +10,7 @@ Aggregate multiple financial news sources into a structured news briefing.
 ## Quick Start
 
 ```bash
-python scripts/fetch_news.py
+uv run --frozen ashare-pilot news fetch
 ```
 
 By default, outputs Markdown format briefing to stdout. The daily workflow must
@@ -46,13 +46,13 @@ readable `news.md`.
 
 ```bash
 # Daily workflow output (required)
-python scripts/fetch_news.py --date 2026-07-10 --output-dir predict/2026-07-10
+uv run --frozen ashare-pilot news fetch --date 2026-07-10 --output-dir predict/2026-07-10
 
 # Get specific sources only
-python scripts/fetch_news.py -s flash finance
+uv run --frozen ashare-pilot news fetch -s flash finance
 
 # JSON format output
-python scripts/fetch_news.py -j -o news.json
+uv run --frozen ashare-pilot news fetch -j -o news.json
 ```
 
 ## Canonical JSON Contract

@@ -681,7 +681,7 @@ def compute_position_caps(
 `build_operation_decision.py` 输入：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py \
+uv run --frozen ashare-pilot operations decision build \
   --snapshot operation/2026-07-13/operation_snapshot_0940.json \
   --output operation/2026-07-13/operation_decision_0940.json
 ```
@@ -865,7 +865,7 @@ python .../validate_strategy_json.py predict/2026-07-13/strategy.json --require-
 生产命令：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date 2026-07-13 \
   --slot 09:35 \
   -o operation/2026-07-13/operation_snapshot_0935.json
@@ -874,7 +874,7 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapsho
 回放命令：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date 2026-07-10 \
   --slot 09:40 \
   --as-of 2026-07-10T09:40:05+08:00 \
@@ -1013,7 +1013,7 @@ valid_member_n < 3 → UNKNOWN
 CLI：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot validate \
   operation/2026-07-13/operation_snapshot_0940.json
 ```
 
@@ -1301,21 +1301,21 @@ feat: add theme breadth confirmation and replay fixtures
 ```bash
 /daily-market-analysis
 
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py \
+uv run --frozen ashare-pilot strategy daily validate \
   predict/2026-07-13/strategy.json --require-v2
 ```
 
 ### 09:35
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date 2026-07-13 --slot 09:35 \
   -o operation/2026-07-13/operation_snapshot_0935.json
 
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot validate \
   operation/2026-07-13/operation_snapshot_0935.json
 
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py \
+uv run --frozen ashare-pilot operations decision build \
   --snapshot operation/2026-07-13/operation_snapshot_0935.json \
   --output operation/2026-07-13/operation_decision_0935.json
 ```
@@ -1323,11 +1323,11 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_decisio
 ### 09:40
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date 2026-07-13 --slot 09:40 \
   -o operation/2026-07-13/operation_snapshot_0940.json
 
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py \
+uv run --frozen ashare-pilot operations decision validate \
   operation/2026-07-13/operation_decision_0940.json
 ```
 

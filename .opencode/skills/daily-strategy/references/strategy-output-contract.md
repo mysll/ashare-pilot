@@ -29,7 +29,7 @@
 `source.strategy_input_sha256` 必须是紧凑输入按 UTF-8、`sort_keys=true`、`separators=(",", ":")` canonical serialization 的 SHA-256。写草稿前运行下列命令取得精确值；旧草稿不可复用：
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/build_strategy_llm_input.py --hash-only predict/YYYY-MM-DD/.strategy_llm_input.json
+uv run --frozen ashare-pilot strategy daily build-llm-input --hash-only predict/YYYY-MM-DD/.strategy_llm_input.json
 ```
 
 ## Selected stock

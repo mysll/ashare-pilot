@@ -16,7 +16,7 @@
 固定统计命令:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py \
+uv run --frozen ashare-pilot review daily backtest-entry-band \
   --since 2026-07-09
 ```
 

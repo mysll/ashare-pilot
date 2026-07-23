@@ -1,6 +1,7 @@
 # docs — 项目文档索引
 
-Trading Office 的纪要、设计与决策文档归档处。新增文档时在下表登记一行。
+A-Share Pilot（当前仓库名 Trading Office）的纪要、设计与决策文档归档处。
+新增文档时在下表登记一行。
 
 ## 纪要 / 设计
 
@@ -11,6 +12,10 @@ Trading Office 的纪要、设计与决策文档归档处。新增文档时在�
 | [A股早盘推荐与二次确认系统开发实施文档](morning-recommendation-system-development.md) | 逐文件开发任务、函数设计、v1→v2 迁移、离线 fixture、测试命令、提交切片与实施顺序。 |
 | [A股早盘推荐系统操作手册](morning-recommendation-operation-runbook.md) | 交易日前检查、09:20盘前分析、09:35/09:40二次确认、人工执行纪律、T+1处理与异常降级。 |
 | [交易日多任务调度器 ADR](adr/0001-multi-task-trading-day-scheduler.md) | 四任务配置合同、交易日 fail-closed、串行排队、漏跑、失败、CLI 与日志决策。 |
+| [Agent 无关 Python 核心工程 ADR](adr/0002-agent-neutral-core-library.md) | A-Share Pilot 的包边界、CLI、旁路迁移、严格等价、配置数据和切换策略。 |
+| [Python 核心工程实施计划](core-refactor-plan.md) | 已完成的七批旁路建设、验收门槛和第二阶段统一 CLI 切换。 |
+| [Python 核心工程迁移映射](core-refactor-migration-map.md) | 旧 Python 入口到 `ashare-pilot` 新功能模块和 CLI 的完整映射。 |
+| [Python 核心工程最终验收矩阵](core-refactor-acceptance-matrix.md) | 68 个旧入口的正常、边界、失败、统一 CLI 和公共 API 验收状态。 |
 | [术语表](glossary.md) | 自动调度中的 T0、TP1、T+1、交易日、排队和漏跑等统一定义。 |
 
 ## 子目录
@@ -18,7 +23,7 @@ Trading Office 的纪要、设计与决策文档归档处。新增文档时在�
 | 目录 | 内容 |
 |------|------|
 | [superpowers/](superpowers/) | superpowers 框架文档(bug、plans、specs) |
-| [adr/](adr/) | 已接受的架构决策记录。 |
+| [adr/](adr/) | 架构决策记录。 |
 
 ---
 

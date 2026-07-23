@@ -44,7 +44,7 @@ Always use the deterministic lifecycle runner. Do not manually infer whether the
 request is an initial run, second confirmation, or recheck from the user's wording:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/run_operation_guide.py \
+uv run --frozen ashare-pilot operations guide run \
   --date {YYYY-MM-DD}
 ```
 
@@ -112,7 +112,7 @@ The runner validates the generated current snapshot and decision automatically.
 For manual diagnostics, validate the current projections with:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py operation/{YYYY-MM-DD}/operation_snapshot.latest.json
+uv run --frozen ashare-pilot operations snapshot validate operation/{YYYY-MM-DD}/operation_snapshot.latest.json
 ```
 
 Use `--portable` only when validating a moved archive whose referenced predecessor files
@@ -121,7 +121,7 @@ are intentionally absent. Live workflows always perform strict reference and has
 Then build and validate the deterministic decision contract:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py \
+uv run --frozen ashare-pilot operations decision validate \
   operation/{YYYY-MM-DD}/operation_decision.latest.json
 ```
 
@@ -170,7 +170,7 @@ stocks at C, `NARROW` caps at B, and a D stock cannot upgrade in a later slot.
 After the decision contract is validated, render the human board:
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/render_operation_guide_html.py \
+uv run --frozen ashare-pilot operations guide render \
   --date {YYYY-MM-DD} \
   --decision operation/{YYYY-MM-DD}/operation_decision.latest.json \
   --snapshot operation/{YYYY-MM-DD}/operation_snapshot.latest.json \
@@ -287,7 +287,7 @@ Use D when:
 ## Required Output Format
 
 Primary deliverable: `operation/{date}/operation_guide.html` via
-`render_operation_guide_html.py`.
+`uv run --frozen ashare-pilot operations guide render`.
 
 HTML sections (fixed by renderer):
 

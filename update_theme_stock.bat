@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul
+set "VIRTUAL_ENV="
 
 echo ============================================
 echo  Theme Library Update
@@ -14,7 +15,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/3] Fetching concept stocks (this may take a while)...
-python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py -q --reset
+uv run --frozen ashare-pilot themes concepts fetch-stocks -q --reset
 if %errorlevel% neq 0 (
     echo [!] Failed to fetch concept stocks. Aborting.
     pause
@@ -23,7 +24,7 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [3/3] Building theme library (v5)...
-python .opencode/skills/theme-library/scripts/build_library.py --clean
+uv run --frozen ashare-pilot themes library build --clean
 if %errorlevel% equ 0 (
     echo.
     echo [*] Theme library update complete.

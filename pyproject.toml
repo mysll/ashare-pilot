@@ -1,10 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
 [project]
-name = "trading-office"
-version = "0.1.0"
-description = "Add your description here"
+name = "ashare-pilot"
+version = "1.0.0"
+description = "Agent-neutral core for the A-Share Pilot trading decision system"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.34.2",
+    "tzdata>=2025.2; sys_platform == 'win32'",
     "websocket-client>=1.9.0",
 ]
+
+[project.scripts]
+ashare-pilot = "ashare_pilot.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3,<10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ashare_pilot"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.uv]
+link-mode = "copy"

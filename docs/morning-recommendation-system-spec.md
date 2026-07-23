@@ -3,7 +3,7 @@
 > 状态：Draft v1  
 > 日期：2026-07-11  
 > 适用范围：`daily-market-analysis`、`intraday-operation-guide`  
-> 交易范围：沪深 A 股普通股票，遵循项目 `.opencode/config/trading-scope.json`  
+> 交易范围：沪深 A 股普通股票，遵循项目 `config/trading-scope.json`
 > 核心约束：A 股新开仓按 T+1 管理，当日买入后不得依赖当日卖出止损
 
 ---
@@ -743,9 +743,9 @@ operation/{date}/execution_log.json
 建议：
 
 ```text
-.opencode/skills/daily-strategy/scripts/validate_strategy_json.py
-.opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py
-.opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py
+uv run --frozen ashare-pilot strategy daily validate
+uv run --frozen ashare-pilot operations snapshot validate
+uv run --frozen ashare-pilot operations decision validate
 ```
 
 验证内容包括：

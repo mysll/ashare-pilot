@@ -17,7 +17,7 @@ Loaded by the `sector-analyst` subagent as Step 2 of the daily-market-analysis p
 
 ## Scope
 
-Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do not hard-code board exclusions in generated artifacts or scripts; apply the config decision and record the matched rule/reason.
+Trading scope is config-driven — see `config/trading-scope.json`. Do not hard-code board exclusions in generated artifacts or scripts; apply the config decision and record the matched rule/reason.
 
 **Core Rule:** Theme Library is the ONLY valid source of themes and theme-stock mappings. Never invent themes, concepts, or stocks.
 
@@ -32,19 +32,19 @@ Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do
 | Symptom | Fix |
 |---------|-----|
 | Skipped `themes.json` validation | Validate `themes.json` before building the stock universe. |
-| Skipped deterministic `theme_stocks.json` publication | Run `prepare_daily_mapping.py`; do not hand-write membership or source flags. |
+| Skipped deterministic `theme_stocks.json` publication | Run `uv run --frozen ashare-pilot mapping daily prepare`; do not hand-write membership or source flags. |
 | Skipped `mapper.annotations.json` or `mapper.json` | Generate annotations, then run annotation validation, JSON build, and mapper validation before Step 3. |
 | Theme name not in Theme Library | Discard. Theme Library is the only source. |
 | Stock in pool but source not in {candidates, market, news_direct, lhb} | Remove. All stocks must be traceable. |
-| Scope-excluded stock entered `theme_stocks.json.stocks[]` | Move to `board_excluded[]` using `.opencode/config/trading-scope.json` matched rule/reason. |
+| Scope-excluded stock entered `theme_stocks.json.stocks[]` | Move to `board_excluded[]` using `config/trading-scope.json` matched rule/reason. |
 | LLM hand-wrote the complete `mapper.json` | Regenerate through the mapper JSON scripts; LLM should provide perception annotations, not own the full file contract. |
-| `build_theme_stocks_universe.py` skipped `themes.json` | Build from validated `themes.json`, then build base from the locked universe. |
+| `uv run --frozen ashare-pilot mapping daily build-theme-stock-universe` skipped `themes.json` | Build from validated `themes.json`, then build base from the locked universe. |
 | Step 2 produces Direction / RiskSeverity / OverrideHint | Violation (V5 Invariant 1). Step 2 is Perception only. |
 | Step 2 makes causal inference ("capital inflow drove rally") | Violation. Correlation OK; causation forbidden. |
 | Candidate Pool row missing `CompositeTrace` or confidence | Re-add. V5 audit trail is mandatory. |
 | `risk_flags` contains liquidity tokens | Remove. Liquidity hard-filter is handled separately. |
 | Stock with `fetch_failed: true` enters Candidate Pool | Move to Observation Pool, reason=`Indicators_Fetch_Failed`. |
-| `Strategy Inputs` numeric values differ from `pool_indicators.json` | Fix base inputs or annotations, then rerun `build_mapper_base.py`, `build_mapper_json.py`, and `validate_mapper_json.py`. |
+| `Strategy Inputs` numeric values differ from `pool_indicators.json` | Fix base inputs or annotations, then rerun `uv run --frozen ashare-pilot mapping daily build-mapper-base`, `uv run --frozen ashare-pilot mapping daily build-mapper`, and `uv run --frozen ashare-pilot mapping daily validate-mapper`. |
 
 ---
 
@@ -52,12 +52,12 @@ Trading scope is config-driven — see `.opencode/config/trading-scope.json`. Do
 
 **Objective:** Match news items to themes from Theme Library via retrieval, not generation.
 
-Run `build_theme_evidence_input.py`, then load only [references/theme-evidence-rubric.md](references/theme-evidence-rubric.md) for this LLM phase.
+Run `uv run --frozen ashare-pilot mapping daily build-theme-evidence`, then load only [references/theme-evidence-rubric.md](references/theme-evidence-rubric.md) for this LLM phase.
 
 ### Load Theme Universe
 
 ```bash
-python .opencode/skills/theme-library/scripts/query_theme.py list --json
+uv run --frozen ashare-pilot themes query list --json
 ```
 
 Theme Library is the ONLY valid theme source.
@@ -273,7 +273,7 @@ Use exactly one of these lowercase machine enums. Do not invent synonyms, mixed-
 | `neutral` | Background/routine theme with no actionable direction | ×0.8 |
 | `unknown` | Direction cannot be determined from cited evidence | ×0.8 |
 
-Validation rejects missing or non-whitelisted direction values. If you need a new direction, update `validate_themes_json.py`, this table, and downstream render labels together; do not add a one-off value in generated JSON.
+Validation rejects missing or non-whitelisted direction values. If you need a new direction, update `uv run --frozen ashare-pilot mapping daily validate-themes`, this table, and downstream render labels together; do not add a one-off value in generated JSON.
 
 ### Theme Extraction Constraints
 
@@ -293,7 +293,7 @@ Validation rejects missing or non-whitelisted direction values. If you need a ne
 
 ### Retrieve Candidate Stocks
 
-`build_theme_stocks_universe.py` reads validated `themes.json` and Theme Library JSON directly for the selected tradeable themes. The LLM writes theme decisions to JSON; it does not hand-build the stock pool table or pass theme lists as CLI text. `build_theme_stocks_base.py` only reads the locked universe plus refreshed indicators.
+`uv run --frozen ashare-pilot mapping daily build-theme-stock-universe` reads validated `themes.json` and Theme Library JSON directly for the selected tradeable themes. The LLM writes theme decisions to JSON; it does not hand-build the stock pool table or pass theme lists as CLI text. `uv run --frozen ashare-pilot mapping daily build-theme-stock-base` only reads the locked universe plus refreshed indicators.
 
 For supplemental stocks that are not already covered by the Theme Library candidate path, write one optional JSON file before building the universe:
 
@@ -323,7 +323,7 @@ Shape:
 
 Allowed `source` values are descriptive, not filtering authorities: `market_active`, `news_direct`, `lhb`, or `manual`. Scope and technical filters still apply in scripts.
 
-If using `query_theme.py market`, place selected active names in `theme_stocks.extra.json`; do not add more CLI stock parameters.
+If using `uv run --frozen ashare-pilot themes query market`, place selected active names in `theme_stocks.extra.json`; do not add more CLI stock parameters.
 
 The market view can provide evidence for extra stocks:
 
@@ -337,35 +337,35 @@ The market view can provide evidence for extra stocks:
 
 Scan `news.json.items` for explicitly mentioned A-share stocks (codes or names).
 Use `news.md` only for narrative context. For each selected supplemental stock:
-1. Resolve name → code via `fetch_stock.py --search` or LLM knowledge
+1. Resolve name → code via `uv run --frozen ashare-pilot market-data quote --search` or LLM knowledge
 2. Add it to `theme_stocks.extra.json` with `source = "news_direct"`, score = rough NewsImpact estimate
 3. Mark `news_direct: true`
 
 News-mentioned stocks skip theme-library constraints but NOT the board filter.
 
 ```bash
-python .opencode/lib/fetch/fetch_stock.py --search "Stock Name" --json
+uv run --frozen ashare-pilot market-data quote --search "Stock Name" --json
 ```
 
 ### Dragon & Tiger List Injection
 
 ```bash
-python .opencode/lib/fetch/fetch_special.py lhb --json
+uv run --frozen ashare-pilot market-data special lhb --json
 ```
 
 For each LHB stock (~50 records):
-1. Look up theme membership: `query_theme.py stock <code> --json`
+1. Look up theme membership: `uv run --frozen ashare-pilot themes query stock <code> --json`
 2. If the stock belongs to ANY selected tradeable theme → add to `theme_stocks.extra.json`
 3. Mark `source: lhb` with score: net buy > 0 = 85; limit-up = 90; limit-down = skip
 
 ### Supplement with Pure Stocks
 
-`build_theme_stocks_universe.py` already includes top pure stocks from Theme Library. Increase `--top-pure` only when the generated universe is too narrow.
+`uv run --frozen ashare-pilot mapping daily build-theme-stock-universe` already includes top pure stocks from Theme Library. Increase `--top-pure` only when the generated universe is too narrow.
 
 ### Deduplicate & Board Filter
 
 1. Merge `source_themes` lists, keep highest score across themes, record all theme associations
-2. Apply board filter from `.opencode/config/trading-scope.json`; use the matched config rule/reason, never hard-code excluded prefixes
+2. Apply board filter from `config/trading-scope.json`; use the matched config rule/reason, never hard-code excluded prefixes
 3. News-mentioned (`news_direct: true`) and LHB stocks bypass score-based dedup but NOT the board filter
 
 ### Stock Pool Constraints
@@ -386,7 +386,7 @@ For each LHB stock (~50 records):
 ### Fetch Data — Phase 1: Auction Snapshot
 
 ```bash
-python .opencode/lib/fetch/fetch_stock.py <code_1>,<code_2>,...,<code_N> --json
+uv run --frozen ashare-pilot market-data quote <code_1>,<code_2>,...,<code_N> --json
 ```
 
 Combine ALL pool stocks into ONE comma-separated call. During call auction (9:15-9:25), returns live auction data.
@@ -400,7 +400,7 @@ Combine ALL pool stocks into ONE comma-separated call. During call auction (9:15
 ### Fetch Data — Phase 2: Technical Indicators
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/fetch_pool_indicators.py <code_1>,<code_2>,...,<code_N> --json -o <output_file>
+uv run --frozen ashare-pilot indicators pool fetch <code_1>,<code_2>,...,<code_N> --json -o <output_file>
 ```
 
 **Timeout: 5 minutes** (fetch + compute across full pool). One call covers the entire pool. Output is a flat JSON array — 25 fields per stock across 3 layers (raw indicators, feature engineering, scoring). All numeric values are float/int.
@@ -432,7 +432,7 @@ When a factor's raw data is `None`: skip that factor's sub-score, renormalize re
 
 ### Scoring: tech_score
 
-Pre-computed by `fetch_pool_indicators.py`. Read directly; no recalculation needed.
+Pre-computed by `uv run --frozen ashare-pilot indicators pool fetch`. Read directly; no recalculation needed.
 
 ```
 tech_score = Traditional × 0.70 + Sentiment × 0.30
@@ -505,7 +505,7 @@ Risk markers only — **not auto-reject**. Step 2 classifies RiskType; RiskSever
 After the LLM writes and validates `themes.json`, run the prepare orchestration:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily prepare --date {YYYY-MM-DD}
 ```
 
 Prepare validates themes, batches selected-theme market views, generates source flags from actual Theme Library/news/market/LHB inputs, expands the universe, fetches indicators sequentially, publishes `theme_stocks.json`, and writes `.mapper_annotation_input.json`. Missing sources remain false. Intermediate files contain no translated source prose or `source_explanation`.
@@ -526,10 +526,10 @@ Additional fetches in this stage:
 
 ```bash
 # Industry money flow
-python .opencode/lib/fetch/fetch_money_flow.py --json
+uv run --frozen ashare-pilot market-data money-flow --json
 
 # Individual stock money flow (requires cookie)
-python .opencode/lib/fetch/fetch_money_flow.py --stock --json
+uv run --frozen ashare-pilot market-data money-flow --stock --json
 ```
 
 Money_Flow scoring:
@@ -782,20 +782,20 @@ Every deterministic candidate must appear exactly once and must include `news_re
 After prepare and writing `mapper.annotations.json`, run:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD}
 ```
 
-`prepare_daily_mapping.py` owns deterministic membership, source flags, sequential indicators, filters, and compact annotation targets. `finalize_daily_mapping.py` gates candidate coverage, builds the deterministic mapper base, overlays sparse semantics, validates the mapper, and writes the Step 3 view. Both update report-only `step2_timing.json`; diagnostic write failure does not invalidate trading contracts. An upstream stage refresh invalidates recorded downstream stages, and `total_recorded_seconds` is populated only when all four timed stages are artifact-linked within the same run.
+`uv run --frozen ashare-pilot mapping daily prepare` owns deterministic membership, source flags, sequential indicators, filters, and compact annotation targets. `uv run --frozen ashare-pilot mapping daily finalize` gates candidate coverage, builds the deterministic mapper base, overlays sparse semantics, validates the mapper, and writes the Step 3 view. Both update report-only `step2_timing.json`; diagnostic write failure does not invalidate trading contracts. An upstream stage refresh invalidates recorded downstream stages, and `total_recorded_seconds` is populated only when all four timed stages are artifact-linked within the same run.
 
 Market source flags use top-N `cross_rank_highlights` plus the full selected-theme threshold sets `threshold_attention` (`attention_score >= 80`) and `threshold_gainers` (`change_pct >= 3%`). Display top-N lists must never truncate threshold qualification.
 
-`prepare_daily_mapping.py` validates the in-memory `theme_stocks.json` contract before publishing it. `finalize_daily_mapping.py` revalidates its schema/date/technical projection, requires both input dates to equal `--date`, and treats extra non-candidate annotation rows as warning-and-skip rather than requiring candidate semantics.
+`uv run --frozen ashare-pilot mapping daily prepare` validates the in-memory `theme_stocks.json` contract before publishing it. `uv run --frozen ashare-pilot mapping daily finalize` revalidates its schema/date/technical projection, requires both input dates to equal `--date`, and treats extra non-candidate annotation rows as warning-and-skip rather than requiring candidate semantics.
 
 The workflow runner should also record both LLM stages so byte and wall-time changes remain visible:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py --date {YYYY-MM-DD} --stage theme_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.theme_evidence_input.json --output predict/{YYYY-MM-DD}/themes.json
-python .opencode/skills/daily-stock-mapping/scripts/build_step2_timing.py --date {YYYY-MM-DD} --stage mapper_annotation_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.mapper_annotation_input.json --output predict/{YYYY-MM-DD}/mapper.annotations.json
+uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage theme_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.theme_evidence_input.json --output predict/{YYYY-MM-DD}/themes.json
+uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage mapper_annotation_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.mapper_annotation_input.json --output predict/{YYYY-MM-DD}/mapper.annotations.json
 ```
 
 | Column | Source | Notes |
@@ -828,7 +828,7 @@ Validation rules:
 
 ### Board Exclusion Policy
 
-Config in `.opencode/config/trading-scope.json`:
+Config in `config/trading-scope.json`:
 
 ```json
 {
@@ -865,7 +865,7 @@ Step 3 **MUST NOT**:
 
 ## Step 2 → Step 3 Data Contract
 
-The **`candidate_pool[*].strategy_inputs` fields in mapper.json** are authoritative for: Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 after `validate_mapper_json.py` passes. Step 3 normally reads their projection at `mapper.strategy_view.json:candidates[*].strategy_inputs`.
+The **`candidate_pool[*].strategy_inputs` fields in mapper.json** are authoritative for: Price, PriceSource, MA20, MA5, ATR, ATR%, High20, Low20 after `uv run --frozen ashare-pilot mapping daily validate-mapper` passes. Step 3 normally reads their projection at `mapper.strategy_view.json:candidates[*].strategy_inputs`.
 
 **Default: no re-fetch.** Step 3 loads `mapper.strategy_view.json` Strategy Inputs and proceeds. Re-fetch from API only if: field is missing (N/A, null, empty), field is invalid (negative, zero where nonsensical), or stale data detected.
 

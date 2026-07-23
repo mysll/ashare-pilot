@@ -1,0 +1,15 @@
+{
+  "schema_version": "daily_verification.v1",
+  "date": "2026-07-11",
+  "market": {"regime_hint": "weak"},
+  "stocks": [
+    {
+      "code": "sh600000",
+      "strategy": "回调布局",
+      "shadow_bands": {
+        "MA5_ZONE": {"enabled": true, "touched": false, "avoided_loss_pct": 2.5},
+        "OPEN_CONFIRM": {"enabled": true, "touched": true, "hold_pct": -1.0, "mae_pct": -2.0}
+      }
+    }
+  ]
+}

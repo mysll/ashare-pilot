@@ -1,6 +1,6 @@
 # Mapper semantic phase
 
-Load only after `prepare_daily_mapping.py` writes `.mapper_annotation_input.json`.
+Load only after `uv run --frozen ashare-pilot mapping daily prepare` writes `.mapper_annotation_input.json`.
 
 - Emit every target candidate code exactly once.
 - Use each candidate's `source_themes`, `direct_news_refs`, and `theme_news_refs` to select only matching rows from top-level `news_evidence`.

@@ -2,8 +2,9 @@
 
 - 状态：Accepted
 - 日期：2026-07-21
-- 范围：`.opencode/scripts/cron-daemon.py`、`.opencode/config/cron-tasks.json`
-- 关联：`.opencode/config/trading-calendar.json`、`auto.bat`
+- 修订：2026-07-22（切换到 A-Share Pilot 公共 CLI）
+- 范围：`ashare_pilot.automation`、`config/cron-tasks.json`
+- 关联：`config/trading-calendar.json`、`auto.bat`
 
 ## 背景
 
@@ -18,7 +19,7 @@
 
 ### 配置合同
 
-调度器启动时一次性加载 `.opencode/config/cron-tasks.json`。配置使用
+调度器启动时一次性加载 `config/cron-tasks.json`。配置使用
 `cron_tasks.v1` JSON 合同，包含交易日历路径、全局默认值和有序任务列表。
 
 每个任务包含：
@@ -54,7 +55,7 @@ opencode run "/intraday-review 2026-07-20" ...
 个实际任务，因此同一已知年份内尚未执行的任务不会被更远期的缺年问题阻断。
 
 当全局下一任务落入日历未配置的年份时，调度器报错退出，并要求先补充
-`.opencode/config/trading-calendar.json`。调度层不采用“未知年份退化为普通
+`config/trading-calendar.json`。调度层不采用“未知年份退化为普通
 工作日”的策略。
 
 ### 排队、漏跑和失败
@@ -70,10 +71,10 @@ opencode run "/intraday-review 2026-07-20" ...
 ### CLI
 
 ```bash
-python .opencode/scripts/cron-daemon.py
-python .opencode/scripts/cron-daemon.py --config path/to/tasks.json
-python .opencode/scripts/cron-daemon.py --dry-run
-python .opencode/scripts/cron-daemon.py --once daily-analysis
+uv run --frozen ashare-pilot automation scheduler run
+uv run --frozen ashare-pilot automation scheduler run --config path/to/tasks.json
+uv run --frozen ashare-pilot automation scheduler run --dry-run
+uv run --frozen ashare-pilot automation scheduler run --once daily-analysis
 ```
 
 `--once TASK_ID` 仍受启用状态、交易日和日期策略约束。旧的 `--cron`、
@@ -81,8 +82,8 @@ python .opencode/scripts/cron-daemon.py --once daily-analysis
 
 ### 日志
 
-- `.opencode/logs/cron-daemon.log` 只保存调度事件。
-- `.opencode/logs/cron-tasks/{YYYY-MM-DD}/{task-id}.log` 保存任务的完整
+- `logs/cron-daemon.log` 只保存调度事件。
+- `logs/cron-tasks/{YYYY-MM-DD}/{task-id}.log` 保存任务的完整
   stdout/stderr；同日手动再次执行时追加。
 
 ## 结果与权衡
@@ -97,6 +98,6 @@ python .opencode/scripts/cron-daemon.py --once daily-analysis
 ## 验证
 
 ```bash
-python -m unittest discover -s .opencode/scripts/tests -p "test_cron_daemon.py" -v
-python .opencode/scripts/cron-daemon.py --dry-run
+pytest tests/unit/test_batch7_scheduler.py tests/equivalence/test_batch7_automation.py
+uv run --frozen ashare-pilot automation scheduler run --dry-run
 ```

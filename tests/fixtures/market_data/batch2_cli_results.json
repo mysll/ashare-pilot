@@ -1,0 +1,29 @@
+{
+  "fixture_metadata": {
+    "source_date": "2026-07-21",
+    "legacy_commands": [
+      "fetch_stock.py",
+      "fetch_history.py",
+      "fetch_all_astocks.py",
+      "fetch_market_breadth.py",
+      "fetch_money_flow.py",
+      "fetch_board_money_flow.py",
+      "fetch_special.py",
+      "fetch_concept_ranking.py",
+      "fetch_turnover_ranking.py",
+      "fetch_limit_up_pool.py"
+    ],
+    "scenario": "minimal successful normalized responses",
+    "sensitive_fields_removed": true
+  },
+  "quote": [{"code": "sh600000", "name": "样本银行", "price": "10.10", "source": "fixture"}],
+  "history": [{"date": "2026-07-20", "open": "10.00", "close": "10.10"}],
+  "stocks_all": [{"code": "sh600000", "name": "样本银行", "percent": "+1.00%", "updown": "+0.10", "source": "fixture"}],
+  "breadth": {"total": 3, "up_count": 2, "down_count": 1, "flat_count": 0, "up_ratio": 66.67, "limit_up_count": 1, "limit_down_count": 0, "avg_change": null, "timestamp": "2026-07-21 14:30:00"},
+  "money_flow": [{"code": "BK0001", "industry": "样本行业", "net_inflow": "1.23", "source": "fixture"}],
+  "board_money_flow": [{"code": "BK0002", "name": "样本概念", "value": "2.34", "field": "f174", "board_type": "concept"}],
+  "special": [{"date": "2026-07-21", "code": "600000", "name": "样本银行", "net_buy": "0.50"}],
+  "concept_ranking": [{"code": "BK0002", "name": "样本概念", "change_pct": "+2.00%"}],
+  "turnover_ranking": [{"code": "sh600000", "name": "样本银行", "amount": "1.00亿"}],
+  "limit_up_pool": [{"code": "sz000001", "name": "样本股份", "change_pct": "+10.00%"}]
+}

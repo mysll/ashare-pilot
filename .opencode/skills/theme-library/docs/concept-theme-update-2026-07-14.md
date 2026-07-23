@@ -143,7 +143,7 @@ coverage_pct = stock_matched_weight / total_theme_weight × 100
 
 ## 5. `theme_config.json` 具体改法（Batch 1）
 
-文件: `.opencode/skills/theme-library/scripts/theme_config.json`
+文件: `config/themes/theme-config.json`
 
 concept 名称必须以 `cache/concepts.json` / `cache/stocks` 为准（注意全角括号：`AI制药（医疗）`）。
 
@@ -204,31 +204,31 @@ concept 名称必须以 `cache/concepts.json` / `cache/stocks` 为准（注意�
 ```bash
 # 0. 改配置前：将四个主题基线 JSON 复制到生成目录之外，仅用于 diff
 mkdir -p .cache/theme-library/baseline-2026-07-14
-cp -n .opencode/skills/theme-library/themes/{AI应用,创新药,数字经济,房地产基建}.json \
+cp -n data/theme-library/themes/{AI应用,创新药,数字经济,房地产基建}.json \
   .cache/theme-library/baseline-2026-07-14/
 
 # 1. 按 §5 编辑 theme_config.json
 
 # 2. 仅当需要刷新本批相关成分时（默认跳过已有缓存）:
-# python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py --concept BK1172
-# python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py --concept BK1170
-# python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py --concept BK1176
-# python .opencode/skills/theme-library/scripts/fetch_concept_stocks.py --concept BK1179
+# uv run --frozen ashare-pilot themes concepts fetch-stocks --concept BK1172
+# uv run --frozen ashare-pilot themes concepts fetch-stocks --concept BK1170
+# uv run --frozen ashare-pilot themes concepts fetch-stocks --concept BK1176
+# uv run --frozen ashare-pilot themes concepts fetch-stocks --concept BK1179
 # 全量重拉才用 --reset（本批通常不需要）
 
 # 3. 重建库
-python .opencode/skills/theme-library/scripts/build_library.py
+uv run --frozen ashare-pilot themes library build
 
 # 4. 查询校验
-python .opencode/skills/theme-library/scripts/query_theme.py concept AI语料
-python .opencode/skills/theme-library/scripts/query_theme.py concept "AI制药（医疗）"
-python .opencode/skills/theme-library/scripts/query_theme.py concept 财税数字化
-python .opencode/skills/theme-library/scripts/query_theme.py concept 房屋检测
-python .opencode/skills/theme-library/scripts/query_theme.py theme AI应用 --json
-python .opencode/skills/theme-library/scripts/query_theme.py theme 创新药 --json
-python .opencode/skills/theme-library/scripts/query_theme.py theme 数字经济 --json
-python .opencode/skills/theme-library/scripts/query_theme.py theme 房地产基建 --json
-python .opencode/skills/theme-library/scripts/query_theme.py stats
+uv run --frozen ashare-pilot themes query concept AI语料
+uv run --frozen ashare-pilot themes query concept "AI制药（医疗）"
+uv run --frozen ashare-pilot themes query concept 财税数字化
+uv run --frozen ashare-pilot themes query concept 房屋检测
+uv run --frozen ashare-pilot themes query theme AI应用 --json
+uv run --frozen ashare-pilot themes query theme 创新药 --json
+uv run --frozen ashare-pilot themes query theme 数字经济 --json
+uv run --frozen ashare-pilot themes query theme 房地产基建 --json
+uv run --frozen ashare-pilot themes query stats
 
 # 5. 静态校验：所有已映射 concept 必须存在于实际成分缓存
 python - <<'PY'
@@ -257,7 +257,7 @@ if missing:
 PY
 ```
 
-说明：`query_theme.py concept <name>` 只验证 concept 文件存在及成分数据正常，当前不会显示所属主题。主题归属应通过对应 `theme <name> --json` 输出中的 `concepts` 字段，或 `index/theme_to_concept.json` 验证。基线复制使用 `cp -n`，避免重复执行时用 build 后文件覆盖 build 前快照。
+说明：`uv run --frozen ashare-pilot themes query concept <name>` 只验证 concept 文件存在及成分数据正常，当前不会显示所属主题。主题归属应通过对应 `theme <name> --json` 输出中的 `concepts` 字段，或 `index/theme_to_concept.json` 验证。基线复制使用 `cp -n`，避免重复执行时用 build 后文件覆盖 build 前快照。
 
 ### 6.1 验收标准
 
@@ -286,9 +286,9 @@ PY
 | 双挂抬高 stock 权重 | AI制药 单挂创新药 |
 | 过宽 concept 稀释纯度 | 人工智能/一带一路/反内卷/零售/小米本批不进 |
 | 知识库含交易范围外股票 | 下游过滤；不在主题库层强删成分 |
-| rebuild 耗时 | 仅 `build_library.py`；按需 `--concept` 刷新成分 |
+| rebuild 耗时 | 仅 `uv run --frozen ashare-pilot themes library build`；按需 `--concept` 刷新成分 |
 
-**回滚**: 还原 `theme_config.json`，然后完整执行 `build_library.py`。基线 theme JSON 只用于 diff，不能单独恢复；否则会与 `stocks/*.json`、索引和 metadata 等派生文件不一致。
+**回滚**: 还原 `theme_config.json`，然后完整执行 `uv run --frozen ashare-pilot themes library build`。基线 theme JSON 只用于 diff，不能单独恢复；否则会与 `stocks/*.json`、索引和 metadata 等派生文件不一致。
 
 ---
 

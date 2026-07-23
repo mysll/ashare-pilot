@@ -14,31 +14,32 @@ description: >
 
 Fetch real-time and historical stock data from Chinese financial APIs.
 
-Scripts live in `.opencode/lib/fetch/` (shared) and the data source classes are in `.opencode/lib/datasources/`.
+Run the project CLI through `uv run --frozen ashare-pilot`. Importable data access APIs live in
+`ashare_pilot.market_data` and indicator APIs in `ashare_pilot.indicators`.
 
 ## Quick Start
 
 ### Real-time Data
 
 ```bash
-python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001
-python .opencode/lib/fetch/fetch_stock.py hk00700,usr_nvda --json
-python .opencode/lib/fetch/fetch_stock.py sh600519 --csv -o output.csv   # Save as CSV
-python .opencode/lib/fetch/fetch_stock.py --search "茅台"
-python .opencode/lib/fetch/fetch_stock.py sh600519 -o output.txt           # Save to file
-python .opencode/lib/fetch/fetch_stock.py sh600519 --json -o output.json   # Save as JSON
+uv run --frozen ashare-pilot market-data quote sh000001,sz399001
+uv run --frozen ashare-pilot market-data quote hk00700,usr_nvda --json
+uv run --frozen ashare-pilot market-data quote sh600519 --csv -o output.csv   # Save as CSV
+uv run --frozen ashare-pilot market-data quote --search "茅台"
+uv run --frozen ashare-pilot market-data quote sh600519 -o output.txt           # Save to file
+uv run --frozen ashare-pilot market-data quote sh600519 --json -o output.json   # Save as JSON
 ```
 
 ### Intraday K-line (Minute Data)
 
 ```bash
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday              # Today's 5-min K-line
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --scale 1    # Today's 1-min K-line
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --scale 15   # Today's 15-min K-line
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --days 3     # Last 3 days, 5-min K-line
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --days 5 --scale 1  # Last 5 days, 1-min K-line
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --json       # JSON output
-python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --csv        # CSV output
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday              # Today's 5-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --scale 1    # Today's 1-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --scale 15   # Today's 15-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --days 3     # Last 3 days, 5-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --days 5 --scale 1  # Last 5 days, 1-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --json       # JSON output
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --csv        # CSV output
 ```
 
 **Intraday Parameters:**
@@ -57,12 +58,12 @@ python .opencode/lib/fetch/fetch_stock.py sh600519 --intraday --csv        # CSV
 ### All A Stocks (Bulk Data)
 
 ```bash
-python .opencode/lib/fetch/fetch_all_astocks.py                  # Summary output
-python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.csv    # Save as CSV (default)
-python .opencode/lib/fetch/fetch_all_astocks.py -o stocks.json --json-output  # Save as JSON
-python .opencode/lib/fetch/fetch_all_astocks.py --json           # Print JSON to stdout
-python .opencode/lib/fetch/fetch_all_astocks.py --source sina    # Force Sina source
-python .opencode/lib/fetch/fetch_all_astocks.py --source eastmoney  # Eastmoney source (has volume_ratio)
+uv run --frozen ashare-pilot market-data stocks all                  # Summary output
+uv run --frozen ashare-pilot market-data stocks all -o stocks.csv    # Save as CSV (default)
+uv run --frozen ashare-pilot market-data stocks all -o stocks.json --json-output  # Save as JSON
+uv run --frozen ashare-pilot market-data stocks all --json           # Print JSON to stdout
+uv run --frozen ashare-pilot market-data stocks all --source sina    # Force Sina source
+uv run --frozen ashare-pilot market-data stocks all --source eastmoney  # Eastmoney source (has volume_ratio)
 ```
 
 **Parameters:**
@@ -76,15 +77,15 @@ Returns ~5500 A stocks with: code, name, price, yestclose, updown, percent, high
 ### Historical Data (A stocks only)
 
 ```bash
-python .opencode/lib/fetch/fetch_history.py sh600519                  # Last 3 months
-python .opencode/lib/fetch/fetch_history.py sh600519 --range 5d       # Last 5 calendar days
-python .opencode/lib/fetch/fetch_history.py sz000001 --range 1m       # Last 1 month
-python .opencode/lib/fetch/fetch_history.py sh600519 --range 1y --json
-python .opencode/lib/fetch/fetch_history.py sh600519 --csv
-python .opencode/lib/fetch/fetch_history.py sh600519 --start 20260101 --end 20260331
-python .opencode/lib/fetch/fetch_history.py sh600519 -o output.txt    # Save to file
-python .opencode/lib/fetch/fetch_history.py sh600519 --json -o output.json   # Save as JSON
-python .opencode/lib/fetch/fetch_history.py sh600519 --csv -o output.csv     # Save as CSV
+uv run --frozen ashare-pilot market-data history sh600519                  # Last 3 months
+uv run --frozen ashare-pilot market-data history sh600519 --range 5d       # Last 5 calendar days
+uv run --frozen ashare-pilot market-data history sz000001 --range 1m       # Last 1 month
+uv run --frozen ashare-pilot market-data history sh600519 --range 1y --json
+uv run --frozen ashare-pilot market-data history sh600519 --csv
+uv run --frozen ashare-pilot market-data history sh600519 --start 20260101 --end 20260331
+uv run --frozen ashare-pilot market-data history sh600519 -o output.txt    # Save to file
+uv run --frozen ashare-pilot market-data history sh600519 --json -o output.json   # Save as JSON
+uv run --frozen ashare-pilot market-data history sh600519 --csv -o output.csv     # Save as CSV
 ```
 
 `--range` accepts any positive integer followed by `d`, `w`, `m`, or `y`
@@ -93,16 +94,16 @@ python .opencode/lib/fetch/fetch_history.py sh600519 --csv -o output.csv     # S
 ### Technical Indicators (A stocks only)
 
 ```bash
-python .opencode/lib/fetch/fetch_indicators.py sh600519                  # Default indicators (SMA, MACD, RSI, Bollinger)
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --range 5d       # Last 5 calendar days
-python .opencode/lib/fetch/fetch_indicators.py sz000001 --range 6m       # Last 6 months
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --indicators rsi,macd,close_50_sma
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --json           # JSON output
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --csv            # CSV output
-python .opencode/lib/fetch/fetch_indicators.py --list                    # List available indicators
-python .opencode/lib/fetch/fetch_indicators.py sh600519 -o output.txt    # Save to file
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --json -o output.json   # Save as JSON
-python .opencode/lib/fetch/fetch_indicators.py sh600519 --csv -o output.csv     # Save as CSV
+uv run --frozen ashare-pilot indicators calculate sh600519                  # Default indicators (SMA, MACD, RSI, Bollinger)
+uv run --frozen ashare-pilot indicators calculate sh600519 --range 5d       # Last 5 calendar days
+uv run --frozen ashare-pilot indicators calculate sz000001 --range 6m       # Last 6 months
+uv run --frozen ashare-pilot indicators calculate sh600519 --indicators rsi,macd,close_50_sma
+uv run --frozen ashare-pilot indicators calculate sh600519 --json           # JSON output
+uv run --frozen ashare-pilot indicators calculate sh600519 --csv            # CSV output
+uv run --frozen ashare-pilot indicators calculate --list                    # List available indicators
+uv run --frozen ashare-pilot indicators calculate sh600519 -o output.txt    # Save to file
+uv run --frozen ashare-pilot indicators calculate sh600519 --json -o output.json   # Save as JSON
+uv run --frozen ashare-pilot indicators calculate sh600519 --csv -o output.csv     # Save as CSV
 ```
 
 **Available Indicators:**
@@ -124,74 +125,74 @@ python .opencode/lib/fetch/fetch_indicators.py sh600519 --csv -o output.csv     
 ### Dragon and Tiger List (龙虎榜)
 
 ```bash
-python .opencode/lib/fetch/fetch_special.py lhb                        # Latest data
-python .opencode/lib/fetch/fetch_special.py lhb --date 2026-03-31      # Specific date
-python .opencode/lib/fetch/fetch_special.py lhb --code 600519          # Specific stock
-python .opencode/lib/fetch/fetch_special.py lhb --json                 # JSON output
-python .opencode/lib/fetch/fetch_special.py lhb -o output.txt          # Save to file
-python .opencode/lib/fetch/fetch_special.py lhb --json -o output.json  # Save as JSON
+uv run --frozen ashare-pilot market-data special lhb                        # Latest data
+uv run --frozen ashare-pilot market-data special lhb --date 2026-03-31      # Specific date
+uv run --frozen ashare-pilot market-data special lhb --code 600519          # Specific stock
+uv run --frozen ashare-pilot market-data special lhb --json                 # JSON output
+uv run --frozen ashare-pilot market-data special lhb -o output.txt          # Save to file
+uv run --frozen ashare-pilot market-data special lhb --json -o output.json  # Save as JSON
 ```
 
 ### Margin Trading (融资融券)
 
 ```bash
-python .opencode/lib/fetch/fetch_special.py rzye                       # Market overview
-python .opencode/lib/fetch/fetch_special.py rzye --top 20              # Top 20 records
-python .opencode/lib/fetch/fetch_special.py rzye --json                # JSON output
-python .opencode/lib/fetch/fetch_special.py rzye -o output.txt         # Save to file
-python .opencode/lib/fetch/fetch_special.py rzye --json -o output.json # Save as JSON
+uv run --frozen ashare-pilot market-data special rzye                       # Market overview
+uv run --frozen ashare-pilot market-data special rzye --top 20              # Top 20 records
+uv run --frozen ashare-pilot market-data special rzye --json                # JSON output
+uv run --frozen ashare-pilot market-data special rzye -o output.txt         # Save to file
+uv run --frozen ashare-pilot market-data special rzye --json -o output.json # Save as JSON
 ```
 
 ### Money Flow (资金流向)
 
 ```bash
 # Industry money flow (行业资金流向)
-python .opencode/lib/fetch/fetch_money_flow.py                  # Top 50 industries (default)
-python .opencode/lib/fetch/fetch_money_flow.py --top 20         # Top 20 industries
-python .opencode/lib/fetch/fetch_money_flow.py --json           # JSON output
-python .opencode/lib/fetch/fetch_money_flow.py --csv            # CSV output
-python .opencode/lib/fetch/fetch_money_flow.py -o flow.csv      # Save as CSV
+uv run --frozen ashare-pilot market-data money-flow                  # Top 50 industries (default)
+uv run --frozen ashare-pilot market-data money-flow --top 20         # Top 20 industries
+uv run --frozen ashare-pilot market-data money-flow --json           # JSON output
+uv run --frozen ashare-pilot market-data money-flow --csv            # CSV output
+uv run --frozen ashare-pilot market-data money-flow -o flow.csv      # Save as CSV
 
 # Individual stock money flow (个股资金流向)
-python .opencode/lib/fetch/fetch_money_flow.py --stock          # Top 50 stocks (default)
-python .opencode/lib/fetch/fetch_money_flow.py --stock --top 20 # Top 20 stocks
-python .opencode/lib/fetch/fetch_money_flow.py --stock --json   # JSON output
-python .opencode/lib/fetch/fetch_money_flow.py --stock --csv    # CSV output
+uv run --frozen ashare-pilot market-data money-flow --stock          # Top 50 stocks (default)
+uv run --frozen ashare-pilot market-data money-flow --stock --top 20 # Top 20 stocks
+uv run --frozen ashare-pilot market-data money-flow --stock --json   # JSON output
+uv run --frozen ashare-pilot market-data money-flow --stock --csv    # CSV output
 
 # Use custom cookie file
-python .opencode/lib/fetch/fetch_money_flow.py --stock --cookie /path/to/.cookie
+uv run --frozen ashare-pilot market-data money-flow --stock --cookie /path/to/.cookie
 ```
 
 ### Concept Ranking (概念板块排行)
 
 ```bash
-python .opencode/lib/fetch/fetch_concept_ranking.py --top 20 --json
+uv run --frozen ashare-pilot market-data ranking concepts --top 20 --json
 ```
 
 ### Limit-Up Pool (涨停池)
 
 ```bash
-python .opencode/lib/fetch/fetch_limit_up_pool.py --top 20 --json
+uv run --frozen ashare-pilot market-data pool limit-up --top 20 --json
 ```
 
 ### Turnover Ranking (换手率排行)
 
 ```bash
-python .opencode/lib/fetch/fetch_turnover_ranking.py --top 20 --json
+uv run --frozen ashare-pilot market-data ranking turnover --top 20 --json
 ```
 
 ### Market Breadth (市场宽度)
 
 ```bash
-python .opencode/lib/fetch/fetch_market_breadth.py --json
-python .opencode/lib/fetch/fetch_market_breadth.py --cache-dir intraday/2026-06-30 --json
+uv run --frozen ashare-pilot market-data breadth --json
+uv run --frozen ashare-pilot market-data breadth --cache-dir intraday/2026-06-30 --json
 ```
 
 ### Board Money Flow (板块资金流向)
 
 ```bash
-python .opencode/lib/fetch/fetch_board_money_flow.py concept --json
-python .opencode/lib/fetch/fetch_board_money_flow.py industry --top 20 --json
+uv run --frozen ashare-pilot market-data money-flow board concept --json
+uv run --frozen ashare-pilot market-data money-flow board industry --top 20 --json
 ```
 
 ## Stock Code Format
@@ -206,23 +207,23 @@ python .opencode/lib/fetch/fetch_board_money_flow.py industry --top 20 --json
 | Domestic Future    | `nf_`  | `nf_IF0`   |
 | Oversea Future     | `hf_`  | `hf_OIL`   |
 
-## Scripts (`.opencode/lib/fetch/`)
+## Commands
 
 | Script               | Purpose                          | Markets          |
 | -------------------- | -------------------------------- | ---------------- |
-| `fetch_stock.py`     | Real-time quotes & intraday K-line | All (intraday: A only) |
-| `fetch_all_astocks.py` | Bulk real-time data (~5500 stocks) | A stocks      |
-| `fetch_history.py`   | Historical daily K-line (前复权) | A stocks (sh/sz) |
-| `fetch_indicators.py`| Technical indicators analysis    | A stocks (sh/sz) |
-| `fetch_special.py`   | 龙虎榜 & 融资融券                | A stocks         |
-| `fetch_money_flow.py`| Money flow (行业/个股资金流向) | All industries/stocks |
-| `fetch_concept_ranking.py` | Concept board ranking       | A stocks         |
-| `fetch_limit_up_pool.py`   | Limit-up stock pool         | A stocks         |
-| `fetch_turnover_ranking.py`| Turnover rate ranking       | A stocks         |
-| `fetch_market_breadth.py`  | Market breadth statistics   | A stocks         |
-| `fetch_board_money_flow.py`| Board-level money flow      | A stocks         |
+| `uv run --frozen ashare-pilot market-data quote`     | Real-time quotes & intraday K-line | All (intraday: A only) |
+| `uv run --frozen ashare-pilot market-data stocks all` | Bulk real-time data (~5500 stocks) | A stocks      |
+| `uv run --frozen ashare-pilot market-data history`   | Historical daily K-line (前复权) | A stocks (sh/sz) |
+| `uv run --frozen ashare-pilot indicators calculate`| Technical indicators analysis    | A stocks (sh/sz) |
+| `uv run --frozen ashare-pilot market-data special`   | 龙虎榜 & 融资融券                | A stocks         |
+| `uv run --frozen ashare-pilot market-data money-flow`| Money flow (行业/个股资金流向) | All industries/stocks |
+| `uv run --frozen ashare-pilot market-data ranking concepts` | Concept board ranking       | A stocks         |
+| `uv run --frozen ashare-pilot market-data pool limit-up`   | Limit-up stock pool         | A stocks         |
+| `uv run --frozen ashare-pilot market-data ranking turnover`| Turnover rate ranking       | A stocks         |
+| `uv run --frozen ashare-pilot market-data breadth`  | Market breadth statistics   | A stocks         |
+| `uv run --frozen ashare-pilot market-data money-flow board`| Board-level money flow      | A stocks         |
 
-## Data Source Classes (`.opencode/lib/datasources/`)
+## Public Python APIs
 
 | Class | Source |
 | ----- | ------ |
@@ -232,10 +233,10 @@ python .opencode/lib/fetch/fetch_board_money_flow.py industry --top 20 --json
 | `EastMoneyDataSource` | East Money (money flow, dragon/tiger, margin, board flow) |
 | `EastMoneyIntradayDataSource` | East Money (intraday ranking, concept ranking, breadth, etc.) |
 
-Import from any script:
+Import from any Python caller:
 ```python
-sys.path.insert(0, str(Path(__file__).resolve()...))  # point to .opencode/
-from lib.datasources import EastMoneyIntradayDataSource
+from ashare_pilot.market_data import fetch_history, fetch_quotes
+from ashare_pilot.indicators import calculate_indicators
 ```
 
 ## Output Fields

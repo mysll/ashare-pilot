@@ -46,7 +46,7 @@
 ### 2.2 检查自动调度
 
 ```bash
-python .opencode/scripts/cron-daemon.py --dry-run
+uv run --frozen ashare-pilot automation scheduler run --dry-run
 ```
 
 如果没有自动运行计划，当天需要手动启动盘前工作流。
@@ -96,21 +96,21 @@ predict/{date}/daily_report.html
 ### 4.1 校验策略
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py \
+uv run --frozen ashare-pilot strategy daily validate \
   predict/{date}/strategy.json --require-v2
 ```
 
 示例：
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py \
+uv run --frozen ashare-pilot strategy daily validate \
   predict/2026-07-13/strategy.json --require-v2
 ```
 
 ### 4.2 校验mapper
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/validate_mapper_json.py \
+uv run --frozen ashare-pilot mapping daily validate-mapper \
   --date {date}
 ```
 
@@ -167,7 +167,7 @@ test -f predict/{date}/daily_report.html
 必须在09:35:05之后运行：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date {date} \
   --slot 09:35 \
   --write-latest \
@@ -177,14 +177,14 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapsho
 ### 6.3 校验快照
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot validate \
   operation/{date}/operation_snapshot_0935.json
 ```
 
 ### 6.4 构建机器决策
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py \
+uv run --frozen ashare-pilot operations decision build \
   --snapshot operation/{date}/operation_snapshot_0935.json \
   -o operation/{date}/operation_decision_0935.json
 ```
@@ -192,7 +192,7 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_decisio
 ### 6.5 校验机器决策
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py \
+uv run --frozen ashare-pilot operations decision validate \
   operation/{date}/operation_decision_0935.json
 ```
 
@@ -244,7 +244,7 @@ t1_controls
 必须在09:40:05之后运行：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date {date} \
   --slot 09:40 \
   --write-latest \
@@ -255,14 +255,14 @@ python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapsho
 ### 7.3 校验和生成决策
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot validate \
   operation/{date}/operation_snapshot_0940.json
 
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_decision.py \
+uv run --frozen ashare-pilot operations decision build \
   --snapshot operation/{date}/operation_snapshot_0940.json \
   -o operation/{date}/operation_decision_0940.json
 
-python .opencode/skills/intraday-operation-guide/scripts/validate_operation_decision.py \
+uv run --frozen ashare-pilot operations decision validate \
   operation/{date}/operation_decision_0940.json
 ```
 
@@ -329,7 +329,7 @@ final_position_max   = 1.0%
 如果09:40仍没有合适A类，可在09:45:05后运行一次：
 
 ```bash
-python .opencode/skills/intraday-operation-guide/scripts/build_operation_snapshot.py \
+uv run --frozen ashare-pilot operations snapshot build \
   --date {date} \
   --slot 09:45 \
   --write-latest \

@@ -1,0 +1,55 @@
+{
+  "source": ".opencode/skills/daily-stock-mapping/tests/test_step2_performance_contract.py",
+  "date": "2026-07-14",
+  "pool": {
+    "sz000001": {
+      "code": "sz000001",
+      "fetch_failed": false,
+      "raw_observation": {
+        "price": {"value": 10, "confidence": 100},
+        "ma20": {"value": 9, "confidence": 100},
+        "ma5": {"value": 9.5, "confidence": 100},
+        "atr": {"value": 0.3, "confidence": 100},
+        "atr_pct": {"value": 3, "confidence": 100},
+        "high20": {"value": 11, "confidence": 100},
+        "low20": {"value": 8, "confidence": 100},
+        "amount": {"value": 80000, "confidence": 100},
+        "board_streak": {"value": 0, "confidence": 100},
+        "seal_quality": {"value": null, "confidence": 100},
+        "auction_change_pct": {"value": null, "confidence": 100}
+      },
+      "computed_perception": {
+        "tech_score": {"value": 70, "confidence": 100},
+        "risk_type": {"value": [], "confidence": 100},
+        "risk_flags": {"value": [], "confidence": 100}
+      }
+    }
+  },
+  "theme_stocks": {
+    "schema_version": "daily_theme_stocks.v1",
+    "date": "2026-07-14",
+    "themes": [
+      {"name": "银行", "rank": 1, "heat": 70, "direction": "bullish", "evidence": "news#1"}
+    ],
+    "stocks": [
+      {
+        "code": "sz000001",
+        "name": "平安银行",
+        "source_themes": [{"name": "银行", "score": 70}],
+        "source_flags": {"candidate": true, "market": false, "news": false, "lhb": false},
+        "filter": {"status": "candidate"}
+      }
+    ]
+  },
+  "annotations": {
+    "schema_version": "daily_mapper_annotations.v1",
+    "date": "2026-07-14",
+    "stocks": [
+      {
+        "code": "sz000001",
+        "news_relevance": {"r": "R0", "p": "P0", "confidence": 90, "trace": "none"},
+        "pattern": {"rotation": {"state": "PRIMARY", "confidence": 95, "trace": "reviewed"}}
+      }
+    ]
+  }
+}

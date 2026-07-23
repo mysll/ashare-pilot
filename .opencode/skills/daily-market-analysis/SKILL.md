@@ -9,7 +9,7 @@ description: Use when users request comprehensive daily financial market analysi
 
 | Layer | Step | Agent | Output |
 |-------|------|-------|--------|
-| Compute | Python scripts | fetch_pool_indicators.py / fetch_stock.py / query_theme.py | raw_observation + computed_perception |
+| Compute | Python scripts | uv run --frozen ashare-pilot indicators pool fetch / uv run --frozen ashare-pilot market-data quote / uv run --frozen ashare-pilot themes query | raw_observation + computed_perception |
 | Perception | Step 1+2 | macro-strategist + sector-analyst | news.json -> compact theme evidence -> themes.json -> prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json |
 | Reasoning | Step 3 | portfolio-manager | strategy.json + daily_report.html (Direction / RiskSeverity / OverrideHint applied + ReasoningTrace) |
 
@@ -49,11 +49,11 @@ digraph workflow {
         color="#666666";
         fontsize=10;
 
-        "fetch_pool_indicators.py\n(V5 nested JSON)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_stock.py\n(auction)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_money_flow.py" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "fetch_special.py\n(lhb)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
-        "query_theme.py\n(candidates/market/pure)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "uv run --frozen ashare-pilot indicators pool fetch\n(V5 nested JSON)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "uv run --frozen ashare-pilot market-data quote\n(auction)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "uv run --frozen ashare-pilot market-data money-flow" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "uv run --frozen ashare-pilot market-data special\n(lhb)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
+        "uv run --frozen ashare-pilot themes query\n(candidates/market/pure)" [shape=folder, style=filled, fillcolor="#e6e6e6"];
     }
 
     // Skills (bottom)
@@ -110,11 +110,11 @@ digraph workflow {
     "theme-library" -> "2.2 Stock Pool Build";
 
     // Compute feeds
-    "fetch_pool_indicators.py\n(V5 nested JSON)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
-    "fetch_stock.py\n(auction)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
-    "fetch_money_flow.py" -> "2.4 Structured Dataset";
-    "fetch_special.py\n(lhb)" -> "2.2 Stock Pool Build";
-    "query_theme.py\n(candidates/market/pure)" -> "2.2 Stock Pool Build";
+    "uv run --frozen ashare-pilot indicators pool fetch\n(V5 nested JSON)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
+    "uv run --frozen ashare-pilot market-data quote\n(auction)" -> "2.3 Technical Enrichment\n(Python V5 nested schema)";
+    "uv run --frozen ashare-pilot market-data money-flow" -> "2.4 Structured Dataset";
+    "uv run --frozen ashare-pilot market-data special\n(lhb)" -> "2.2 Stock Pool Build";
+    "uv run --frozen ashare-pilot themes query\n(candidates/market/pure)" -> "2.2 Stock Pool Build";
 
     // Inter-stage file reads (dashed)
     "themes.json" -> "2.2 Stock Pool Build" [style=dashed];
@@ -140,19 +140,19 @@ This pipeline runs at any time. Data availability depends on market state — th
 
 | Data Type | Source | Pre-market? | Note |
 |-----------|--------|:----------:|------|
-| News / policy / events | fetch_news.py | ✓ | Morning news, overnight developments |
-| Theme stock pools | query_theme.py | ✓ | Industry leaders, candidates, pure stocks — pre-built offline library |
-| Market observation | query_theme.py market | ✓* | Cross-rank highlights + attention + gainers from concept cache snapshots |
-| Technical indicators (MA/MACD/RSI/BB/ATR) | fetch_indicators.py | ✓ | MA20(boll)/MA50, MACD, RSI, Bollinger %B, ATR — based on yesterday's close |
-| Yesterday's turnover (成交额) | fetch_indicators.py | ✓ | Last K-line record's `amount` |
-| Auction data (竞价涨幅/金额/量) | fetch_stock.py | ✓* | `percent`(竞价涨幅), `amount`(竞价金额), `volume`(竞价量); 9:15-9:25 call auction only |
+| News / policy / events | uv run --frozen ashare-pilot news fetch | ✓ | Morning news, overnight developments |
+| Theme stock pools | uv run --frozen ashare-pilot themes query | ✓ | Industry leaders, candidates, pure stocks — pre-built offline library |
+| Market observation | uv run --frozen ashare-pilot themes query market | ✓* | Cross-rank highlights + attention + gainers from concept cache snapshots |
+| Technical indicators (MA/MACD/RSI/BB/ATR) | uv run --frozen ashare-pilot indicators calculate | ✓ | MA20(boll)/MA50, MACD, RSI, Bollinger %B, ATR — based on yesterday's close |
+| Yesterday's turnover (成交额) | uv run --frozen ashare-pilot indicators calculate | ✓ | Last K-line record's `amount` |
+| Auction data (竞价涨幅/金额/量) | uv run --frozen ashare-pilot market-data quote | ✓* | `percent`(竞价涨幅), `amount`(竞价金额), `volume`(竞价量); 9:15-9:25 call auction only |
 | Today's intraday price/volume | — | ✗ | Requires active trading |
-| Today's money flow | — | ✗ | Yesterday's data via fetch_money_flow.py (intraday: real-time available) |
+| Today's money flow | — | ✗ | Yesterday's data via uv run --frozen ashare-pilot market-data money-flow (intraday: real-time available) |
 | Today's volume_ratio/swing | — | ✗ | Requires intraday trading |
 
 ## Performance Constraints
 
-**DO NOT** use `fetch_all_astocks.py` in this pipeline. It fetches ~5500 stocks and takes 30-60s — too slow for pre-market delivery.
+**DO NOT** use `uv run --frozen ashare-pilot market-data stocks all` in this pipeline. It fetches ~5500 stocks and takes 30-60s — too slow for pre-market delivery.
 
 All data fetching targets ONLY stocks in the pool (theme library candidates + news-mentioned), typically 30-50 stocks. Never fetch full market data.
 
@@ -169,7 +169,7 @@ Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must com
 **Task:**
 
 - Fetch news once from all sources via `daily-news-brief` and write both files:
-  `python .opencode/skills/daily-news-brief/scripts/fetch_news.py --date {YYYY-MM-DD} --output-dir predict/{YYYY-MM-DD}`
+  `uv run --frozen ashare-pilot news fetch --date {YYYY-MM-DD} --output-dir predict/{YYYY-MM-DD}`
 - Before Step 2, require `predict/{YYYY-MM-DD}/news.json` to exist. If it is
   missing, stop and rerun Step 1. No separate schema validation is required
   because `news.json` is generated deterministically by the fetch script.
@@ -202,11 +202,11 @@ If this fails, rerun the Step 1 fetch command. Do not dispatch Step 2 with only
 Before theme extraction, build the compact high-recall input. After `themes.json`, prepare deterministic inputs; after sparse annotations, finalize:
 
 ```bash
-python .opencode/skills/daily-stock-mapping/scripts/build_theme_evidence_input.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily build-theme-evidence --date {YYYY-MM-DD}
 # LLM writes themes.json from the compact input
-python .opencode/skills/daily-stock-mapping/scripts/prepare_daily_mapping.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily prepare --date {YYYY-MM-DD}
 # LLM writes candidate-complete sparse mapper.annotations.json
-python .opencode/skills/daily-stock-mapping/scripts/finalize_daily_mapping.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD}
 ```
 
 **Prompt (exact format, MUST NOT deviate):**
@@ -244,7 +244,7 @@ Outputs:
 **Action:** Execute the following one unambiguous prepare → selected-only LLM draft → finalize sequence.
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py \
+uv run --frozen ashare-pilot strategy daily prepare \
   --date {YYYY-MM-DD}
 ```
 
@@ -257,8 +257,11 @@ Read only:
 - predict/{YYYY-MM-DD}/.strategy_llm_input.json
 - .opencode/skills/daily-strategy/references/strategy-selection-rubric.md
 - .opencode/skills/daily-strategy/references/strategy-output-contract.md
-- memory/RULES.md
-- memory/SHARED_RULES.md
+- memory/RULES.md (when present)
+- memory/SHARED_RULES.md (when present)
+
+In a zero-history project, missing memory files mean there are no learned
+rules yet. Continue from current-day evidence and do not invent rule history.
 
 Consider every compact candidate, deep-reason only the final regime-limited
 selection, and write:
@@ -268,7 +271,7 @@ selection, and write:
 The LLM must not open full `mapper.json`, `pool_indicators.json`, `news.json`, or any Markdown report. It retains final regime, code set/order, Direction, RiskSeverity application, rating, rule application, and selected execution-plan ownership.
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py \
+uv run --frozen ashare-pilot strategy daily finalize \
   --date {YYYY-MM-DD} \
   --llm-duration {MEASURED_PORTFOLIO_MANAGER_SECONDS}
 ```
@@ -287,7 +290,7 @@ If draft validation fails, send only the reported draft errors back to portfolio
 | `predict/{date}/news.md` | LLM-readable briefing; report only, not an evidence contract | Perception (Step 1) |
 | `predict/{date}/themes.json` | Matched themes with heat/confidence sub-scores (`daily_themes.v1`) | Perception (Step 2.1) |
 | `predict/{date}/theme_stocks.extra.json` | Optional LLM supplemental stocks for market/news/LHB sources | Perception (Step 2.2 input) |
-| `predict/{date}/theme_stocks.universe.json` | Script-built pre-indicator stock universe for `fetch_pool_indicators.py` | Perception (Step 2.2 bridge) |
+| `predict/{date}/theme_stocks.universe.json` | Script-built pre-indicator stock universe for `uv run --frozen ashare-pilot indicators pool fetch` | Perception (Step 2.2 bridge) |
 | `predict/{date}/theme_stocks.base.json` | Script-built deterministic stock-pool base with scope and filters | Perception (Step 2.2-2.3) |
 | `predict/{date}/theme_stocks.json` | Validated stock-pool machine contract (`daily_theme_stocks.v1`) | Perception (Step 2.2-2.3) |
 | `predict/{date}/mapper.annotations.json` | LLM-owned Step 2 perception annotations (`daily_mapper_annotations.v1`) | Perception (Step 2.4) |
@@ -323,6 +326,6 @@ Phase 3 uses the exact prepare → portfolio-manager draft → finalize sequence
 - Directory: `predict/{YYYY}-{MM}-{DD}/` (e.g., `predict/2026-04-07/`)
 - All output in Chinese (中文)
 - **V5 architecture:** Compute (Python) → Perception (Steps 1-2) → Reasoning (Step 3) → Decision (`strategy.json` + `daily_report.html`)
-- `fetch_pool_indicators.py` outputs V5 nested JSON (`raw_observation` + `computed_perception` each with `{value, confidence, trace}` per field)
+- `uv run --frozen ashare-pilot indicators pool fetch` outputs V5 nested JSON (`raw_observation` + `computed_perception` each with `{value, confidence, trace}` per field)
 - Step 2 NEVER produces Direction / RiskSeverity — Step 3 is the sole Reasoning authority
 - Daily pipeline runs at any time; data availability depends on market state (see § Execution Timing)

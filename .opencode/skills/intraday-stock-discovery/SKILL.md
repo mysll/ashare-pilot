@@ -14,7 +14,7 @@ This is the **theme/pool perception** check. Output is structured perception wit
 ## Pipeline Position
 
 ```
-Compute once: run_intraday_pipeline.py
+Compute once: uv run --frozen ashare-pilot automation intraday run
     → scan_pool, compute_pool_enriched, theme_ranking, opportunity_pool (under .cache)
     ↓
 Skill 1 → market perception (breadth / indices / concepts)
@@ -28,7 +28,7 @@ Orchestrator: skill `intraday-market-analysis`.
 
 ## Inputs (read only)
 
-Prefer files already produced by `run_intraday_pipeline.py`:
+Prefer files already produced by `uv run --frozen ashare-pilot automation intraday run`:
 
 - `.cache/intraday/{date}/scan_pool.json`
 - `.cache/intraday/{date}/compute_pool_enriched.json`
@@ -37,16 +37,16 @@ Prefer files already produced by `run_intraday_pipeline.py`:
 Do **not** re-run enrichment/ranking if these files exist for the date. Only if compute has **not** been run for this date:
 
 ```bash
-python .opencode/skills/intraday-stock-discovery/scripts/enrich_compute_pool.py .cache/intraday/{date}/scan_pool.json --json -o .cache/intraday/{date}/compute_pool_enriched.json
-python .opencode/skills/intraday-stock-discovery/scripts/enrich_technicals.py .cache/intraday/{date}/compute_pool_enriched.json --json -o .cache/intraday/{date}/compute_pool_enriched.json
-python .opencode/skills/intraday-stock-discovery/scripts/compute_theme_ranking.py .cache/intraday/{date}/compute_pool_enriched.json --json --date {date} -o .cache/intraday/{date}/theme_ranking.json
+uv run --frozen ashare-pilot mapping intraday enrich-compute-pool .cache/intraday/{date}/scan_pool.json --json -o .cache/intraday/{date}/compute_pool_enriched.json
+uv run --frozen ashare-pilot indicators pool enrich .cache/intraday/{date}/compute_pool_enriched.json --json -o .cache/intraday/{date}/compute_pool_enriched.json
+uv run --frozen ashare-pilot themes ranking compute .cache/intraday/{date}/compute_pool_enriched.json --json --date {date} -o .cache/intraday/{date}/theme_ranking.json
 ```
 
 Skill 3 consumes `theme_ranking.json` via mapper base / cache under `.cache/intraday/{date}/`.
 
 ## Theme Heat Formula (compute-owned)
 
-Implemented in `compute_theme_ranking.py` (LLM does not recompute):
+Implemented in `uv run --frozen ashare-pilot themes ranking compute` (LLM does not recompute):
 
 ```
 Theme Heat = Breadth(20%) + Leader(30%) + Capital(25%) + Momentum(15%) + Continuation(10%)
@@ -69,8 +69,8 @@ Theme Heat = Breadth(20%) + Leader(30%) + Capital(25%) + Momentum(15%) + Continu
 
 ## Constraints
 
-- DO NOT compute overnight scores — `score_overnight.py` / Skill 3 compute path
+- DO NOT compute overnight scores — `uv run --frozen ashare-pilot strategy overnight score` / Skill 3 compute path
 - DO NOT output Direction, RiskSeverity, or buy/sell recommendations
-- Theme heat is owned by `compute_theme_ranking.py`; LLM does NOT re-score
+- Theme heat is owned by `uv run --frozen ashare-pilot themes ranking compute`; LLM does NOT re-score
 - Theme library is STATIC membership only; live multi-dim concept ranks live in `concept_dashboard.json`
 - Handoff to Skill 3 is JSON under `.cache/intraday/{date}/` only

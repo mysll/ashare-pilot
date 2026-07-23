@@ -295,7 +295,7 @@ Finalize always recomputes profile from final regime. Comparing against historic
 Command shape:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py \
+uv run --frozen ashare-pilot strategy daily prepare \
   --date 2026-07-15 \
   --indices /tmp/opencode/indices_2026-07-15.json \
   --output-dir /tmp/opencode/step3_prep_2026-07-15

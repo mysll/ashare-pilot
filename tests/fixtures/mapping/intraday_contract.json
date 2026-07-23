@@ -1,0 +1,42 @@
+{
+  "source": ".opencode/skills/intraday-strategy/scripts/intraday_mapper_json_lib.py",
+  "date": "2026-07-14",
+  "base": {
+    "schema_version": "intraday_mapper_base.v1",
+    "date": "2026-07-14",
+    "pool_summary": {"scoring_policy_version": "convergence_v1"},
+    "stocks": [
+      {
+        "code": "sz000001",
+        "name": "平安银行",
+        "price": 10,
+        "enriched": {"real_time": {"price": 10, "high": 10.2, "low": 9.7, "yestclose": 9.8}},
+        "technicals": {"ma5": 9.9, "ma10": 9.8, "ma20": 9.6}
+      }
+    ]
+  },
+  "annotations": {
+    "schema_version": "intraday_mapper_annotations.v1",
+    "date": "2026-07-14",
+    "market_assessment": {"reasoning_trace": "frozen assessment"},
+    "strategy": {"position_cap": "30%"},
+    "stocks": [
+      {
+        "code": "sz000001",
+        "direction": "谨慎持有",
+        "tradeability": "Suitable",
+        "trading_strategy": "趋势跟随",
+        "risk_severity": "medium",
+        "expected_premium": "moderate",
+        "key_reason": "frozen reason",
+        "reasoning_trace": "frozen trace",
+        "t_plus_1_plan": {
+          "auction_condition": "observe",
+          "open_strategy": "hold",
+          "take_profit": "scale out",
+          "stop_loss_basis": "ma5"
+        }
+      }
+    ]
+  }
+}

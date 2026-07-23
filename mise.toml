@@ -7,12 +7,16 @@ uv = "latest"
 [env]
 PYTHONIOENCODING = "utf-8"
 PYTHONUNBUFFERED = "1"
-
-[settings]
-python.uv_venv_auto = "source"
+UV_LINK_MODE = "copy"
 
 [tasks.sync]
-run = "uv sync"
+run = "env -u VIRTUAL_ENV uv sync"
+run_windows = "set \"VIRTUAL_ENV=\" && uv sync"
+
+[tasks.pilot]
+description = "运行 A-Share Pilot（统一使用默认 .venv）"
+run = "env -u VIRTUAL_ENV uv run --frozen ashare-pilot"
+run_windows = "set \"VIRTUAL_ENV=\" && uv run --frozen ashare-pilot"
 
 [tasks.opencode]
 depends = ["sync"]
@@ -55,7 +59,7 @@ opencode --version
 
 [tasks.auto]
 description = "启动 cron 守护进程（同 auto.sh）"
-run = "python .opencode/scripts/cron-daemon.py"
+run = "env -u VIRTUAL_ENV uv run --frozen ashare-pilot automation scheduler run"
 
 [tasks.update-cli]
 run = [

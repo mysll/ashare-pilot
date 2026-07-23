@@ -16,7 +16,7 @@ This is the **market perception** check after compute. Output is structured perc
 ```
 [14:30 Trigger]
     ↓
-Compute once: run_intraday_pipeline.py → .cache/intraday/{date}/*.json
+Compute once: uv run --frozen ashare-pilot automation intraday run → .cache/intraday/{date}/*.json
     ↓
 Skill 1: intraday-market-scan (THIS) — read market JSON, verify MarketState
     ↓
@@ -29,7 +29,7 @@ Orchestrator: skill `intraday-market-analysis`.
 
 ## Inputs (read only)
 
-Prefer files already produced by `run_intraday_pipeline.py`:
+Prefer files already produced by `uv run --frozen ashare-pilot automation intraday run`:
 
 - `.cache/intraday/{date}/market_breadth.json`
 - `.cache/intraday/{date}/indices.json`
@@ -39,10 +39,10 @@ Prefer files already produced by `run_intraday_pipeline.py`:
 Do **not** re-run compute if these files exist for the date. Only if the orchestrator has **not** run compute for this date, fetch via:
 
 ```bash
-python .opencode/lib/fetch/fetch_market_breadth.py --json -o .cache/intraday/{date}/market_breadth.json
-python .opencode/lib/fetch/fetch_stock.py sh000001,sz399001,sz399006,sh000688,sh000852 --json -o .cache/intraday/{date}/indices.json
-python .opencode/skills/intraday-market-scan/scripts/build_concept_dashboard.py --json --top 100 -o .cache/intraday/{date}/concept_dashboard.json
-python .opencode/skills/intraday-market-scan/scripts/build_scan_pool.py --compute-pool-size 120 --json -o .cache/intraday/{date}/scan_pool.json
+uv run --frozen ashare-pilot market-data breadth --json -o .cache/intraday/{date}/market_breadth.json
+uv run --frozen ashare-pilot market-data quote sh000001,sz399001,sz399006,sh000688,sh000852 --json -o .cache/intraday/{date}/indices.json
+uv run --frozen ashare-pilot themes dashboard build --json --top 100 -o .cache/intraday/{date}/concept_dashboard.json
+uv run --frozen ashare-pilot mapping intraday build-scan-pool --compute-pool-size 120 --json -o .cache/intraday/{date}/scan_pool.json
 ```
 
 ## Perception checks

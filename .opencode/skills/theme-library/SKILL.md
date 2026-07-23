@@ -66,54 +66,54 @@ Three-dimensional ranking system with eligibility filtering:
 
 ```bash
 # Step 1: Fetch concept board list
-python scripts/fetch_concepts.py
+uv run --frozen ashare-pilot themes concepts fetch
 
 # Step 2: Fetch stocks for all concepts (slow, ~500 concepts)
-python scripts/fetch_concept_stocks.py
+uv run --frozen ashare-pilot themes concepts fetch-stocks
 
 # Step 3: Build concept, theme, stock files and indexes
-python scripts/build_library.py
+uv run --frozen ashare-pilot themes library build
 ```
 
 ### Query
 
 ```bash
 # Query theme (shows concepts + weights + industry leaders)
-python scripts/query_theme.py theme AI算力
+uv run --frozen ashare-pilot themes query theme AI算力
 
 # Query concept (shows stocks + parent theme)
-python scripts/query_theme.py concept 算力概念
+uv run --frozen ashare-pilot themes query concept 算力概念
 
 # Query stock (shows themes + concepts with weights)
-python scripts/query_theme.py stock sz000977
+uv run --frozen ashare-pilot themes query stock sz000977
 
 # Map keyword to theme
-python scripts/query_theme.py keyword GPU
+uv run --frozen ashare-pilot themes query keyword GPU
 
 # Ranking commands
-python scripts/query_theme.py leaders AI算力      # Top industry leaders by industry_score
-python scripts/query_theme.py pure AI算力         # Top pure stocks by purity_score
-python scripts/query_theme.py candidates AI算力    # Top candidate stocks by candidate_score
+uv run --frozen ashare-pilot themes query leaders AI算力      # Top industry leaders by industry_score
+uv run --frozen ashare-pilot themes query pure AI算力         # Top pure stocks by purity_score
+uv run --frozen ashare-pilot themes query candidates AI算力    # Top candidate stocks by candidate_score
 
 # Market observation view (dynamic, from concept cache)
-python scripts/query_theme.py market AI算力        # Full market view (7 sections)
-python scripts/query_theme.py market AI算力 --top 20
+uv run --frozen ashare-pilot themes query market AI算力        # Full market view (7 sections)
+uv run --frozen ashare-pilot themes query market AI算力 --top 20
 
 # List all themes
-python scripts/query_theme.py list
+uv run --frozen ashare-pilot themes query list
 
 # Library statistics
-python scripts/query_theme.py stats
+uv run --frozen ashare-pilot themes query stats
 ```
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `fetch_concepts.py` | Fetch concept board list from East Money |
-| `fetch_concept_stocks.py` | Fetch stocks for each concept board (supports resume) |
-| `build_library.py` | Build concepts/themes/stocks JSON files and indexes (v5 ranking) |
-| `query_theme.py` | Query interface for themes, concepts, stocks, keywords |
+| `uv run --frozen ashare-pilot themes concepts fetch` | Fetch concept board list from East Money |
+| `uv run --frozen ashare-pilot themes concepts fetch-stocks` | Fetch stocks for each concept board (supports resume) |
+| `uv run --frozen ashare-pilot themes library build` | Build concepts/themes/stocks JSON files and indexes (v5 ranking) |
+| `uv run --frozen ashare-pilot themes query` | Query interface for themes, concepts, stocks, keywords |
 
 ## Query Commands
 
@@ -187,14 +187,14 @@ All inputs are percentile ranks (排名百分位), not raw values.
 ### Design Notes
 
 - **Static vs Dynamic**: `industry_score` lives in JSON, `attention_score` computed at query time
-- **Data freshness**: Depends on `fetch_concept_stocks.py` last run time — shown as `Data Time` in output
+- **Data freshness**: Depends on `uv run --frozen ashare-pilot themes concepts fetch-stocks` last run time — shown as `Data Time` in output
 - **No auto-refresh**: `market` command reads cache only, never triggers API calls
 - **ST exclusion**: Applied at cache snapshot load time
 
 ## Directory Structure
 
 ```
-theme-library/
+data/theme-library/
 ├── themes/          # One JSON per Theme (high-level, ~60 files)
 ├── concepts/        # One JSON per East Money Concept (~490 files)
 ├── stocks/          # One JSON per stock (~5200 files)
@@ -207,15 +207,14 @@ theme-library/
 │   ├── stock_to_theme.json
 │   ├── stock_to_concept.json
 │   └── keyword_to_theme.json
-├── cache/           # Raw East Money data
-│   ├── concepts.json
-│   └── stocks/      # One JSON per concept (BK0917.json)
-└── scripts/         # Data fetching and query scripts
 ```
+
+Refreshable source data is stored under `.cache/theme-library/`. Fetch, build,
+and query operations run the project CLI through `uv run --frozen ashare-pilot`.
 
 ## Theme Configuration
 
-Themes are defined in `scripts/theme_config.json`:
+Themes are defined in `config/themes/theme-config.json`:
 
 - **`themes`**: Theme name → {concepts, aliases, concept_weights_override, anchors} mapping (~60 themes)
 - **`concept_aliases`**: Concept-level aliases (for keyword matching)
@@ -245,11 +244,11 @@ Stock theme weight = max(concept_weight × rank_weight) across all member concep
 
 - Data source: East Money push2 API (concept boards)
 - Library must be built before querying (run fetch + build)
-- `fetch_concept_stocks.py` supports resume — interrupt and re-run to continue
+- `uv run --frozen ashare-pilot themes concepts fetch-stocks` supports resume — interrupt and re-run to continue
   - `--retry-failed` to retry previously failed concepts
   - `--reset` to clear cache and start fresh
 - Use `--top N` to limit concept boards during development
-- Theme definitions are in `scripts/theme_config.json`
+- Theme definitions are in `config/themes/theme-config.json`
 - ~166 non-investment concepts (index/style/trading-state) are excluded from themes but still queryable via `concept` command
 - All data files use JSON format
 - **V5 Design Principle**: Static data (theme membership, purity, industry_score) lives in JSON files. Dynamic data (price action, turnover, volume ratio) lives in cache and is read at query time via `market` command. The two are never mixed.

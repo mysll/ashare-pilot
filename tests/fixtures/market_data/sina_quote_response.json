@@ -1,0 +1,25 @@
+{
+  "fixture_metadata": {
+    "source_date": "2026-07-21",
+    "legacy_command": "fetch_stock.py sh600000 --json",
+    "scenario": "single A-share quote response",
+    "sensitive_fields_removed": true
+  },
+  "response_text": "var hq_str_sh600000=\"样本银行,10.00,10.00,10.10,10.20,9.90,10.00,10.10,123400,5678000,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,2026-07-21,14:30:00,00\";\n",
+  "expected": [{
+    "code": "sh600000",
+    "name": "样本银行",
+    "price": "10.1",
+    "open": "10.0",
+    "yestclose": "10.0",
+    "high": "10.2",
+    "low": "9.9",
+    "volume": "123400",
+    "amount": "5678000",
+    "amount_10000": "567.80",
+    "updown": "+0.1",
+    "percent": "+1.00%",
+    "time": "2026-07-21 14:30:00",
+    "market": "A"
+  }]
+}

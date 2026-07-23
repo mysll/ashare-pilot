@@ -23,12 +23,12 @@ Skill 3 → Overnight Scoring + intraday_mapper.annotations.json → intraday_ma
 
 ## Execute: Overnight scores (compute-owned)
 
-In the normal orchestrated flow, `run_intraday_pipeline.py` already writes
+In the normal orchestrated flow, `uv run --frozen ashare-pilot automation intraday run` already writes
 `.cache/intraday/{date}/opportunity_pool.json`. Do **not** re-score if that file
 exists for the date. Only if compute was skipped:
 
 ```bash
-python .opencode/skills/intraday-strategy/scripts/score_overnight.py .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
+uv run --frozen ashare-pilot strategy overnight score .cache/intraday/{YYYY-MM-DD}/compute_pool_enriched.json --opportunity-pool-size 30 --json -o .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
 ```
 
 ### Scoring Dimensions (V1.2 Percentile-Based, 9-Dim)
@@ -57,7 +57,7 @@ Do not use 75/60/45 as hard tier cuts. Compatibility field `tier` == `rank_tier`
 
 ## JSON-first output contract
 
-First run `build_intraday_mapper_base.py`. Generate only
+First run `uv run --frozen ashare-pilot mapping intraday build-mapper-base`. Generate only
 `intraday/{YYYY-MM-DD}/intraday_mapper.annotations.json`; never copy numeric
 compute fields into it. The required schema is:
 
@@ -107,12 +107,12 @@ stop-loss number. Observation-only stocks use `not_applicable`.
 Then run:
 
 ```bash
-python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/build_intraday_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/build_overnight_strategy_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/validate_overnight_strategy_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/render_overnight_strategy_html.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday validate-annotations --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday build-mapper --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday validate-mapper --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight build --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight validate --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight render-report --date {YYYY-MM-DD}
 ```
 
 The following seven headings describe logical data groups in the final JSON.
@@ -170,9 +170,11 @@ Stocks that were in Compute Pool but scored < 45 with clear reason (e.g., "净�
 
 ### BEFORE generating
 
-Read full content of:
+Read full content when present:
 - `memory/INTRADAY_RULES.md` — 尾盘/T+1 隔夜专属规则
 - `memory/SHARED_RULES.md` — 通用规则（两Agent共用）
+
+零历史项目中两者可以都不存在；这表示没有已学习规则，不得为了满足输入列表创建占位内容。
 
 Apply rules via semantic matching in ReasoningTrace (see § ReasoningTrace).
 
@@ -232,7 +234,7 @@ by I01/I05, including their existing Watch sizing semantics.
 
 ### Board Exclusion (config-driven)
 
-Read `.opencode/config/trading-scope.json`. Apply board exclusion.
+Read `config/trading-scope.json`. Apply board exclusion.
 Use longest-prefix matching plus explicit code overrides from this file; do not
 hard-code excluded board prefixes in the strategy implementation.
 
@@ -335,12 +337,12 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 ## Constraints
 
 - This is the ONLY skill that outputs Direction, RiskSeverity, or Expected Premium
-- All scores come from `score_overnight.py` through `intraday_mapper.base.json`; LLM does NOT compute or transcribe scores
+- All scores come from `uv run --frozen ashare-pilot strategy overnight score` through `intraday_mapper.base.json`; LLM does NOT compute or transcribe scores
 - LLM role: interpret scores, write reasoning trace, generate natural-language strategy, query rules
 - Do NOT recalculate any numbers — trust the compute layer
-- When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `score_overnight.py` output is authoritative)
+- When referencing concept themes in reasoning, use Skill 1's `concept_dashboard.json` Composite rank as cross-validation (NOT as primary input — `uv run --frozen ashare-pilot strategy overnight score` output is authoritative)
 - **涨停封板股票 (seal_quality="封死") 不得出现在B-Tier尾盘买入推荐中**
-- **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per .opencode/config/trading-scope.json)**
+- **sh688/bj 前缀股票不得出现在B-Tier买入推荐中 (per config/trading-scope.json)**
 - **质量过滤器排除（无行情/跌破VWAP且无I14豁免）的股票不得参与评分**
 - Excluded-board 和涨停封板股票可出现在 A-Tier 观察区，但必须标注排除原因
 - Output language: 中文

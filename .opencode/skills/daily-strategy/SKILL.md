@@ -24,7 +24,7 @@ Step 3 是唯一的日策略 Reasoning 层。Python 负责验证、投影、提�
 先运行：
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/prepare_daily_strategy.py --date YYYY-MM-DD
+uv run --frozen ashare-pilot strategy daily prepare --date YYYY-MM-DD
 ```
 
 portfolio-manager 的热阶段只读取：
@@ -32,8 +32,11 @@ portfolio-manager 的热阶段只读取：
 - `predict/YYYY-MM-DD/.strategy_llm_input.json`
 - `.opencode/skills/daily-strategy/references/strategy-selection-rubric.md`
 - `.opencode/skills/daily-strategy/references/strategy-output-contract.md`
-- `memory/RULES.md`
-- `memory/SHARED_RULES.md`
+- `memory/RULES.md`（存在时）
+- `memory/SHARED_RULES.md`（存在时）
+
+零历史项目中缺少这两个文件表示尚无已学习规则；继续基于当日合同推理，不得预先生成或
+虚构历史规则。
 
 按 rubric 扫描全部候选，只对最终入选股做深推理，并写：
 
@@ -42,13 +45,13 @@ portfolio-manager 的热阶段只读取：
 然后运行：
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py --date YYYY-MM-DD
+uv run --frozen ashare-pilot strategy daily finalize --date YYYY-MM-DD
 ```
 
 编排器能够测得 portfolio-manager 墙钟时间时必须传入：
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/finalize_daily_strategy.py \
+uv run --frozen ashare-pilot strategy daily finalize \
   --date YYYY-MM-DD --llm-duration <measured_seconds>
 ```
 
@@ -74,4 +77,4 @@ finalize 校验草稿的输入哈希、候选和证据归属，按最终 regime 
 
 ## 回滚
 
-若新链路在 live shadow 中出现实质决策漂移，保留已发布正式合同，停止工作流切换并恢复上一版 Step 3 指令；不要重写历史 `strategy.json`。冻结回放使用 `compare_strategy_shadow.py --mode frozen`；live shadow 使用 `--mode live --report-only`。在五次 Gate D 样本完成前保持此回滚路径。
+若新链路在 live shadow 中出现实质决策漂移，保留已发布正式合同，停止工作流切换并恢复上一版 Step 3 指令；不要重写历史 `strategy.json`。冻结回放使用 `uv run --frozen ashare-pilot strategy daily compare-shadow --mode frozen`；live shadow 使用 `--mode live --report-only`。在五次 Gate D 样本完成前保持此回滚路径。

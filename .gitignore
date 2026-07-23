@@ -27,10 +27,10 @@ build/
 .DS_Store
 Thumbs.db
 
-predict
-intraday
-memory
-operation
+/predict/
+/intraday/
+/memory/
+/operation/
 
 *.zip
 
@@ -42,3 +42,11 @@ operation
 .opencode/skills/theme-library/aliases/
 .opencode/skills/theme-library/index/
 .opencode/skills/theme-library/metadata/
+
+data/theme-library/cache/
+data/theme-library/concepts/
+data/theme-library/themes/
+data/theme-library/stocks/
+data/theme-library/aliases/
+data/theme-library/index/
+data/theme-library/metadata/

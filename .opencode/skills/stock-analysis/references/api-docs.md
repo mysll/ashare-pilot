@@ -470,7 +470,7 @@ EASTMONEY_COOKIE=your_cookie_here
 
 **Custom cookie file**:
 ```bash
-python scripts/fetch_money_flow.py --stock --cookie /path/to/custom.cookie
+uv run --frozen ashare-pilot market-data money-flow --stock --cookie /path/to/custom.cookie
 ```
 
 ### Response Format (JSONP)
@@ -731,26 +731,26 @@ All scripts support the following common output parameters:
 | --------- | ---------------------------------------- | ------------------------ |
 | `--json`  | Output as JSON format                    | `--json`                 |
 | `-o FILE` | Save output to file                      | `-o output.txt`          |
-| `--csv`   | Output as CSV (fetch_history.py only)    | `--csv`                  |
+| `--csv`   | Output as CSV (uv run --frozen ashare-pilot market-data history only)    | `--csv`                  |
 
 ### Output Behavior
 
 - Without `-o`: Output is printed to stdout
 - With `-o` + `--json`: File saved as JSON format
-- With `-o` + `--csv`: File saved as CSV format (fetch_stock.py, fetch_history.py, fetch_indicators.py)
+- With `-o` + `--csv`: File saved as CSV format (uv run --frozen ashare-pilot market-data quote, uv run --frozen ashare-pilot market-data history, uv run --frozen ashare-pilot indicators calculate)
 - With `-o` only: File saved as plain text format
 
 ### Examples by Script
 
-**fetch_stock.py**:
+**uv run --frozen ashare-pilot market-data quote**:
 ```bash
-python fetch_stock.py sh600519 -o output.txt           # Save table to file
-python fetch_stock.py sh600519 --json -o output.json   # Save JSON to file
-python fetch_stock.py sh600519 --csv -o output.csv     # Save CSV to file
-python fetch_stock.py sh600519 --intraday              # Today's 5-min K-line
-python fetch_stock.py sh600519 --intraday --scale 1    # Today's 1-min K-line
-python fetch_stock.py sh600519 --intraday --days 3 --json  # Last 3 days K-line as JSON
-python fetch_stock.py sh600519 --intraday --csv        # Intraday K-line as CSV
+uv run --frozen ashare-pilot market-data quote sh600519 -o output.txt           # Save table to file
+uv run --frozen ashare-pilot market-data quote sh600519 --json -o output.json   # Save JSON to file
+uv run --frozen ashare-pilot market-data quote sh600519 --csv -o output.csv     # Save CSV to file
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday              # Today's 5-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --scale 1    # Today's 1-min K-line
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --days 3 --json  # Last 3 days K-line as JSON
+uv run --frozen ashare-pilot market-data quote sh600519 --intraday --csv        # Intraday K-line as CSV
 ```
 
 **Real-time Quote Fields** (JSON/CSV):
@@ -796,48 +796,48 @@ Note: `float_shares` is fetched from Sina StockService API (流通股本变更�
 | `ma_price5` | 5-period MA of price |
 | `ma_volume5` | 5-period MA of volume |
 
-**fetch_history.py**:
+**uv run --frozen ashare-pilot market-data history**:
 ```bash
-python fetch_history.py sh600519 -o output.txt         # Save table to file
-python fetch_history.py sh600519 --json -o output.json # Save JSON to file
-python fetch_history.py sh600519 --csv -o output.csv   # Save CSV to file
+uv run --frozen ashare-pilot market-data history sh600519 -o output.txt         # Save table to file
+uv run --frozen ashare-pilot market-data history sh600519 --json -o output.json # Save JSON to file
+uv run --frozen ashare-pilot market-data history sh600519 --csv -o output.csv   # Save CSV to file
 ```
 
-**fetch_special.py**:
+**uv run --frozen ashare-pilot market-data special**:
 ```bash
-python fetch_special.py lhb -o output.txt              # Save table to file
-python fetch_special.py lhb --json -o output.json      # Save JSON to file
-python fetch_special.py rzye -o output.txt             # Save table to file
-python fetch_special.py rzye --json -o output.json     # Save JSON to file
+uv run --frozen ashare-pilot market-data special lhb -o output.txt              # Save table to file
+uv run --frozen ashare-pilot market-data special lhb --json -o output.json      # Save JSON to file
+uv run --frozen ashare-pilot market-data special rzye -o output.txt             # Save table to file
+uv run --frozen ashare-pilot market-data special rzye --json -o output.json     # Save JSON to file
 ```
 
-**fetch_indicators.py**:
+**uv run --frozen ashare-pilot indicators calculate**:
 ```bash
-python fetch_indicators.py sh600519 -o output.txt      # Save table to file
-python fetch_indicators.py sh600519 --json -o output.json  # Save JSON to file
-python fetch_indicators.py sh600519 --csv -o output.csv     # Save CSV to file
+uv run --frozen ashare-pilot indicators calculate sh600519 -o output.txt      # Save table to file
+uv run --frozen ashare-pilot indicators calculate sh600519 --json -o output.json  # Save JSON to file
+uv run --frozen ashare-pilot indicators calculate sh600519 --csv -o output.csv     # Save CSV to file
 ```
 
-**fetch_all_astocks.py**:
+**uv run --frozen ashare-pilot market-data stocks all**:
 ```bash
-python fetch_all_astocks.py -o stocks.csv              # Save CSV (default)
-python fetch_all_astocks.py -o stocks.json --json-output  # Save JSON
+uv run --frozen ashare-pilot market-data stocks all -o stocks.csv              # Save CSV (default)
+uv run --frozen ashare-pilot market-data stocks all -o stocks.json --json-output  # Save JSON
 ```
 
-**fetch_money_flow.py**:
+**uv run --frozen ashare-pilot market-data money-flow**:
 ```bash
 # Industry money flow
-python fetch_money_flow.py                            # Top 50 industries (default)
-python fetch_money_flow.py --top 20                   # Top 20 industries
-python fetch_money_flow.py --json                     # JSON output
-python fetch_money_flow.py --csv -o flow.csv          # Save as CSV
+uv run --frozen ashare-pilot market-data money-flow                            # Top 50 industries (default)
+uv run --frozen ashare-pilot market-data money-flow --top 20                   # Top 20 industries
+uv run --frozen ashare-pilot market-data money-flow --json                     # JSON output
+uv run --frozen ashare-pilot market-data money-flow --csv -o flow.csv          # Save as CSV
 
 # Individual stock money flow
-python fetch_money_flow.py --stock                    # Top 50 stocks (default)
-python fetch_money_flow.py --stock --top 100          # Top 100 stocks
-python fetch_money_flow.py --stock --json             # JSON output
-python fetch_money_flow.py --stock --csv              # CSV output
-python fetch_money_flow.py --stock --cookie /path/.cookie  # Custom cookie file
+uv run --frozen ashare-pilot market-data money-flow --stock                    # Top 50 stocks (default)
+uv run --frozen ashare-pilot market-data money-flow --stock --top 100          # Top 100 stocks
+uv run --frozen ashare-pilot market-data money-flow --stock --json             # JSON output
+uv run --frozen ashare-pilot market-data money-flow --stock --csv              # CSV output
+uv run --frozen ashare-pilot market-data money-flow --stock --cookie /path/.cookie  # Custom cookie file
 ```
 
 **Money Flow Parameters**:

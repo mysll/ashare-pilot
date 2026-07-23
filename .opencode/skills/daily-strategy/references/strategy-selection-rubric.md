@@ -1,6 +1,6 @@
 # Step 3 Selection Rubric
 
-只读取当日 `.strategy_llm_input.json`、本 rubric、输出合同、`memory/RULES.md` 与 `memory/SHARED_RULES.md`。不得打开完整 mapper、pool、news 或 Markdown 报告。
+只读取当日 `.strategy_llm_input.json`、本 rubric、输出合同，以及实际存在的 `memory/RULES.md` 与 `memory/SHARED_RULES.md`。零历史项目中 memory 文件缺失表示没有已学习规则，不得创建占位内容。不得打开完整 mapper、pool、news 或 Markdown 报告。
 
 ## 1. 全候选浅扫描
 

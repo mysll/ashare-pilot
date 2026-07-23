@@ -1,0 +1,12 @@
+{
+  "fixture_metadata": {
+    "source_date": "2026-07-21",
+    "legacy_command": "fetch_news.py --date 2026-07-21 --output-dir ...",
+    "scenario": "normalization, global IDs, control-character cleanup and dual output",
+    "sensitive_fields_removed": true
+  },
+  "sources": {
+    "policy": [{"title": "政策\u0001样本", "url": "https://example.invalid/policy", "source": "Fixture", "desc": "政策摘要"}],
+    "flash": [{"title": "市场快讯", "url": "https://example.invalid/flash", "source": "Fixture", "desc": "快讯摘要"}]
+  }
+}

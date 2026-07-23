@@ -1,0 +1,128 @@
+{
+  "schema_version": "ashare_pilot_fixture_manifest.v1",
+  "policy": {
+    "sensitive_data": "Fixtures must not contain credentials, cookies, request signatures, or machine-specific absolute paths.",
+    "network": "Equivalence tests consume recorded or synthetic inputs and do not access external services."
+  },
+  "fixtures": [
+    {
+      "path": "indicators/history.json",
+      "source_date": "2026-07-21",
+      "legacy_commands": ["fetch_indicators.py", "fetch_pool_indicators.py"],
+      "scenario": "Thirty-five deterministic daily bars for indicator formulas and pool output.",
+      "provenance": "Synthetic minimal input shaped from the legacy contract."
+    },
+    {
+      "path": "mapping/2026-07-14-market-source-corrections.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["prepare_daily_mapping.py", "build_mapper_base.py"],
+      "scenario": "Frozen market-source corrections used by Step 2 regression gates.",
+      "provenance": "Minimized historical Step 2 artifact."
+    },
+    {
+      "path": "mapping/daily_contract.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["build_mapper_base.py", "build_mapper_json.py"],
+      "scenario": "Daily mapper base, annotation merge, candidate ordering, and serialization.",
+      "provenance": "Synthetic minimal contract fixture."
+    },
+    {
+      "path": "mapping/intraday_contract.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["build_intraday_mapper_json.py", "validate_intraday_mapper_annotations.py"],
+      "scenario": "Intraday annotation merge and validation ordering.",
+      "provenance": "Synthetic minimal contract fixture."
+    },
+    {
+      "path": "mapping/step2_frozen_gates.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["prepare_daily_mapping.py", "finalize_daily_mapping.py"],
+      "scenario": "Frozen Step 2 filtering, timing, and annotation-input gates.",
+      "provenance": "Minimized historical Step 2 artifact."
+    },
+    {
+      "path": "market_data/batch2_cli_results.json",
+      "source_date": "2026-07-21",
+      "legacy_commands": ["fetch_stock.py", "fetch_history.py", "fetch_all_astocks.py", "fetch_market_breadth.py", "fetch_money_flow.py", "fetch_board_money_flow.py", "fetch_special.py", "fetch_concept_ranking.py", "fetch_turnover_ranking.py", "fetch_limit_up_pool.py"],
+      "scenario": "Minimal successful normalized responses for market-data CLI parity.",
+      "provenance": "Synthetic normalized results without upstream credentials."
+    },
+    {
+      "path": "market_data/sina_quote_response.json",
+      "source_date": "2026-07-21",
+      "legacy_commands": ["fetch_stock.py sh600000 --json"],
+      "scenario": "Single A-share recorded quote response and parsed output.",
+      "provenance": "Minimized public server response body."
+    },
+    {
+      "path": "news/source_items.json",
+      "source_date": "2026-07-21",
+      "legacy_commands": ["fetch_news.py --date 2026-07-21 --output-dir ..."],
+      "scenario": "Normalization, global IDs, cleanup, source failure, and dual output.",
+      "provenance": "Synthetic news items without private content."
+    },
+    {
+      "path": "review/verification_2026-07-10.json",
+      "source_date": "2026-07-10",
+      "legacy_commands": ["entry_band_shadow_backtest.py"],
+      "scenario": "Entry-band verification row selected by the backtest loader.",
+      "provenance": "Minimized historical verification artifact."
+    },
+    {
+      "path": "review/verification_2026-07-10.md",
+      "source_date": "2026-07-10",
+      "legacy_commands": ["entry_quality_backtest.py"],
+      "scenario": "Readable verification input for entry-quality parsing.",
+      "provenance": "Minimized historical verification artifact."
+    },
+    {
+      "path": "review/verification_2026-07-11.json",
+      "source_date": "2026-07-11",
+      "legacy_commands": ["entry_band_shadow_backtest.py"],
+      "scenario": "Second verification day for grouped entry-band statistics.",
+      "provenance": "Minimized historical verification artifact."
+    },
+    {
+      "path": "strategy/step3_real/2026-07-09.json",
+      "source_date": "2026-07-09",
+      "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],
+      "scenario": "Frozen real-shape Step 3 input for contract regression.",
+      "provenance": "Historical artifact stripped to public market and strategy fields."
+    },
+    {
+      "path": "strategy/step3_real/2026-07-13.json",
+      "source_date": "2026-07-13",
+      "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],
+      "scenario": "Frozen real-shape Step 3 input for contract regression.",
+      "provenance": "Historical artifact stripped to public market and strategy fields."
+    },
+    {
+      "path": "strategy/step3_real/2026-07-14.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],
+      "scenario": "Frozen real-shape Step 3 input for contract regression.",
+      "provenance": "Historical artifact stripped to public market and strategy fields."
+    },
+    {
+      "path": "strategy/step3_real/2026-07-15.json",
+      "source_date": "2026-07-15",
+      "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],
+      "scenario": "Frozen real-shape Step 3 input for contract regression.",
+      "provenance": "Historical artifact stripped to public market and strategy fields."
+    },
+    {
+      "path": "strategy/strategy_shadow_2026-07-14.json",
+      "source_date": "2026-07-14",
+      "legacy_commands": ["compare_strategy_shadow.py", "finalize_daily_strategy.py"],
+      "scenario": "Daily compact input, selected draft, and rendered strategy parity.",
+      "provenance": "Synthetic minimal contract fixture based on a historical shape."
+    },
+    {
+      "path": "themes/ranking_input.json",
+      "source_date": "2026-07-21",
+      "legacy_commands": ["compute_theme_ranking.py compute_pool_enriched.json --json"],
+      "scenario": "Two stocks sharing one theme and one distinct theme.",
+      "provenance": "Synthetic minimal theme-ranking input."
+    }
+  ]
+}

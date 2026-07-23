@@ -10,7 +10,7 @@ inter-step contract. Human-facing board is `overnight_strategy.html`.
 
 | Layer | Owner | Canonical output |
 |---|---|---|
-| Compute | `run_intraday_pipeline.py` | `.cache/intraday/{date}/*.json` |
+| Compute | `uv run --frozen ashare-pilot automation intraday run` | `.cache/intraday/{date}/*.json` |
 | Perception | Python + analyst agents | read compute JSON only |
 | Reasoning | `portfolio-manager` + `intraday-strategy` | `intraday_mapper.annotations.json` |
 | Contract build | Python | `intraday_mapper.base.json` → `intraday_mapper.json` → `overnight_strategy.json` |
@@ -24,7 +24,7 @@ fields always come from the compute layer.
 Run before dispatching any agent:
 
 ```bash
-python .opencode/scripts/run_intraday_pipeline.py --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
+uv run --frozen ashare-pilot automation intraday run --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
 ```
 
 Use a timeout of at least 180 seconds. Do not run this again in substeps.
@@ -83,7 +83,7 @@ Step 1 and Step 2 NEVER output Direction or RiskSeverity.
 ## 3. Build the deterministic mapper base
 
 ```bash
-python .opencode/skills/intraday-strategy/scripts/build_intraday_mapper_base.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday build-mapper-base --date {YYYY-MM-DD}
 ```
 
 This copies authoritative market, theme, pool, score, and exclusion data into:
@@ -122,12 +122,12 @@ applied rules, and ReasoningTrace.
 ## 5. Validate and publish
 
 ```bash
-python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_annotations.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/build_intraday_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/validate_intraday_mapper_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/build_overnight_strategy_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/validate_overnight_strategy_json.py --date {YYYY-MM-DD}
-python .opencode/skills/intraday-strategy/scripts/render_overnight_strategy_html.py --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday validate-annotations --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday build-mapper --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping intraday validate-mapper --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight build --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight validate --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot strategy overnight render-report --date {YYYY-MM-DD}
 ```
 
 If annotation validation fails, ask the LLM to regenerate
@@ -150,9 +150,9 @@ Downstream consumers and review skills read `intraday_mapper.json` and
 ## Invariants
 
 - A-share scope only: `sh`/`sz`; exclude `sh688*` and `bj*` from buy candidates
-  according to `.opencode/config/trading-scope.json`.
+  according to `config/trading-scope.json`.
 - A sealed limit-up stock is observation-only, never a B-tier tail-buy.
-- Apply `memory/INTRADAY_RULES.md` and `memory/SHARED_RULES.md` in Reasoning.
-- All scores come from `score_overnight.py`; the LLM never recalculates them.
+- Apply `memory/INTRADAY_RULES.md` and `memory/SHARED_RULES.md` in Reasoning when they exist. In a zero-history project, absence means no learned rules and is not an error.
+- All scores come from `uv run --frozen ashare-pilot strategy overnight score`; the LLM never recalculates them.
 - Themes are detected bottom-up from stocks, not from news.
 - Run the compute phase once and keep all stages on the same dated snapshot.

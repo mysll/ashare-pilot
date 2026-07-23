@@ -7,6 +7,10 @@ description: Review yesterday's intraday overnight strategy against actual next-
 
 Verify yesterday's intraday overnight strategy predictions against actual next-day (T+1) market data, extract lessons, update rules, and persist to memory.
 
+For a zero-history project, missing memory files mean no accumulated rules or
+performance history. Write the first factual verification from actual market
+results; do not create template rules or claim prior validation.
+
 ## Workflow Overview
 
 ```dot
@@ -91,7 +95,7 @@ digraph workflow {
 
 1. **T+1 日K线** (today's daily bar): 开盘价、最高价、最低价、收盘价（或当前价）
    ```bash
-   python .opencode/lib/fetch/fetch_stock.py CODE1,CODE2,... --json
+   uv run --frozen ashare-pilot market-data quote CODE1,CODE2,... --json
    ```
 
 2. **T日收盘价验证** (yesterday's close): 确认 14:50-14:57 执行窗口内价格是否在买入区间
@@ -99,7 +103,7 @@ digraph workflow {
    **调用规范**
 
    ```bash
-   python .opencode/lib/fetch/fetch_history.py CODE \
+   uv run --frozen ashare-pilot market-data history CODE \
      --start STRATEGY_DATE --end REVIEW_DATE --json
    ```
 
@@ -132,7 +136,7 @@ digraph workflow {
    ```
 
 3. **T+1 竞价数据** (if available): 开盘价 vs 昨日收盘价 → 涨跌幅
-   从 `fetch_stock.py` 实时行情中提取 `open` / `prev_close`
+   从 `uv run --frozen ashare-pilot market-data quote` 实时行情中提取 `open` / `prev_close`
 
 **Verify for each core position:**
 
@@ -208,7 +212,7 @@ Stock [code] [name]:
 
 #### 3e. Scoring Quality Assessment
 
-对比 `score_overnight.py` 产出的 overnight_score 与 T+1 实际收益:
+对比 `uv run --frozen ashare-pilot strategy overnight score` 产出的 overnight_score 与 T+1 实际收益:
 
 ```
 Spearman rank correlation: score rank vs actual return

@@ -18,8 +18,12 @@ Use after market close or when the user asks for 复盘 / verification / review.
 - `predict/{date}/strategy.json` — preferred machine-readable strategy input.
 - `predict/{date}/strategy.md` — fallback human report if `strategy.json` is missing.
 - `predict/{date}/pool_indicators.json` — used automatically by scripts when present for MA/ATR and technical context.
-- `memory/RULES.md` and `memory/SHARED_RULES.md` — read before judging rule performance.
-- `memory/RULE_GOVERNANCE.md` — read before adding, changing, merging, upgrading, sleeping, or retiring rules.
+- `memory/RULES.md` and `memory/SHARED_RULES.md` — read when present before judging accumulated rule performance.
+- `memory/RULE_GOVERNANCE.md` — read when present before changing an established rule lifecycle.
+
+For a zero-history project, write the first factual verification without
+inventing prior rules. Memory and governance documents grow only from actual
+reviews; missing files are not initialized from templates.
 
 ## Step 1: Load Strategy
 
@@ -32,13 +36,13 @@ If `strategy.json` is missing, read `strategy.md` and pass stock codes explicitl
 Run before writing `verification.md`:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/generate_verification_json.py --date {YYYY-MM-DD} --pretty
+uv run --frozen ashare-pilot review daily verify --date {YYYY-MM-DD} --pretty
 ```
 
 If `strategy.json` is missing, use fallback:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/generate_verification_json.py \
+uv run --frozen ashare-pilot review daily verify \
   --date {YYYY-MM-DD} --codes sh600000,sz000001,... --regime {panic|weak|neutral|strong-sector} --pretty
 ```
 
@@ -62,7 +66,7 @@ The script fetches market data directly, uses `pool_indicators.json` when availa
 Optional shadow backtest:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py --since {YYYY-MM-DD}
+uv run --frozen ashare-pilot review daily backtest-entry-band --since {YYYY-MM-DD}
 ```
 
 Treat early shadow results as evidence collection only. Do not update entry rules until enough forward samples accumulate by regime/playbook.

@@ -1,0 +1,38 @@
+{
+  "schema_version": "cron_tasks.v1",
+  "calendar": "config/trading-calendar.json",
+  "defaults": {
+    "model": "opencode-go/deepseek-v4-pro",
+    "timeout_seconds": 7200
+  },
+  "tasks": [
+    {
+      "id": "daily-analysis",
+      "enabled": true,
+      "time": "09:20",
+      "command": "/daily-analysis",
+      "date_policy": "T0"
+    },
+    {
+      "id": "intraday-review",
+      "enabled": true,
+      "time": "09:45",
+      "command": "/intraday-review",
+      "date_policy": "TP1"
+    },
+    {
+      "id": "intraday-analysis",
+      "enabled": true,
+      "time": "14:30",
+      "command": "/intraday-analysis",
+      "date_policy": "T0"
+    },
+    {
+      "id": "daily-review",
+      "enabled": true,
+      "time": "15:10",
+      "command": "/daily-review",
+      "date_policy": "T0"
+    }
+  ]
+}

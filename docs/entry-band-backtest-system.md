@@ -106,7 +106,7 @@ predict/{date}/strategy.json
 生成后必须校验:
 
 ```bash
-python .opencode/skills/daily-strategy/scripts/validate_strategy_json.py predict/{date}/strategy.json
+uv run --frozen ashare-pilot strategy daily validate predict/{date}/strategy.json
 ```
 
 校验失败时,必须修正 `strategy.json`,不要临时写转换脚本。
@@ -122,13 +122,13 @@ memory/daily/{date}/verification.json
 生成命令:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/generate_verification_json.py --date {YYYY-MM-DD} --pretty
+uv run --frozen ashare-pilot review daily verify --date {YYYY-MM-DD} --pretty
 ```
 
 若旧日期没有 `strategy.json`,可以临时回退:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/generate_verification_json.py \
+uv run --frozen ashare-pilot review daily verify \
   --date {YYYY-MM-DD} \
   --codes code1,code2,... \
   --regime strong-sector \
@@ -143,24 +143,24 @@ python .opencode/skills/daily-trading-review/scripts/generate_verification_json.
 | `pool_indicators.json` | MA5/MA20/ATR/position_state/risk_type 等早盘事实 |
 | 盘后行情接口 | 当日 open/low/high/close、首根5分K |
 
-### 3.3 `entry_band_shadow_backtest.py`
+### 3.3 `uv run --frozen ashare-pilot review daily backtest-entry-band`
 
 回测脚本位置:
 
 ```text
-.opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py
+uv run --frozen ashare-pilot review daily backtest-entry-band
 ```
 
 运行:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py --since {YYYY-MM-DD}
+uv run --frozen ashare-pilot review daily backtest-entry-band --since {YYYY-MM-DD}
 ```
 
 机器输出:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py --since {YYYY-MM-DD} --json
+uv run --frozen ashare-pilot review daily backtest-entry-band --since {YYYY-MM-DD} --json
 ```
 
 ---
@@ -215,7 +215,7 @@ python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.
 每 5 个交易日跑一次:
 
 ```bash
-python .opencode/skills/daily-trading-review/scripts/entry_band_shadow_backtest.py --since {start_date}
+uv run --frozen ashare-pilot review daily backtest-entry-band --since {start_date}
 ```
 
 观察重点:

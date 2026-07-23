@@ -1,0 +1,15 @@
+{
+  "schema_version": "daily_verification.v1",
+  "date": "2026-07-10",
+  "market": {"regime_hint": "neutral"},
+  "stocks": [
+    {
+      "code": "sz000001",
+      "strategy": "趋势跟随",
+      "shadow_bands": {
+        "MA5_ZONE": {"enabled": true, "touched": true, "hold_pct": 2.0, "mae_pct": -0.5},
+        "OPEN_CONFIRM": {"enabled": true, "touched": false, "missed_upside_pct": 3.0}
+      }
+    }
+  ]
+}
