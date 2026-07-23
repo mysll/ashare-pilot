@@ -7,6 +7,15 @@
   "candidate_threshold": 60,
   "default_min_coverage": 15,
   "default_min_concepts": 2,
+  "aggregation": {
+    "core_weight": 1.0,
+    "qualified_purity_scale": 0.01,
+    "qualified_weight_min": 0.0,
+    "qualified_weight_max": 1.0,
+    "edge_theme_weight_scale": 0.1,
+    "edge_weight_min": 0.0,
+    "edge_weight_max": 1.0
+  },
   "scoring": {
     "purity_coverage_weight": 0.60,
     "purity_rank_weight": 0.40,

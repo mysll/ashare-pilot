@@ -13,6 +13,10 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 | [A股早盘推荐系统操作手册](morning-recommendation-operation-runbook.md) | 交易日前检查、09:20盘前分析、09:35/09:40二次确认、人工执行纪律、T+1处理与异常降级。 |
 | [交易日多任务调度器 ADR](adr/0001-multi-task-trading-day-scheduler.md) | 四任务配置合同、交易日 fail-closed、串行排队、漏跑、失败、CLI 与日志决策。 |
 | [Agent 无关 Python 核心工程 ADR](adr/0002-agent-neutral-core-library.md) | A-Share Pilot 的包边界、CLI、旁路迁移、严格等价、配置数据和切换策略。 |
+| [盘中主题证据链 ADR](adr/0003-intraday-theme-evidence-contract.md) | 概念成员分页、core/qualified/edge、双领涨、双热度、主题时点与 mapper 确定性主题合同。 |
+| [盘中主题证据链实施清单](intraday-theme-evidence-implementation.md) | ADR-0003 的逐阶段代码任务、测试范围、全量重建和验收步骤。 |
+| [主题成分抓取排除清单](theme-member-fetch-exclusions.md) | 主题成员抓取排除项、审计依据、盘中 Dashboard 边界、延期项和后续复审流程。 |
+| [东方财富概念板块接口样本](api.md) | 网页双接口请求/响应样本、生产字段边界、分页 checkpoint 和双源一致性验证。 |
 | [Python 核心工程实施计划](core-refactor-plan.md) | 已完成的七批旁路建设、验收门槛和第二阶段统一 CLI 切换。 |
 | [Python 核心工程迁移映射](core-refactor-migration-map.md) | 旧 Python 入口到 `ashare-pilot` 新功能模块和 CLI 的完整映射。 |
 | [Python 核心工程最终验收矩阵](core-refactor-acceptance-matrix.md) | 68 个旧入口的正常、边界、失败、统一 CLI 和公共 API 验收状态。 |

@@ -1,0 +1,75 @@
+{
+  "library_version": "2026-07-23",
+  "enriched_time": "2026-07-23 14:31:36",
+  "compute_pool": [
+    {
+      "code": "sz003001",
+      "name": "中岩大地",
+      "quick_score": 75.0,
+      "change_pct": "+10.03%",
+      "enriched": {"money_flow": {"main_net_inflow": "0.00"}}
+    },
+    {
+      "code": "sz300214",
+      "name": "日科化学",
+      "quick_score": 63.4,
+      "change_pct": "+20.00%",
+      "enriched": {"money_flow": {"main_net_inflow": "0.00"}}
+    },
+    {
+      "code": "sh601600",
+      "name": "中国铝业",
+      "quick_score": 59.8,
+      "change_pct": "+3.82%",
+      "enriched": {"money_flow": {"main_net_inflow": "2.50"}}
+    }
+  ],
+  "stock_themes": {
+    "sz003001": {
+      "themes": [
+        {
+          "name": "PCB/被动元件",
+          "weight": 1.0,
+          "eligible": false,
+          "member_role": "edge",
+          "anchor": false
+        }
+      ]
+    },
+    "sz300214": {
+      "themes": [
+        {
+          "name": "AI算力",
+          "weight": 2.7,
+          "eligible": true,
+          "member_role": "qualified",
+          "purity_score": 33.2,
+          "industry_score": 32.0,
+          "candidate_score": 28.0,
+          "anchor": false
+        }
+      ]
+    },
+    "sh601600": {
+      "themes": [
+        {
+          "name": "有色金属",
+          "weight": 9.0,
+          "eligible": true,
+          "member_role": "core",
+          "purity_score": 22.9,
+          "industry_score": 54.5,
+          "candidate_score": 44.7,
+          "anchor": false
+        },
+        {
+          "name": "央国企改革",
+          "weight": 5.4,
+          "eligible": false,
+          "member_role": "edge",
+          "anchor": false
+        }
+      ]
+    }
+  }
+}

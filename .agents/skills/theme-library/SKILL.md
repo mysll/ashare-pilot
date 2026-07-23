@@ -220,6 +220,13 @@ Themes are defined in `config/themes/theme-config.json`:
 - **`concept_aliases`**: Concept-level aliases (for keyword matching)
 - **`concept_weights_override`**: Manual concept weight overrides (auto-generated if not specified)
 - **`anchors`**: Known theme representative stock codes (used as eligibility exceptions and anchor labels)
+- **`member_fetch_exclusions`**: Explicit concept name → reason mapping. These
+  concepts retain metadata but their member pages are not requested. An
+  exclusion must never overlap `themes.*.concepts`.
+- **`fetch_settings.concept_board_page_size`**: Page size for the concept-board
+  list request (default 50, valid range 1-100).
+- **`fetch_settings.concept_member_page_size`**: Page size for each concept's
+  member-stock request (default 50, valid range 1-100).
 - Concepts not mapped to any theme remain queryable via `concept` command
 
 ## Integration
@@ -247,8 +254,29 @@ Stock theme weight = max(concept_weight × rank_weight) across all member concep
 - `uv run --frozen ashare-pilot themes concepts fetch-stocks` supports resume — interrupt and re-run to continue
   - `--retry-failed` to retry previously failed concepts
   - `--reset` to clear cache and start fresh
+  - Member pages use the browser-validated 50-row contract, a persistent HTTP
+    session, a stable Windows Chrome fingerprint, board-specific referer,
+    JSONP parsing, and randomized 3–5 second spacing.
+  - Legacy 100-row partial checkpoints resume safely under the 50-row contract:
+    overlapping rows are de-duplicated before later pages advance.
+- Concept-board discovery uses two browser-observed endpoints: the one-request
+  `dataapi/bkzj/getbkzj` catalog validates total/code/name, while paginated
+  `push2/api/qt/clist/get` preserves the full `concepts.json` market fields.
+  Both sources must agree before the board list is published.
+- Concept-board pages use a versioned request-contract checkpoint. Incompatible
+  legacy checkpoints restart page 1; compatible failures resume without
+  publishing a partial `concepts.json`.
 - Use `--top N` to limit concept boards during development
 - Theme definitions are in `config/themes/theme-config.json`
+- Explicit `member_fetch_exclusions` are stored in `theme-config.json`; excluded
+  concepts are queryable as metadata-only entries with no member stocks.
+- The intraday concept dashboard removes `member_fetch_exclusions` before
+  ranking so metadata-only boards never receive artificial zero momentum.
+- Removing a concept from `member_fetch_exclusions` makes its old `ignored`
+  marker ineligible as a completed cache entry; the next batch fetch restores
+  its members automatically.
+- Review rationale and deferred candidates are maintained in
+  `docs/theme-member-fetch-exclusions.md`.
 - ~166 non-investment concepts (index/style/trading-state) are excluded from themes but still queryable via `concept` command
 - All data files use JSON format
 - **V5 Design Principle**: Static data (theme membership, purity, industry_score) lives in JSON files. Dynamic data (price action, turnover, volume ratio) lives in cache and is read at query time via `market` command. The two are never mixed.

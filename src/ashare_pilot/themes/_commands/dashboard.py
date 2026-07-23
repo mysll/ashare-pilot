@@ -25,11 +25,12 @@ import os
 import sys
 from pathlib import Path
 
-from ashare_pilot.themes.runtime import theme_data_path
+from ashare_pilot.themes.runtime import theme_config_path, theme_data_path
 
 from ashare_pilot.market_data._datasources import EastMoneyIntradayDataSource
 
 THEME_INDEX = theme_data_path("index")
+THEME_CONFIG_FILE = theme_config_path("theme-config.json")
 
 _ds = EastMoneyIntradayDataSource()
 
@@ -39,6 +40,20 @@ WEIGHTS = {
     "momentum": 0.25,
     "performance": 0.15,
 }
+
+
+def load_member_fetch_exclusions() -> set[str]:
+    if not THEME_CONFIG_FILE.exists():
+        return set()
+    with open(THEME_CONFIG_FILE, "r", encoding="utf-8") as f:
+        config = json.load(f)
+    exclusions = config.get("member_fetch_exclusions", {})
+    if not isinstance(exclusions, dict):
+        return set()
+    return {
+        name for name in exclusions
+        if isinstance(name, str) and name
+    }
 
 
 def load_concept_to_stock() -> dict:
@@ -144,7 +159,12 @@ def compute_momentum(concepts: list, concept_to_stock: dict, lianban_set: set, a
 
 
 def build_dashboard(top: int = 100, cache_dir: str = None) -> dict:
-    concepts = _ds.fetch_concept_ranking(top=top)
+    exclusions = load_member_fetch_exclusions()
+    concepts = _ds.fetch_concept_ranking(top=top + len(exclusions))
+    concepts = [
+        concept for concept in concepts
+        if concept.get("name") not in exclusions
+    ][:top]
     if not concepts:
         return {"error": "No concept data", "themes": {}, "rankings": {}}
 

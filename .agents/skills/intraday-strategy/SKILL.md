@@ -73,7 +73,6 @@ compute fields into it. The required schema is:
   },
   "stocks": [{
     "code": "sh600000",
-    "sector": "string",
     "tradeability": "Suitable|Watch|Extended|Avoid",
     "direction": "持有偏多|持有|谨慎持有|观望",
     "trading_strategy": "趋势跟随|回调布局|强势接力|防御布局",
@@ -98,6 +97,11 @@ compute fields into it. The required schema is:
   }
 }
 ```
+
+`sector`、`market_board`、`primary_theme`、`themes`、主题热度、领涨股及成员评分
+均来自 `intraday_mapper.base.json` 的确定性主题合同，只读且不得出现在 annotations
+中。推理可以引用这些字段，但不得复制、改写或补造；`sector` 由 Python 构建器固定
+为 `primary_theme`。
 
 `stop_loss_basis` is the only stop-loss field authored by the LLM. The mapper
 builder resolves `stop_loss_price` and readable `stop_loss` from the same
@@ -319,6 +323,8 @@ board-policy → 涨停封板 → 持仓质量过滤 → score tiers → INTRADA
 ## Score immutability
 
 - Never recompute OvernightScore, rank_tier, or quality/floor flags in annotations.
+- Never author or override deterministic theme fields (`sector`, `market_board`,
+  `primary_theme`, `themes`, heat, leaders, member roles, or member scores).
 - Never reproduce `execution_state`, `stop_loss_price`, or stop-loss text in annotations.
   Select only `stop_loss_basis`; Python resolves the price from the same stock.
 - I10/I11/I14 effects appear only via opportunity_pool / base.json fields

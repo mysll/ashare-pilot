@@ -123,6 +123,13 @@
       "legacy_commands": ["compute_theme_ranking.py compute_pool_enriched.json --json"],
       "scenario": "Two stocks sharing one theme and one distinct theme.",
       "provenance": "Synthetic minimal theme-ranking input."
+    },
+    {
+      "path": "themes/adr0003_2026-07-23.json",
+      "source_date": "2026-07-23",
+      "legacy_commands": ["ashare-pilot themes ranking compute", "ashare-pilot mapping intraday build-mapper-base"],
+      "scenario": "Frozen ADR-0003 roles, dual leaders, version timestamps, and mapper theme/board separation.",
+      "provenance": "Minimized public 2026-07-23 ComputePool rows with deterministic post-build membership evidence."
     }
   ]
 }

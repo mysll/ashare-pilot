@@ -132,14 +132,15 @@ def strategy_rows(items: list[dict[str, Any]]) -> str:
               <td><span class="badge {direction_class(item.get('direction'))}">{esc(direction_label(item.get('direction')))}</span></td>
               <td class="mono">{esc(item.get('code'))}</td>
               <td class="stock-name">{esc(item.get('name'))}</td>
-              <td>{esc(item.get('sector'))}</td>
+              <td>{esc(item.get('primary_theme'))}</td>
+              <td>{esc(item.get('market_board'))}</td>
               <td>{score_bar(item.get('overnight_score'))}</td>
               <td><span class="badge risk-{risk_class(item.get('risk_severity'))}">{risk_label(item.get('risk_severity'))}</span></td>
               <td class="action" title="{esc(plan.get('open_strategy'))}">{esc(plan.get('open_strategy'))}</td>
               <td class="reason" title="{esc(item.get('key_reason'))}">{esc(item.get('key_reason'))}</td>
             </tr>"""
         )
-    return "".join(rows) or '<tr><td colspan="8" class="empty">今日无可执行标的</td></tr>'
+    return "".join(rows) or '<tr><td colspan="9" class="empty">今日无可执行标的</td></tr>'
 
 
 def execution_cards(items: list[dict[str, Any]]) -> str:
@@ -153,7 +154,8 @@ def execution_cards(items: list[dict[str, Any]]) -> str:
                 <div class="card-score"><small>SCORE</small>{esc(item.get('overnight_score'))}</div>
               </header>
               <div class="card-tags">
-                <span>{esc(item.get('sector'))}</span>
+                <span>{esc(item.get('primary_theme'))}</span>
+                <span>{esc(item.get('market_board'))}</span>
                 <span class="badge {direction_class(item.get('direction'))}">{esc(direction_label(item.get('direction')))}</span>
                 <span class="badge risk-{risk_class(item.get('risk_severity'))}">{risk_label(item.get('risk_severity'))}风险</span>
               </div>
@@ -171,7 +173,7 @@ def execution_cards(items: list[dict[str, Any]]) -> str:
 def watch_group(item: dict[str, Any]) -> tuple[str, str]:
     text = " ".join(
         str(item.get(key) or "")
-        for key in ("key_reason", "position_plan", "reasoning_trace", "sector")
+        for key in ("key_reason", "position_plan", "reasoning_trace", "primary_theme")
     )
     code = str(item.get("code") or "")
     if code.startswith("sh688") or "科创" in text or "不可交易" in text:
@@ -203,7 +205,7 @@ def watch_groups(items: list[dict[str, Any]]) -> str:
         kind, values = grouped[label]
         rows = "".join(
             f"""<tr><td class="mono">{esc(x.get('code'))}</td><td class="stock-name">{esc(x.get('name'))}</td>
-            <td>{esc(x.get('sector'))}</td><td>{esc(x.get('overnight_score'))}</td>
+            <td>{esc(x.get('primary_theme'))}</td><td>{esc(x.get('market_board'))}</td><td>{esc(x.get('overnight_score'))}</td>
             <td><span class="badge watch">暂不买入</span></td><td>{esc(x.get('key_reason'))}</td></tr>"""
             for x in values
         )
@@ -211,7 +213,7 @@ def watch_groups(items: list[dict[str, Any]]) -> str:
             f"""<details class="watch-group">
               <summary><span class="group-mark {kind}"></span><b>{label}</b><em>{len(values)}</em>
               <span class="representatives">{esc(' / '.join(str(x.get('name') or '') for x in values[:3]))}</span></summary>
-              <div class="table-scroll"><table><thead><tr><th>代码</th><th>名称</th><th>板块</th><th>评分</th><th>状态</th><th>观察理由</th></tr></thead>
+              <div class="table-scroll"><table><thead><tr><th>代码</th><th>名称</th><th>投资主题</th><th>交易板</th><th>评分</th><th>状态</th><th>观察理由</th></tr></thead>
               <tbody>{rows}</tbody></table></div>
             </details>"""
         )
@@ -231,7 +233,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     cautious = sum(1 for x in positions if x.get("direction") == "谨慎持有")
     primary_sectors = []
     for item in positions:
-        sector = str(item.get("sector") or "")
+        sector = str(item.get("primary_theme") or "")
         if sector and sector not in primary_sectors:
             primary_sectors.append(sector)
     focus = " / ".join(primary_sectors[:3]) or "等待主线确认"
@@ -333,7 +335,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
 
   <div class="section-head"><h2>执行策略总览（{len(positions)}只）</h2><p>先看尾盘决策和明早动作</p></div>
   <section class="panel"><div class="table-scroll"><table>
-    <thead><tr><th>尾盘决策</th><th>代码</th><th>名称</th><th>板块</th><th>评分</th><th>风险</th><th>开盘动作</th><th>核心理由</th></tr></thead>
+    <thead><tr><th>尾盘决策</th><th>代码</th><th>名称</th><th>投资主题</th><th>交易板</th><th>评分</th><th>风险</th><th>开盘动作</th><th>核心理由</th></tr></thead>
     <tbody>{strategy_rows(positions)}</tbody>
   </table></div></section>
 

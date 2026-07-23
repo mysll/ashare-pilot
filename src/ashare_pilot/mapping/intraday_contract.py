@@ -254,6 +254,62 @@ def opportunity_stocks(pool: dict[str, Any]) -> list[dict[str, Any]]:
     return result
 
 
+def market_board(code: str) -> str:
+    normalized = str(code or "").lower()
+    if normalized.startswith("sh688"):
+        return "科创板"
+    if normalized.startswith("sh"):
+        return "沪市主板"
+    if normalized.startswith("sz300"):
+        return "创业板"
+    if normalized.startswith("sz"):
+        return "深市主板"
+    if normalized.startswith("bj"):
+        return "北交所"
+    return "未知交易板"
+
+
+def primary_theme(themes: list[dict[str, Any]]) -> str | None:
+    role_order = {"core": 0, "qualified": 1, "edge": 2}
+    relations = [
+        value
+        for value in themes
+        if isinstance(value, dict) and isinstance(value.get("name"), str) and value["name"]
+    ]
+    if not relations:
+        return None
+    selected = min(
+        relations,
+        key=lambda value: (
+            role_order.get(value.get("member_role"), 2),
+            -(numeric(value.get("industry_score")) or 0),
+            -(numeric(value.get("purity_score")) or 0),
+            -(numeric(value.get("weight")) or 0),
+            value["name"],
+        ),
+    )
+    return selected["name"]
+
+
+def attach_theme_evidence(
+    stocks: list[dict[str, Any]], stock_themes: dict[str, Any]
+) -> list[dict[str, Any]]:
+    result = []
+    for stock in stocks:
+        item = dict(stock)
+        code = str(item.get("code") or "")
+        evidence = stock_themes.get(code) if isinstance(stock_themes, dict) else None
+        relations = evidence.get("themes", []) if isinstance(evidence, dict) else []
+        relations = [dict(value) for value in relations if isinstance(value, dict)]
+        selected = primary_theme(relations)
+        item["market_board"] = market_board(code)
+        item["primary_theme"] = selected
+        item["themes"] = relations
+        item["sector"] = selected
+        result.append(item)
+    return result
+
+
 def merge_annotations(base: dict[str, Any], annotations: dict[str, Any]) -> dict[str, Any]:
     stock_notes = {
         item["code"]: item

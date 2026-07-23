@@ -32,10 +32,6 @@ def validate_stock(
         errors.append(f"{path}.code: invalid")
     if not isinstance(item.get("name"), str) or not item["name"]:
         errors.append(f"{path}.name: required")
-    if expected_direction == "position" and (
-        not isinstance(item.get("sector"), str) or not item["sector"].strip()
-    ):
-        errors.append(f"{path}.sector: actionable position requires non-empty string")
     if item.get("direction") not in DIRECTIONS:
         errors.append(f"{path}.direction: invalid enum")
     tradeability = item.get("tradeability")

@@ -1,9 +1,9 @@
 # A-Share Pilot 术语表
 
-- 版本：1.1
-- 日期：2026-07-21
-- 范围：自动调度、交易日期语义与 Agent 无关架构
-- 关联：[ADR-0001](adr/0001-multi-task-trading-day-scheduler.md)、[ADR-0002](adr/0002-agent-neutral-core-library.md)
+- 版本：1.2
+- 日期：2026-07-23
+- 范围：自动调度、交易日期语义、Agent 无关架构与盘中主题证据链
+- 关联：[ADR-0001](adr/0001-multi-task-trading-day-scheduler.md)、[ADR-0002](adr/0002-agent-neutral-core-library.md)、[ADR-0003](adr/0003-intraday-theme-evidence-contract.md)
 
 | 术语 | 定义 |
 |------|------|
@@ -24,3 +24,23 @@
 | 公共接口 | 核心库承诺给 CLI、Agent 适配器或其他调用者使用，并受兼容策略约束的 Python API、CLI 或数据合同。 |
 | 旁路建设 | 在不修改现有生产入口的前提下新增核心工程；旧链路继续运行，新链路独立开发和验证。 |
 | 切换阶段 | 新核心工程通过验收后，修改 Skill 调用、停止旧入口并清理重复实现的独立迁移阶段。 |
+| 概念（Concept） | 东方财富维护的股票板块及其原始成员集合，例如“算力概念”“PCB”。概念成员关系是主题库的外部数据源。 |
+| 主题（Theme） | 项目在多个概念之上定义的投资语义聚合，例如“AI算力”“PCB/被动元件”。一个主题包含一个或多个概念。 |
+| 主题成员关系（Theme Membership） | 从“主题→概念→股票”推导出的股票与主题关系。它描述相关性，不直接表示股票值得买入。 |
+| `core` 成员 | 主题成员中的核心关系；股票为主题 anchor，或 `industry_score` 达到配置的产业代表阈值。 |
+| `qualified` 成员 | 通过主题库 eligibility、但未达到 core 条件的有效主题成员。 |
+| `edge` 成员 | 未通过 eligibility 的原始主题成员。它可以反映边缘扩散或事件炒作，但不贡献 `core_heat`。 |
+| `core_leader` | ComputePool 中主题核心领涨者。优先从 core 选择；没有 core 时可由 qualified 显式兜底；edge 禁止入选。 |
+| `momentum_leader` | ComputePool 中所有主题成员里当日涨幅最高者，可以是 edge。它表达价格动量，不等同于产业龙头。 |
+| `core_heat` | 由 core 和 qualified 成员加权聚合的主题核心热度。它是主题数据，不直接构成买入指令。 |
+| `diffusion_heat` | 由 edge 成员加权聚合的主题边缘扩散热度。它用于识别扩散，不代表主题核心强度。 |
+| `library_version` | 已发布主题库的版本标识，本期使用成功构建日期 `YYYY-MM-DD`。 |
+| `membership_as_of` | 主题成员关系所对应的主题库构建日期。 |
+| `market_as_of` | 盘中主题排名所使用的 ComputePool 行情快照时间。 |
+| `contributors` | Top 主题中实际参与本次热度、资金或领涨计算的池内股票及其贡献明细。 |
+| `stock_themes` | ComputePool 全股票的确定性主题关系、成员身份及可用评分，不受 Top 主题展示截断影响。 |
+| `market_board` | 沪市主板、深市主板、创业板等交易板属性，不是投资主题。 |
+| `primary_theme` | mapper 按确定性成员身份和评分规则选择的股票主要投资主题。 |
+| `sector` | 盘中合同的过渡兼容字段，由构建器令其等于 `primary_theme`；LLM 不得编写。 |
+| 主题感知层 | 使用已发布主题关系和今日行情生成主题观察数据的确定性能力；不负责最终选股、方向和仓位。 |
+| 策略层 | 消费主题、资金、价格和执行数据，决定候选优先级、方向、仓位和 T+1 计划的能力。 |

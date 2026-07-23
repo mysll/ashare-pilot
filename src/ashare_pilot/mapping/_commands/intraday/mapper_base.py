@@ -9,6 +9,7 @@ from pathlib import Path
 
 from ashare_pilot.mapping.intraday_contract import (
     cache_dir,
+    attach_theme_evidence,
     intraday_dir,
     opportunity_stocks,
     read_json,
@@ -38,6 +39,20 @@ def main(argv=None) -> int:
     if not isinstance(pool, dict):
         print("[ERROR] opportunity_pool.json root must be an object", file=sys.stderr)
         return 1
+    theme_contract = values["theme_ranking"]
+    if (
+        not isinstance(theme_contract, dict)
+        or theme_contract.get("schema_version") != "intraday_theme_ranking.v2"
+        or not isinstance(theme_contract.get("stock_themes"), dict)
+    ):
+        print("[ERROR] theme_ranking.json must be intraday_theme_ranking.v2", file=sys.stderr)
+        return 1
+    stock_themes = (
+        theme_contract.get("stock_themes", {})
+        if isinstance(theme_contract, dict)
+        else {}
+    )
+    stocks = attach_theme_evidence(opportunity_stocks(pool), stock_themes)
     doc = {
         "schema_version": "intraday_mapper_base.v1",
         "date": args.date,
@@ -51,7 +66,7 @@ def main(argv=None) -> int:
             "indices": values["indices"],
             "concept_dashboard": values["concept_dashboard"],
         },
-        "themes": values["theme_ranking"],
+        "themes": theme_contract,
         "pool_summary": {
             key: pool.get(key)
             for key in (
@@ -62,7 +77,7 @@ def main(argv=None) -> int:
                 "i14_applied_count", "i14_skipped_no_quick_score", "vwap_missing_count",
             )
         },
-        "stocks": opportunity_stocks(pool),
+        "stocks": stocks,
         "quality_filtered": pool.get("quality_filtered", []),
     }
     write_json(output, doc)

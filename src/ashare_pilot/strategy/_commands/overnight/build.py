@@ -26,7 +26,10 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
     return {
         "code": stock.get("code"),
         "name": stock.get("name"),
-        "sector": reasoning.get("sector"),
+        "market_board": stock.get("market_board"),
+        "primary_theme": stock.get("primary_theme"),
+        "themes": stock.get("themes") or [],
+        "sector": stock.get("primary_theme"),
         "source_tier": stock.get("tier"),
         "source_rank": stock.get("rank"),
         "overnight_score": stock.get("overnight_score"),

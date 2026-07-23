@@ -3,26 +3,45 @@
 import json
 import random
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, Literal
+from urllib.parse import urlencode
 
 import requests
 
 from ashare_pilot.themes.runtime import workspace_path
 
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
-]
-
 EASTMONEY_LIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
+EASTMONEY_BOARD_LIST_URL = "https://data.eastmoney.com/dataapi/bkzj/getbkzj"
+EASTMONEY_CONCEPT_PAGE_SIZE = 50
+EASTMONEY_MEMBER_PAGE_SIZE = 50
+EASTMONEY_MEMBER_UT = "8dec03ba335b81bf4ebdf7b29ec27d15"
+CONCEPT_FETCH_STATE_SCHEMA = "concept_fetch_state.v2"
+CHROME_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/150.0.0.0 Safari/537.36"
+)
+CHROME_SEC_CH_UA = (
+    '"Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"'
+)
 
 COOKIE_FILE = workspace_path(".cookie")
 
 _custom_cookie_file: Path | None = None
+
+
+@dataclass(frozen=True)
+class ConceptStocksFetchResult:
+    """Explicit result for one concept's paginated member fetch."""
+
+    status: Literal["complete", "partial", "failed"]
+    stocks: list[dict[str, Any]]
+    total: int | None
+    next_page: int
+    failed_page: int | None = None
+    error: str | None = None
 
 
 def set_cookie_file(path: str | Path) -> None:
@@ -58,31 +77,48 @@ class EastMoneyConceptSource:
         self._max_interval = max_interval
         self.verbose = verbose
         self._state_dir = state_dir
+        self._session = requests.Session()
+        self._last_request_error: str | None = None
 
     def _log(self, msg: str):
         if self.verbose:
             print(msg, flush=True)
 
-    def _get_random_ua(self) -> str:
-        return random.choice(USER_AGENTS)
-
-    def _get_push2_headers(self) -> dict:
+    def _get_push2_headers(self, referer: str = "https://quote.eastmoney.com/") -> dict:
         cookie = load_cookie()
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
-            "host": "push2.eastmoney.com",
-            "referer": "https://quote.eastmoney.com/",
-            "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
+            "referer": referer,
+            "sec-ch-ua": CHROME_SEC_CH_UA,
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "script",
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
-            "user-agent": self._get_random_ua(),
+            "user-agent": CHROME_USER_AGENT,
             "cookie": cookie,
         }
+
+    def _get_board_list_headers(self) -> dict:
+        headers = self._get_push2_headers(
+            referer="https://data.eastmoney.com/bkzj/gn.html"
+        )
+        headers.update(
+            {
+                "sec-fetch-dest": "empty",
+                "sec-fetch-mode": "cors",
+                "sec-fetch-site": "same-origin",
+                "x-requested-with": "XMLHttpRequest",
+            }
+        )
+        return headers
+
+    @staticmethod
+    def _jsonp_callback() -> str:
+        now_ms = int(time.time() * 1000)
+        return f"jQuery1123{random.randrange(10**15, 10**16)}_{now_ms}"
 
     def _wait_for_rate_limit(self):
         elapsed = time.time() - self._last_request_time
@@ -103,33 +139,128 @@ class EastMoneyConceptSource:
             self._request_count = 0
             self._minute_start = time.time()
 
-    def _request_with_retry(self, url: str, headers: dict, retries: int = 1, timeout: int = 30) -> dict | None:
+    def _request_with_retry(
+        self,
+        url: str,
+        headers: dict,
+        retries: int = 1,
+        timeout: int = 30,
+        callback: str | None = None,
+    ) -> dict | None:
         for attempt in range(retries):
+            self._last_request_error = None
             self._wait_for_rate_limit()
             self._check_rate_limit()
             try:
-                resp = requests.get(url, headers=headers, timeout=timeout)
+                resp = self._session.get(url, headers=headers, timeout=timeout)
                 self._request_count += 1
-                data = resp.json()
+                content_type = resp.headers.get("content-type", "")
+                body = resp.text.strip()
+                if resp.status_code != 200:
+                    prefix = body[:160].replace("\r", " ").replace("\n", " ")
+                    self._last_request_error = (
+                        f"http_status:{resp.status_code};"
+                        f"content_type:{content_type};body_prefix:{prefix}"
+                    )
+                    raise ValueError(self._last_request_error)
+
+                if callback:
+                    wrapper = callback + "("
+                    if not body.startswith(wrapper):
+                        raise ValueError("jsonp_callback_mismatch")
+                    if body.endswith(");"):
+                        body = body[len(wrapper) : -2]
+                    elif body.endswith(")"):
+                        body = body[len(wrapper) : -1]
+                    else:
+                        raise ValueError("jsonp_wrapper_incomplete")
+
+                data = json.loads(body)
+                if not isinstance(data, dict):
+                    raise ValueError("response_not_object")
+                self._last_request_error = None
                 return data
-            except Exception:
+            except Exception as exc:
+                if self._last_request_error is None:
+                    self._last_request_error = (
+                        f"{type(exc).__name__}:{str(exc)[:160]}"
+                    )
                 if attempt < retries - 1:
                     wait = 3 * (2 ** attempt) * random.uniform(0.7, 1.3)
-                    self._log(f"  Request failed (attempt {attempt+1}/{retries}), retrying in {wait:.1f}s...")
+                    self._log(
+                        f"  Request failed ({self._last_request_error}; "
+                        f"attempt {attempt+1}/{retries}), retrying in {wait:.1f}s..."
+                    )
                     time.sleep(wait)
                 else:
+                    self._log(f"  Request failed: {self._last_request_error}")
                     return None
         return None
 
-    def _fetch_page_with_retry(self, url: str, headers: dict, page_label: str = "") -> dict | None:
+    def _fetch_page_with_retry(
+        self,
+        url: str,
+        headers: dict,
+        page_label: str = "",
+        callback: str | None = None,
+    ) -> dict | None:
         """Fetch a single page. No retry — failure triggers checkpoint save and exit."""
         self._log(f"  Fetching page {page_label}...")
-        data = self._request_with_retry(url, headers, retries=1)
+        data = self._request_with_retry(
+            url,
+            headers,
+            retries=1,
+            callback=callback,
+        )
         if data and data.get("rc") == 0:
             return data
+        if data:
+            self._last_request_error = f"api_rc:{data.get('rc')}"
+            self._log(f"  Request failed: {self._last_request_error}")
         return None
 
-    def fetch_concept_sectors(self, page_size: int = 100, resume: bool = True) -> list:
+    def _fetch_concept_catalog(self) -> tuple[dict[str, str], int] | None:
+        """Fetch the one-request concept code/name catalog used for validation."""
+        url = (
+            f"{EASTMONEY_BOARD_LIST_URL}?"
+            + urlencode({"key": "f62", "code": "m:90+t:3"})
+        )
+        data = self._request_with_retry(
+            url,
+            self._get_board_list_headers(),
+            retries=1,
+        )
+        payload = data.get("data") if isinstance(data, dict) else None
+        if not isinstance(payload, dict):
+            self._log(
+                "  Concept catalog unavailable: "
+                f"{self._last_request_error or 'invalid_payload'}"
+            )
+            return None
+        rows = payload.get("diff")
+        rows = rows if isinstance(rows, list) else []
+        catalog = {
+            str(row.get("f12")): str(row.get("f14"))
+            for row in rows
+            if row.get("f12") and row.get("f14")
+        }
+        try:
+            total = int(payload.get("total"))
+        except (TypeError, ValueError):
+            total = len(catalog)
+        if not catalog or len(catalog) != total:
+            self._log(
+                "  Concept catalog incomplete: "
+                f"codes={len(catalog)}, total={total}"
+            )
+            return None
+        return catalog, total
+
+    def fetch_concept_sectors(
+        self,
+        page_size: int = EASTMONEY_CONCEPT_PAGE_SIZE,
+        resume: bool = True,
+    ) -> list:
         """Fetch all concept sector list from East Money.
 
         Args:
@@ -137,8 +268,24 @@ class EastMoneyConceptSource:
             resume: If True, resume from last saved page on failure
         """
         fs = "m:90+t:3"
-        ut = "fa5fd1947385f9554f5b7d918a9e"
-        fields = "f12,f14,f2,f3,f4,f8,f20,f104,f105,f128,f136,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87"
+        ut = EASTMONEY_MEMBER_UT
+        fields = (
+            "f12,f13,f14,f2,f3,f4,f8,f20,f104,f105,f128,f136,f62,"
+            "f184,f66,f69,f72,f75,f78,f81,f84,f87,f124,f204,f205,f206"
+        )
+        request_contract = {
+            "page_size": page_size,
+            "fid": "f62",
+            "ut": ut,
+            "fs": fs,
+        }
+        catalog_result = self._fetch_concept_catalog()
+        if catalog_result is None:
+            raise RuntimeError(
+                "Concept catalog request failed or returned an incomplete payload: "
+                f"{self._last_request_error or 'catalog_validation_failed'}"
+            )
+        catalog, catalog_total = catalog_result
 
         state_file = self._state_dir / "concepts_fetch_state.json" if self._state_dir else None
 
@@ -151,21 +298,38 @@ class EastMoneyConceptSource:
             try:
                 with open(state_file, "r", encoding="utf-8") as sf:
                     state = json.loads(sf.read())
-                results = state.get("results", [])
-                start_page = state.get("next_page", 1)
-                known_total = state.get("total")
-                if not self.verbose and known_total:
-                    total_pages = (known_total + page_size - 1) // page_size
-                    print(f"  Total concepts: {known_total}, fetching {total_pages} page(s)...", flush=True)
-                if not self.verbose:
-                    print(f"  Resuming from page {start_page} ({len(results)} concepts cached)...", flush=True)
+                if (
+                    state.get("schema_version") == CONCEPT_FETCH_STATE_SCHEMA
+                    and state.get("request_contract") == request_contract
+                ):
+                    results = state.get("results", [])
+                    start_page = state.get("next_page", 1)
+                    known_total = state.get("total")
+                    if not self.verbose and known_total:
+                        total_pages = (known_total + page_size - 1) // page_size
+                        print(f"  Total concepts: {known_total}, fetching {total_pages} page(s)...", flush=True)
+                    if not self.verbose:
+                        print(f"  Resuming from page {start_page} ({len(results)} concepts cached)...", flush=True)
+                else:
+                    print(
+                        "  Ignoring incompatible concept-list checkpoint; "
+                        "the browser request contract changed.",
+                        flush=True,
+                    )
             except Exception:
                 pass
 
         page = start_page
-        headers = self._get_push2_headers()
+        headers = self._get_push2_headers(
+            referer="https://data.eastmoney.com/bkzj/gn.html"
+        )
         total = known_total
         complete = False
+        seen_codes = {
+            str(item.get("code"))
+            for item in results
+            if isinstance(item, dict) and item.get("code")
+        }
 
         while True:
             now = time.strftime("%H:%M:%S")
@@ -175,41 +339,74 @@ class EastMoneyConceptSource:
             else:
                 print(f"  [{now}] Fetching page {page}...", flush=True)
 
-            url = f"{EASTMONEY_LIST_URL}?pn={page}&pz={page_size}&po=1&np=1&ut={ut}&fltt=2&invt=2&fid=f3&fs={fs}&fields={fields}"
-            data = self._fetch_page_with_retry(url, headers, page_label=str(page))
+            callback = self._jsonp_callback()
+            params = {
+                "cb": callback,
+                "fid": "f62",
+                "po": 1,
+                "pz": page_size,
+                "pn": page,
+                "np": 1,
+                "fltt": 2,
+                "invt": 2,
+                "ut": ut,
+                "fs": fs,
+                "fields": fields,
+            }
+            url = f"{EASTMONEY_LIST_URL}?{urlencode(params)}"
+            data = self._fetch_page_with_retry(
+                url,
+                headers,
+                page_label=str(page),
+                callback=callback,
+            )
             if not data or data.get("rc") != 0:
                 if resume and state_file:
                     try:
                         state_file.parent.mkdir(parents=True, exist_ok=True)
                         with open(state_file, "w", encoding="utf-8") as sf:
-                            sf.write(json.dumps({"next_page": page, "total": total, "results": results},
-                                                  ensure_ascii=False, indent=2))
+                            sf.write(json.dumps({
+                                "schema_version": CONCEPT_FETCH_STATE_SCHEMA,
+                                "request_contract": request_contract,
+                                "next_page": page,
+                                "total": total,
+                                "results": results,
+                            }, ensure_ascii=False, indent=2))
                     except Exception:
                         pass
-                print(f"\n  Page {page} failed after retries. Cookie may have expired.", flush=True)
-                print("  Run: ashare-pilot market-data auth update-cookie", flush=True)
-                total_pages = (total + page_size - 1) // page_size if total else "?"
-                print(f"  Partial data: {len(results)} concepts fetched (page {page}/{total_pages}).", flush=True)
-                if resume and state_file:
-                    print(f"  Checkpoint saved, next run will resume from page {page}.", flush=True)
-                break
+                error = self._last_request_error or "request_failed"
+                resume_note = (
+                    "Checkpoint saved for resume."
+                    if resume and state_file
+                    else "No checkpoint path configured."
+                )
+                raise RuntimeError(
+                    f"Concept board page {page} failed: {error}. "
+                    f"{resume_note}"
+                )
 
             if total is None:
                 total = data.get("data", {}).get("total", 0)
+                if catalog_total is not None and total != catalog_total:
+                    raise RuntimeError(
+                        "Concept API totals disagree: "
+                        f"catalog={catalog_total}, push2={total}"
+                    )
                 total_pages = (total + page_size - 1) // page_size
                 now = time.strftime("%H:%M:%S")
                 print(f"  [{now}] Total concepts: {total}, fetching {total_pages} page(s)...", flush=True)
 
             diff = data.get("data", {}).get("diff", [])
             if not diff:
-                complete = True
+                complete = total is not None and len(results) == total
                 break
 
             for item in diff:
                 code = item.get("f12", "")
                 name = item.get("f14", "")
-                if not code or not name:
+                if not code or not name or code in seen_codes:
                     continue
+                seen_codes.add(code)
 
                 stock_count = item.get("f104")
                 if stock_count is not None:
@@ -229,8 +426,8 @@ class EastMoneyConceptSource:
                     "stock_count": stock_count,
                     "up_count": item.get("f104"),
                     "down_count": item.get("f105"),
-                    "lead_stock": item.get("f128", ""),
-                    "lead_stock_code": item.get("f136", ""),
+                    "lead_stock": item.get("f128") or item.get("f204", ""),
+                    "lead_stock_code": item.get("f136") or item.get("f205", ""),
                     "net_inflow": _to_yi(item.get("f62") or 0),
                     "source": "eastmoney",
                 })
@@ -244,21 +441,44 @@ class EastMoneyConceptSource:
                 try:
                     state_file.parent.mkdir(parents=True, exist_ok=True)
                     with open(state_file, "w", encoding="utf-8") as sf:
-                        sf.write(json.dumps({"next_page": page + 1, "total": total, "results": results},
-                                              ensure_ascii=False, indent=2))
+                        sf.write(json.dumps({
+                            "schema_version": CONCEPT_FETCH_STATE_SCHEMA,
+                            "request_contract": request_contract,
+                            "next_page": page + 1,
+                            "total": total,
+                            "results": results,
+                        }, ensure_ascii=False, indent=2))
                 except Exception:
                     pass
 
-            if len(diff) < page_size:
+            if total is not None and len(results) == total:
                 complete = True
+                break
+            if len(diff) < page_size:
                 break
 
             page += 1
-            headers = self._get_push2_headers()
-            delay = random.uniform(4.0, 7.0) + page * 1.5
-            now = time.strftime("%H:%M:%S")
-            print(f"  [{now}] Waiting {delay:.1f}s before next page...", flush=True)
-            time.sleep(delay)
+
+        if not complete:
+            raise RuntimeError(
+                "Concept board pagination incomplete: "
+                f"{len(results)}/{total or '?'} unique boards."
+            )
+        if catalog is not None:
+            fetched_catalog = {item["code"]: item["name"] for item in results}
+            missing = sorted(set(catalog) - set(fetched_catalog))
+            extra = sorted(set(fetched_catalog) - set(catalog))
+            renamed = sorted(
+                code
+                for code in set(catalog) & set(fetched_catalog)
+                if catalog[code] != fetched_catalog[code]
+            )
+            if missing or extra or renamed:
+                raise RuntimeError(
+                    "Concept API code/name sets disagree: "
+                    f"missing={len(missing)}, extra={len(extra)}, "
+                    f"renamed={len(renamed)}"
+                )
 
         # Clean up state file on successful completion
         if complete and resume and state_file and state_file.exists():
@@ -269,32 +489,115 @@ class EastMoneyConceptSource:
 
         return results
 
-    def fetch_concept_stocks(self, concept_code: str, page_size: int = 200) -> list:
+    def fetch_concept_stocks(
+        self,
+        concept_code: str,
+        page_size: int = EASTMONEY_MEMBER_PAGE_SIZE,
+        *,
+        start_page: int = 1,
+        initial_stocks: list[dict[str, Any]] | None = None,
+        known_total: int | None = None,
+        on_page: Callable[[ConceptStocksFetchResult], None] | None = None,
+        max_pages: int | None = None,
+    ) -> ConceptStocksFetchResult:
         """Fetch stocks belonging to a specific concept sector.
 
         Args:
             concept_code: Concept sector code (e.g., "BK0493")
             page_size: Number of stocks per page
+            start_page: First page to request when resuming.
+            initial_stocks: Previously checkpointed, already de-duplicated members.
+            known_total: Interface total captured by an earlier successful page.
+            on_page: Called after every successful page with resumable state.
+            max_pages: Maximum successful pages to fetch in this call. ``None``
+                fetches through completion; ``1`` supports round-robin paging.
         """
-        fs = f"b:{concept_code}+f:!50"
-        ut = "fa5fd1947385f9554f5b7d918a9e"
+        fs = f"b:{concept_code}"
+        ut = EASTMONEY_MEMBER_UT
         fields = "f12,f13,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21"
 
-        results = []
-        page = 1
-        headers = self._get_push2_headers()
+        results: list[dict[str, Any]] = []
+        seen_codes: set[str] = set()
+        for stock in initial_stocks or []:
+            code = stock.get("code") if isinstance(stock, dict) else None
+            if isinstance(code, str) and code and code not in seen_codes:
+                results.append(stock)
+                seen_codes.add(code)
+        page = max(1, int(start_page))
+        total = int(known_total) if known_total is not None else None
+        headers = self._get_push2_headers(
+            referer=f"https://data.eastmoney.com/bkzj/{concept_code}.html"
+        )
+        pages_fetched = 0
 
         while True:
-            url = f"{EASTMONEY_LIST_URL}?pn={page}&pz={page_size}&po=1&np=1&ut={ut}&fltt=2&invt=2&fid=f3&fs={fs}&fields={fields}"
-            data = self._fetch_page_with_retry(url, headers, page_label=f"{concept_code}/p{page}")
+            callback = self._jsonp_callback()
+            params = {
+                "cb": callback,
+                "fid": "f3",
+                "po": 1,
+                "pz": page_size,
+                "pn": page,
+                "np": 1,
+                "fltt": 2,
+                "invt": 2,
+                "ut": ut,
+                "fs": fs,
+                "fields": fields,
+            }
+            url = f"{EASTMONEY_LIST_URL}?{urlencode(params)}"
+            data = self._fetch_page_with_retry(
+                url,
+                headers,
+                page_label=f"{concept_code}/p{page}",
+                callback=callback,
+            )
             if not data or data.get("rc") != 0:
-                self._log(f"\n  {concept_code} page {page} failed after retries. Cookie may have expired.")
-                self._log("  Run: ashare-pilot market-data auth update-cookie")
-                break
+                error = self._last_request_error or "request_failed"
+                self._log(
+                    f"\n  {concept_code} page {page} failed: {error}"
+                )
+                return ConceptStocksFetchResult(
+                    status="partial" if results else "failed",
+                    stocks=results,
+                    total=total,
+                    next_page=page,
+                    failed_page=page,
+                    error=error,
+                )
 
-            diff = data.get("data", {}).get("diff", [])
+            payload = data.get("data")
+            payload = payload if isinstance(payload, dict) else {}
+            reported_total = payload.get("total")
+            try:
+                reported_total = int(reported_total)
+            except (TypeError, ValueError):
+                reported_total = None
+            if reported_total is not None:
+                if total is not None and reported_total != total:
+                    return ConceptStocksFetchResult(
+                        status="partial" if results else "failed",
+                        stocks=results,
+                        total=reported_total,
+                        next_page=page,
+                        failed_page=page,
+                        error=f"total_changed:{total}->{reported_total}",
+                    )
+                total = reported_total
+
+            diff = payload.get("diff", [])
+            diff = diff if isinstance(diff, list) else []
             if not diff:
-                break
+                if total == len(results):
+                    return ConceptStocksFetchResult("complete", results, total, page)
+                return ConceptStocksFetchResult(
+                    status="partial" if results else "failed",
+                    stocks=results,
+                    total=total,
+                    next_page=page,
+                    failed_page=page,
+                    error=f"incomplete_count:{len(results)}/{total}",
+                )
 
             for item in diff:
                 code = item.get("f12", "")
@@ -330,7 +633,7 @@ class EastMoneyConceptSource:
                 else:
                     float_mv = 0
 
-                results.append({
+                stock = {
                     "code": full_code,
                     "name": name,
                     "price": item.get("f2"),
@@ -347,15 +650,37 @@ class EastMoneyConceptSource:
                     "yestclose": item.get("f18"),
                     "total_mv": total_mv,
                     "float_mv": float_mv,
-                })
+                }
+                if full_code not in seen_codes:
+                    results.append(stock)
+                    seen_codes.add(full_code)
 
-            if len(diff) < page_size:
-                break
+            next_page = page + 1
+            pages_fetched += 1
+            page_result = ConceptStocksFetchResult(
+                status="complete" if total is not None and len(results) == total else "partial",
+                stocks=results,
+                total=total,
+                next_page=next_page,
+            )
+            if on_page:
+                on_page(page_result)
 
-            page += 1
-            time.sleep(random.uniform(0.5, 1.5))
+            if total is not None and len(results) == total:
+                return ConceptStocksFetchResult("complete", results, total, next_page)
+            if total is not None and len(results) > total:
+                return ConceptStocksFetchResult(
+                    status="partial",
+                    stocks=results,
+                    total=total,
+                    next_page=next_page,
+                    failed_page=page,
+                    error=f"count_exceeds_total:{len(results)}/{total}",
+                )
+            if max_pages is not None and pages_fetched >= max_pages:
+                return page_result
 
-        return results
+            page = next_page
 
 
 def _to_yi(val) -> str:

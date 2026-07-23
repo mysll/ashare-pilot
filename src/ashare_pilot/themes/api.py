@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import importlib
+from typing import TYPE_CHECKING
 
 from ashare_pilot.market_data.runtime import use_workspace
 from ashare_pilot.workspace import Workspace
+
+if TYPE_CHECKING:
+    from ashare_pilot.themes.datasource import ConceptStocksFetchResult
 
 
 def _query_module():
@@ -69,7 +73,7 @@ def fetch_concepts(*, workspace: Workspace, **source_options) -> list:
 
 def fetch_concept_stocks(
     concept_code: str, *, workspace: Workspace, **source_options
-) -> list:
+) -> ConceptStocksFetchResult:
     with use_workspace(workspace):
         module = importlib.import_module("ashare_pilot.themes.datasource")
         source = module.EastMoneyConceptSource(**source_options)

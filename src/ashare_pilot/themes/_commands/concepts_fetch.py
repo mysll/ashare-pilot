@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 from ashare_pilot.themes.datasource import EastMoneyConceptSource
+from ashare_pilot.themes.fetch_settings import load_fetch_page_sizes
 from ashare_pilot.themes.runtime import theme_cache_path, theme_data_path
 
 CACHE_DIR = theme_cache_path()
@@ -49,8 +50,26 @@ def main(argv=None):
         print("Cleared checkpoint, starting fresh.")
 
     print("Fetching concept boards from East Money...")
-    source = EastMoneyConceptSource(verbose=args.verbose, state_dir=CACHE_DIR)
-    concepts = source.fetch_concept_sectors(resume=not args.fresh)
+    try:
+        concept_page_size, _member_page_size = load_fetch_page_sizes()
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        print(f"Error: invalid theme fetch settings: {exc}", file=sys.stderr)
+        return 1
+    source = EastMoneyConceptSource(
+        requests_per_minute=15,
+        min_interval=3.0,
+        max_interval=5.0,
+        verbose=args.verbose,
+        state_dir=CACHE_DIR,
+    )
+    try:
+        concepts = source.fetch_concept_sectors(
+            page_size=concept_page_size,
+            resume=not args.fresh,
+        )
+    except RuntimeError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
     if args.top > 0:
         concepts = concepts[:args.top]
@@ -90,6 +109,7 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     elif not args.quiet:
         print(output_str)
+    return 0
 
 
 if __name__ == "__main__":

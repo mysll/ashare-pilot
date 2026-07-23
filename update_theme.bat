@@ -1,8 +1,6 @@
 @echo off
 chcp 65001 >nul
 set "VIRTUAL_ENV="
-rem set "UV_PROJECT_ENVIRONMENT=.venv-windows"
-
 echo ============================================
 echo  Theme Library Update
 echo ============================================
@@ -16,12 +14,22 @@ if %errorlevel% neq 0 (
 
 echo.
 echo [2/4] Fetching concept board list...
+:fetch_concepts
 uv run --frozen ashare-pilot themes concepts fetch -q -v
+if %errorlevel% equ 0 goto concept_fetch_complete
+
+echo [!] Concept board fetch interrupted or failed.
+echo [*] Waiting 5 seconds before refreshing the East Money cookie...
+timeout /T 5 /NOBREAK >nul
+call update_cookie.bat
 if %errorlevel% neq 0 (
-    echo [!] Failed to fetch concept list. Aborting.
-    pause
-    exit /b 1
+    echo [!] Cookie update failed. Retrying from checkpoint with the existing cookie...
 )
+echo [*] Resuming concept board fetch from checkpoint...
+goto fetch_concepts
+
+:concept_fetch_complete
+echo [*] All concept boards fetched successfully.
 
 @echo sleep 60s
 timeout /T 60 > NUL

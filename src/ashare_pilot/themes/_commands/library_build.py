@@ -88,6 +88,15 @@ def _load_config():
     )
 
 
+def _load_member_fetch_exclusions():
+    if not CONFIG_FILE.exists():
+        return {}
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    value = cfg.get("member_fetch_exclusions", {})
+    return value if isinstance(value, dict) else {}
+
+
 def _load_library_config():
     defaults = {
         "pure_limit": 50,
@@ -98,6 +107,15 @@ def _load_library_config():
         "candidate_threshold": 60,
         "default_min_coverage": 15,
         "default_min_concepts": 2,
+        "aggregation": {
+            "core_weight": 1.0,
+            "qualified_purity_scale": 0.01,
+            "qualified_weight_min": 0.0,
+            "qualified_weight_max": 1.0,
+            "edge_theme_weight_scale": 0.1,
+            "edge_weight_min": 0.0,
+            "edge_weight_max": 1.0,
+        },
         "scoring": {
             "purity_coverage_weight": 0.60,
             "purity_rank_weight": 0.40,
@@ -125,12 +143,15 @@ def _load_library_config():
 
 
 THEMES_CONFIG, CONCEPT_ALIASES, RELATED_THEMES_MAP = {}, {}, {}
+MEMBER_FETCH_EXCLUSIONS = {}
 LIBRARY_CONFIG = {}
 
 
 def reload_configuration():
-    global THEMES_CONFIG, CONCEPT_ALIASES, RELATED_THEMES_MAP, LIBRARY_CONFIG
+    global THEMES_CONFIG, CONCEPT_ALIASES, RELATED_THEMES_MAP
+    global MEMBER_FETCH_EXCLUSIONS, LIBRARY_CONFIG
     THEMES_CONFIG, CONCEPT_ALIASES, RELATED_THEMES_MAP = _load_config()
+    MEMBER_FETCH_EXCLUSIONS = _load_member_fetch_exclusions()
     LIBRARY_CONFIG = _load_library_config()
 
 
@@ -142,7 +163,34 @@ def load_concept_stocks():
     for f in STOCKS_CACHE_DIR.glob("*.json"):
         code = f.stem
         with open(f, "r", encoding="utf-8") as fh:
-            all_data[code] = json.load(fh)
+            value = json.load(fh)
+        stocks = value.get("stocks", []) if isinstance(value, dict) else []
+        unique_codes = {
+            stock.get("code")
+            for stock in stocks
+            if isinstance(stock, dict) and stock.get("code")
+        }
+        ignored = value.get("status") == "ignored"
+        valid_ignored = (
+            ignored
+            and value.get("concept_name") in MEMBER_FETCH_EXCLUSIONS
+            and value.get("reported_total") == 0
+            and value.get("stock_count") == 0
+            and stocks == []
+        )
+        valid_complete = (
+            value.get("status") == "complete"
+            and value.get("reported_total") == value.get("stock_count")
+            and value.get("stock_count") == len(stocks)
+            and len(unique_codes) == len(stocks)
+        )
+        if not valid_ignored and not valid_complete:
+            print(
+                f"Error: incomplete or legacy concept cache {f}. "
+                "Run themes concepts fetch-stocks --reset first."
+            )
+            sys.exit(1)
+        all_data[code] = value
     if not all_data:
         print(f"Error: No concept stock files found in {STOCKS_CACHE_DIR}. Run fetch_concept_stocks.py first.")
         sys.exit(1)
@@ -324,8 +372,11 @@ def build_concepts(all_data, concepts_map):
             "aliases": aliases,
             "stock_count": stock_count,
             "stocks": stock_codes,
+            "member_fetch_status": data.get("status", "complete"),
             "last_update": time.strftime('%Y-%m-%d'),
         }
+        if data.get("status") == "ignored":
+            concept_data["ignore_reason"] = data.get("ignore_reason")
 
         _write_json(concept_path, concept_data)
 
@@ -335,6 +386,7 @@ def build_concepts(all_data, concepts_map):
             "stock_count": stock_count,
             "stocks": stock_codes,
             "aliases": aliases,
+            "member_fetch_status": data.get("status", "complete"),
         }
 
     return concept_info
@@ -343,7 +395,7 @@ def build_concepts(all_data, concepts_map):
 def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_stocks, concept_info):
     """Compute V5 multi-dimensional ranking: purity, industry, candidate scores.
 
-    Returns (pure_list, industry_list, candidate_list, concept_weights, qualified_count).
+    Returns display Top-N lists, complete member evidence, weights, and qualified count.
     """
     all_stock_counts = [
         concept_info.get(cn, {}).get("stock_count", 50)
@@ -379,13 +431,18 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
                     "concept_ranks": {},
                     "weighted_coverage": 0.0,
                     "rank_weighted_sum": 0.0,
+                    "theme_weight": 0.0,
                 }
             stock_data[code]["concept_ranks"][cn] = rank
             stock_data[code]["weighted_coverage"] += cw
             stock_data[code]["rank_weighted_sum"] += cw * _rank_factor(rank)
+            stock_data[code]["theme_weight"] = max(
+                stock_data[code]["theme_weight"],
+                round(calc_weight(rank_0, len(sorted_stocks)) * cw, 2),
+            )
 
     if not stock_data or total_theme_weight <= 0:
-        return [], [], [], concept_weights, 0
+        return [], [], [], [], concept_weights, 0
 
     coverage_pcts = []
     raw_rank_scores = []
@@ -405,6 +462,7 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
     mcap_scores = _normalize_log_scores(raw_mcap_scores)
 
     eligible_stocks = []
+    members = []
     codes = list(stock_data.keys())
 
     for i, code in enumerate(codes):
@@ -424,7 +482,18 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
             if cn in sd["concept_ranks"]
         )
 
-        if not _is_eligible(coverage_pct, matched_count, is_anchor, is_rank1_in_core, min_coverage, min_concepts):
+        eligible = _is_eligible(
+            coverage_pct, matched_count, is_anchor, is_rank1_in_core, min_coverage, min_concepts
+        )
+        if not eligible:
+            members.append({
+                "code": code,
+                "name": sd["name"],
+                "eligible": False,
+                "member_role": "edge",
+                "anchor": False,
+                "theme_weight": sd["theme_weight"],
+            })
             continue
 
         purity_score = round(
@@ -443,16 +512,26 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
             + 0 * scoring["candidate_momentum_weight"], 1
         )
 
-        eligible_stocks.append({
+        member_role = (
+            "core"
+            if is_anchor or industry_score >= LIBRARY_CONFIG["leader_threshold"]
+            else "qualified"
+        )
+        scored_member = {
             "code": code,
             "name": sd["name"],
+            "eligible": True,
+            "member_role": member_role,
+            "theme_weight": sd["theme_weight"],
             "purity_score": purity_score,
             "industry_score": industry_score,
             "candidate_score": candidate_score,
             "liquidity_score": round(liquidity_score, 1),
             "market_cap_score": round(market_cap_score, 1),
             "anchor": is_anchor,
-        })
+        }
+        eligible_stocks.append(scored_member)
+        members.append(dict(scored_member))
 
     qualified_count = len(eligible_stocks)
 
@@ -490,7 +569,15 @@ def _compute_theme_scores(theme_name, theme_cfg, child_concepts, all_concept_sto
         for s in candidate_list
     ]
 
-    return pure_list, industry_list, candidate_list, concept_weights, qualified_count
+    members.sort(
+        key=lambda x: (
+            {"core": 0, "qualified": 1, "edge": 2}[x["member_role"]],
+            -x.get("industry_score", 0),
+            -x.get("purity_score", 0),
+            x["code"],
+        )
+    )
+    return pure_list, industry_list, candidate_list, members, concept_weights, qualified_count
 
 
 def build_themes(all_data, concept_info):
@@ -524,7 +611,14 @@ def build_themes(all_data, concept_info):
                         seen_codes.add(s["code"])
                         merged_stocks.append(s)
 
-        pure_stocks, industry_stocks, candidate_stocks, concept_weights, qualified_count = _compute_theme_scores(
+        (
+            pure_stocks,
+            industry_stocks,
+            candidate_stocks,
+            members,
+            concept_weights,
+            qualified_count,
+        ) = _compute_theme_scores(
             theme_name, theme_cfg, child_concepts, all_concept_stocks, concept_info
         )
 
@@ -552,7 +646,9 @@ def build_themes(all_data, concept_info):
             "pure_stocks": pure_stocks,
             "industry_leaders": industry_stocks,
             "candidate_stocks": candidate_stocks,
+            "members": members,
             "stocks": stock_codes,
+            "library_version": time.strftime('%Y-%m-%d'),
             "last_update": time.strftime('%Y-%m-%d'),
         }
 
@@ -571,7 +667,9 @@ def build_themes(all_data, concept_info):
             "pure_stocks": pure_stocks,
             "industry_leaders": industry_stocks,
             "candidate_stocks": candidate_stocks,
+            "members": members,
             "anchors": anchor_codes,
+            "library_version": time.strftime('%Y-%m-%d'),
             "file": f"{safe_name}.json",
         }
 
@@ -617,39 +715,9 @@ def build_stocks(all_data, theme_info):
 
     theme_scores = {}
     for theme_name, info in theme_info.items():
-        for stock in info.get("pure_stocks", []):
+        for stock in info.get("members", []):
             code = stock["code"]
-            if code not in theme_scores:
-                theme_scores[code] = {}
-            theme_scores[code].setdefault(theme_name, {})
-            theme_scores[code][theme_name]["purity_score"] = stock["purity_score"]
-
-        for stock in info.get("industry_leaders", []):
-            code = stock["code"]
-            if code not in theme_scores:
-                theme_scores[code] = {}
-            theme_scores[code].setdefault(theme_name, {})
-            theme_scores[code][theme_name].update({
-                "purity_score": stock["purity_score"],
-                "industry_score": stock["industry_score"],
-                "liquidity_score": stock["liquidity_score"],
-                "market_cap_score": stock["market_cap_score"],
-                "anchor": stock["anchor"],
-            })
-
-        for stock in info.get("candidate_stocks", []):
-            code = stock["code"]
-            if code not in theme_scores:
-                theme_scores[code] = {}
-            theme_scores[code].setdefault(theme_name, {})
-            d = theme_scores[code][theme_name]
-            d["candidate_score"] = stock["candidate_score"]
-            if "purity_score" not in d:
-                d["purity_score"] = stock["purity_score"]
-            if "liquidity_score" not in d:
-                d["liquidity_score"] = stock["liquidity_score"]
-            if "market_cap_score" not in d:
-                d["market_cap_score"] = stock["market_cap_score"]
+            theme_scores.setdefault(code, {})[theme_name] = dict(stock)
 
     stock_files = {}
     for stock_code in set(list(concept_stock_weights.keys()) + list(theme_stock_weights.keys())):
@@ -677,13 +745,18 @@ def build_stocks(all_data, theme_info):
             entry = {"name": t["name"], "weight": t["weight"]}
             scores = theme_scores.get(stock_code, {}).get(t["name"])
             if scores:
-                if "purity_score" in scores:
-                    entry["purity_score"] = scores["purity_score"]
-                if "industry_score" in scores:
-                    entry["industry_score"] = scores["industry_score"]
-                if "candidate_score" in scores:
-                    entry["candidate_score"] = scores["candidate_score"]
+                entry["eligible"] = scores["eligible"]
+                entry["member_role"] = scores["member_role"]
                 entry["anchor"] = scores.get("anchor", False)
+                for score_name in (
+                    "purity_score",
+                    "industry_score",
+                    "candidate_score",
+                    "liquidity_score",
+                    "market_cap_score",
+                ):
+                    if score_name in scores:
+                        entry[score_name] = scores[score_name]
             theme_entries.append(entry)
 
         stock_data = {
@@ -695,6 +768,7 @@ def build_stocks(all_data, theme_info):
             "core_concept": core_concept,
             "theme_count": len(themes_sorted),
             "concept_count": len(concepts_sorted),
+            "library_version": time.strftime('%Y-%m-%d'),
             "last_update": time.strftime('%Y-%m-%d'),
         }
 
@@ -705,7 +779,7 @@ def build_stocks(all_data, theme_info):
             "core_concept": core_concept,
             "theme_count": len(themes_sorted),
             "concept_count": len(concepts_sorted),
-            "themes": themes_sorted,
+            "themes": theme_entries,
             "concepts": concepts_sorted,
         }
 
@@ -770,9 +844,14 @@ def build_update_log(theme_info, concept_info, stock_files):
 
     log_data = {
         "last_build": time.strftime('%Y-%m-%d %H:%M:%S'),
+        "library_version": time.strftime('%Y-%m-%d'),
         "industry_ranking_version": "v5",
         "theme_count": len(theme_info),
         "concept_count": len(concept_info),
+        "ignored_concept_count": sum(
+            info.get("member_fetch_status") == "ignored"
+            for info in concept_info.values()
+        ),
         "themed_concepts": len(themed_concepts & set(concept_info.keys())),
         "unthemed_concepts": unthemed,
         "stock_count": len(stock_files),
@@ -797,6 +876,32 @@ def main(argv=None):
     parser.add_argument("--stocks-only", action="store_true", help="Only build stock files")
     args = parser.parse_args(argv)
 
+    print("Loading cached concept data...")
+    referenced_concepts = {
+        concept_name
+        for theme in THEMES_CONFIG.values()
+        for concept_name in theme.get("concepts", [])
+    }
+    conflicts = sorted(set(MEMBER_FETCH_EXCLUSIONS) & referenced_concepts)
+    if conflicts:
+        print(
+            "Error: member_fetch_exclusions contains theme-referenced concepts: "
+            + ", ".join(conflicts)
+        )
+        return 1
+    all_data = load_concept_stocks()
+    concepts_map = load_concepts()
+    missing = sorted(set(concepts_map) - set(all_data))
+    extra = sorted(set(all_data) - set(concepts_map))
+    if missing or extra:
+        print(
+            "Error: concept member cache does not exactly cover concepts.json "
+            f"(missing={len(missing)}, extra={len(extra)}). "
+            "Run themes concepts fetch-stocks --reset first."
+        )
+        return 1
+    print(f"Loaded {len(all_data)} concept boards.")
+
     if args.clean:
         import shutil
         for d in [THEMES_DIR, CONCEPTS_DIR, STOCKS_DIR, ALIASES_DIR, INDEX_DIR]:
@@ -804,11 +909,6 @@ def main(argv=None):
                 shutil.rmtree(d)
                 d.mkdir(parents=True, exist_ok=True)
         print("Cleaned existing files.")
-
-    print("Loading cached concept data...")
-    all_data = load_concept_stocks()
-    concepts_map = load_concepts()
-    print(f"Loaded {len(all_data)} concept boards.")
 
     concept_info = {}
     theme_info = {}
@@ -847,7 +947,8 @@ def main(argv=None):
         build_update_log(theme_info, concept_info, stock_files)
 
     print("\nBuild complete!")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -29,6 +29,25 @@ COMPUTE_OWNED_STOCK_FIELDS = {
     "i11_applied",
     "execution_state",
 }
+DETERMINISTIC_THEME_FIELDS = {
+    "sector",
+    "market_board",
+    "primary_theme",
+    "themes",
+    "core_heat",
+    "diffusion_heat",
+    "core_leader",
+    "momentum_leader",
+    "member_role",
+    "eligible",
+    "aggregation_weight",
+    "theme_weight",
+    "purity_score",
+    "industry_score",
+    "candidate_score",
+    "liquidity_score",
+    "market_cap_score",
+}
 HOLD_DIRECTIONS = {"持有偏多", "持有", "谨慎持有"}
 I14_WATCH_MAX = {"观望"}
 I14_CAUTIOUS_MAX = {"观望", "谨慎持有"}
@@ -49,6 +68,20 @@ def is_zero_position_cap(value: Any) -> bool:
     )
 
 
+def deterministic_theme_paths(value: Any, path: str = "") -> list[str]:
+    paths = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            child_path = f"{path}.{key}" if path else str(key)
+            if key in DETERMINISTIC_THEME_FIELDS:
+                paths.append(child_path)
+            paths.extend(deterministic_theme_paths(child, child_path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            paths.extend(deterministic_theme_paths(child, f"{path}[{index}]"))
+    return paths
+
+
 def validate(doc: Any, date: str, allowed_codes: set[str], base: dict | None = None) -> list[str]:
     errors: list[str] = []
     if not isinstance(doc, dict):
@@ -57,6 +90,8 @@ def validate(doc: Any, date: str, allowed_codes: set[str], base: dict | None = N
         errors.append("schema_version: must be intraday_mapper_annotations.v1")
     if doc.get("date") != date:
         errors.append(f"date: must be {date}")
+    for path in deterministic_theme_paths(doc):
+        errors.append(f"{path}: deterministic theme field not allowed in annotations")
     assessment = doc.get("market_assessment")
     if not isinstance(assessment, dict):
         errors.append("market_assessment: must be object")
