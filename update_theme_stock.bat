@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 set "VIRTUAL_ENV="
+rem set "UV_PROJECT_ENVIRONMENT=.venv-windows"
 
 echo ============================================
 echo  Theme Library Update
