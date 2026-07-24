@@ -295,6 +295,7 @@ def main(argv=None):
     parser.add_argument("--concept", help="Fetch stocks for a specific concept code (e.g., BK0917)")
     parser.add_argument("--top", type=int, default=0, help="Limit number of concept boards to fetch")
     parser.add_argument("--retry-failed", action="store_true", help="Only retry previously failed concepts")
+    parser.add_argument("--force-complete", action="store_true", help="Mark checkpoints as complete and move to stocks, skipping further pages")
     parser.add_argument("--reset", action="store_true", help="Delete cache and start fresh")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
@@ -324,6 +325,49 @@ def main(argv=None):
         if (CACHE_DIR / "concept_stocks.json").exists():
             (CACHE_DIR / "concept_stocks.json").unlink()
         print("Cleared cache and failed list.")
+
+    if args.force_complete:
+        if not CHECKPOINT_DIR.exists() or not any(CHECKPOINT_DIR.iterdir()):
+            print("No checkpoints found.")
+            return 0
+
+        concepts = load_concepts()
+        concept_name_map = {c["code"]: c["name"] for c in concepts}
+
+        checkpoints = sorted(CHECKPOINT_DIR.glob("*.json"))
+        if args.concept:
+            checkpoints = [p for p in checkpoints if p.stem == args.concept]
+
+        if not checkpoints:
+            print("No matching checkpoints found.")
+            return 0
+
+        failed = {item["code"]: item for item in load_failed()}
+        processed = 0
+        for cp in checkpoints:
+            with open(cp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            code = data.get("concept_code", cp.stem)
+            name = concept_name_map.get(code, code)
+            stocks = data.get("stocks", [])
+            save_concept(code, {
+                "concept_code": code,
+                "concept_name": name,
+                "status": "complete",
+                "reported_total": len(stocks),
+                "stock_count": len(stocks),
+                "stocks": stocks,
+                "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            clear_checkpoint(code)
+            failed.pop(code, None)
+            print(f"  {code} {name}: {len(stocks)} stocks -> completed")
+            processed += 1
+
+        save_failed(list(failed.values()))
+        clear_progress()
+        print(f"\nForce-completed {processed} concept(s).")
+        return 0
 
     source = EastMoneyConceptSource(
         requests_per_minute=15,
