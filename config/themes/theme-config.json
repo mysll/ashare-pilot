@@ -1,7 +1,8 @@
 {
   "fetch_settings": {
     "concept_board_page_size": 50,
-    "concept_member_page_size": 50
+    "concept_member_page_size": 100,
+    "concept_member_first_page_only": true
   },
   "themes": {
     "AI算力": {

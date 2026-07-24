@@ -21,10 +21,11 @@ Agent 必须遵守以下顺序：
 3. 选择当前操作系统的 uv 项目环境。
 4. 同步锁定依赖。
 5. 创建本地状态目录并初始化不含策略的 memory 骨架。
-6. 更新东方财富 Cookie。
-7. 首次构建主题库。
-8. 执行验收命令。
-9. 只有全部验收通过后，才启动分析或定时任务。
+6. 首次构建主题库。
+7. 执行验收命令。
+8. 只有全部验收通过后，才启动分析或定时任务。
+
+Agent 无法执行交互式步骤；Cookie 初始化需用户手动完成，详见文件末尾的后续步骤章节。
 
 初始化过程中不得删除用户已有的 `.cookie`、`memory/`、`predict/`、`intraday/`、
 `operation/` 或 `data/theme-library/`。这些目录可能包含不可从代码重建的运行状态。
@@ -232,32 +233,7 @@ memory 按真实运行结果自然生长：
 uv run --frozen ashare-pilot automation rules check
 ```
 
-## 6. 初始化 Cookie
-
-东方财富认证状态保存在仓库根目录 `.cookie`，格式为：
-
-```text
-EASTMONEY_COOKIE=<cookie-string>
-```
-
-`.cookie` 含敏感信息，已被 Git 忽略。不得提交、打印或复制到日志和 Agent 回复中。
-
-批处理入口：
-
-```powershell
-.\update_cookie.bat
-```
-
-Chrome 打开后完成登录或人机验证，返回终端继续。成功标准是根目录生成非空 `.cookie`，
-并且批处理输出 `Done`。
-
-如果当前平台无法执行该批处理，应从受控凭据存储恢复 `.cookie`，或在能够执行批处理的
-环境完成更新后安全传递该文件。不要让 Agent 在对话中索取 Cookie 内容。
-
-当前核心 CLI 不会自动读取 `.env` 中的用户名和密码；不要把创建 `.env` 当作 Cookie
-初始化的替代方案。
-
-## 7. 首次构建主题库
+## 6. 首次构建主题库
 
 必须按以下顺序执行，后一步依赖前一步输出：
 
@@ -289,7 +265,7 @@ uv run --frozen ashare-pilot themes query stats
 uv run --frozen ashare-pilot themes query list --json
 ```
 
-## 8. OpenCode 与自动调度
+## 7. OpenCode 与自动调度
 
 使用 OpenCode Desktop 时，它必须打开仓库根目录，并读取 `AGENTS.md`、`opencode.json` 和
 `.agents/skills/`。Agent 执行业务命令时使用 `uv run --frozen ashare-pilot`，不得调用
@@ -319,7 +295,7 @@ Shell 入口：
 调度配置来自 `config/cron-tasks.json`，交易日和时区来自
 `config/trading-calendar.json`。修改配置后必须重启调度器；停机期间错过的任务不会补跑。
 
-## 9. 最终验收清单
+## 8. 最终验收清单
 
 Agent 应按顺序执行并记录退出码，不得只根据文件存在推断初始化成功：
 
@@ -357,7 +333,7 @@ uv run --frozen pytest -q
 - 所有项目入口都使用仓库默认的 `.venv`；
 - `.cookie`、`memory/` 和运行产物没有进入 Git 暂存区。
 
-## 10. 常见故障
+## 9. 常见故障
 
 ### `No time zone found with key Asia/Shanghai`
 
@@ -379,5 +355,65 @@ uv sync --frozen
 
 ### 找不到 `opencode`
 
-这只影响自动调度，不影响普通 `ashare-pilot` CLI。安装 OpenCode CLI、加入 `PATH`，
+ 这只影响自动调度，不影响普通 `ashare-pilot` CLI。安装 OpenCode CLI、加入 `PATH`，
 重新打开终端或桌面程序后再执行 dry-run。
+
+## 10. 后续步骤：初始化 Cookie 与主题库
+
+Agent 无法执行 `update_cookie.bat` — 该脚本打开 Chrome 浏览器后会阻塞终端等待用户
+按 Enter 确认，Agent 无法完成这种终端交互。主题库构建也依赖有效 Cookie。
+
+Agent 完成前述所有可自动化步骤（第 2–9 节）后，应提示用户手动执行以下操作：
+
+### Cookie 初始化
+
+东方财富认证状态保存在仓库根目录 `.cookie`，格式为：
+
+```text
+EASTMONEY_COOKIE=<cookie-string>
+```
+
+`.cookie` 含敏感信息，已被 Git 忽略。不得提交、打印或复制到日志和 Agent 回复中。
+
+批处理入口：
+
+```powershell
+.\update_cookie.bat
+```
+
+Chrome 打开后完成登录或人机验证，返回终端按 Enter。成功标准是根目录生成非空 `.cookie`，
+并且批处理输出 `Done`。
+
+如果当前平台无法执行该批处理，应从受控凭据存储恢复 `.cookie`，或在能够执行批处理的
+环境完成更新后安全传递该文件。不要让 Agent 在对话中索取 Cookie 内容。
+
+当前核心 CLI 不会自动读取 `.env` 中的用户名和密码；不要把创建 `.env` 当作 Cookie
+初始化的替代方案。
+
+### 主题库构建
+
+Cookie 就绪后，手动构建主题库。
+
+全量批处理：
+
+```powershell
+.\update_theme.bat
+```
+
+仅更新成分股和索引：
+
+```powershell
+.\update_theme_stock.bat
+```
+
+或分步执行：
+
+```bash
+uv run --frozen ashare-pilot themes concepts fetch -q
+uv run --frozen ashare-pilot themes concepts fetch-stocks
+uv run --frozen ashare-pilot themes library build
+```
+
+### 完成验收
+
+上述步骤完成后，Agent 可继续执行完整验收（行情查询、主题库统计、规则检查、调度 dry-run）。

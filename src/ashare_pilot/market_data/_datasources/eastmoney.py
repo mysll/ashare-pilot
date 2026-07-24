@@ -7,11 +7,11 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-import requests
+from ashare_pilot.http_settings import http_get
+from ashare_pilot.market_data.runtime import workspace_path
 
 from .base import BaseDataSource, RateLimitConfig
 from .utils import format_price, format_volume, format_amount, format_percent, to_yi
-from ashare_pilot.market_data.runtime import workspace_path
 
 LHB_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 RZYE_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
@@ -79,7 +79,7 @@ class EastMoneyDataSource(BaseDataSource):
 
     def _make_request(self, url: str) -> dict:
         try:
-            resp = requests.get(url, headers=self._get_headers(), timeout=15)
+            resp = http_get(url, headers=self._get_headers(), timeout=15)
             return resp.json()
         except Exception:
             return {}
@@ -225,7 +225,7 @@ class EastMoneyDataSource(BaseDataSource):
             try:
                 self._wait_for_rate_limit()
                 self._check_rate_limit()
-                resp = requests.get(url, headers=headers, timeout=30)
+                resp = http_get(url, headers=headers, timeout=30)
                 data = resp.json()
                 self._request_count += 1
             except Exception:
@@ -313,7 +313,7 @@ class EastMoneyDataSource(BaseDataSource):
         try:
             self._wait_for_rate_limit()
             self._check_rate_limit()
-            resp = requests.get(url, headers=headers, timeout=15)
+            resp = http_get(url, headers=headers, timeout=15)
             data = resp.json()
             self._request_count += 1
         except Exception:
@@ -360,7 +360,7 @@ class EastMoneyDataSource(BaseDataSource):
         try:
             self._wait_for_rate_limit()
             self._check_rate_limit()
-            resp = requests.get(url, headers=headers, timeout=15)
+            resp = http_get(url, headers=headers, timeout=15)
             data = resp.json()
             self._request_count += 1
         except Exception:
@@ -477,7 +477,7 @@ class EastMoneyDataSource(BaseDataSource):
         try:
             self._wait_for_rate_limit()
             self._check_rate_limit()
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = http_get(url, headers=headers, timeout=30)
             self._request_count += 1
             text = resp.text
         except Exception:

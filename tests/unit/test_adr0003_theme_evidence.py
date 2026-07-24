@@ -15,7 +15,7 @@ from ashare_pilot.themes._commands import (
     ranking,
 )
 from ashare_pilot.themes.datasource import ConceptStocksFetchResult, EastMoneyConceptSource
-from ashare_pilot.themes.fetch_settings import load_fetch_page_sizes
+from ashare_pilot.themes.fetch_settings import load_fetch_page_sizes, load_first_page_only
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,18 +75,11 @@ def test_concept_board_list_uses_both_browser_endpoints(
 ):
     source = EastMoneyConceptSource(min_interval=0, max_interval=0)
     concepts = [api_concept(index) for index in range(75)]
-    catalog = {item["f12"]: item["f14"] for item in concepts}
     captured = []
 
-    monkeypatch.setattr(
-        source,
-        "_fetch_concept_catalog",
-        lambda: (catalog, len(catalog)),
-    )
-
-    def fetch(url, headers, page_label="", callback=None):
+    def fetch(url, headers, page_label=""):
         query = parse_qs(urlparse(url).query)
-        captured.append((query, headers, page_label, callback))
+        captured.append((query, headers, page_label))
         page = int(query["pn"][0])
         start = (page - 1) * 50
         return response(75, concepts[start : start + 50])
@@ -96,13 +89,11 @@ def test_concept_board_list_uses_both_browser_endpoints(
 
     assert len(result) == 75
     assert [item[2] for item in captured] == ["1", "2"]
-    for query, headers, _page_label, callback in captured:
+    for query, headers, _page_label in captured:
         assert query["pz"] == ["50"]
         assert query["fid"] == ["f62"]
         assert query["fs"] == ["m:90+t:3"]
         assert query["ut"] == ["8dec03ba335b81bf4ebdf7b29ec27d15"]
-        assert query["cb"] == [callback]
-        assert headers["referer"] == "https://data.eastmoney.com/bkzj/gn.html"
 
 
 def test_concept_board_list_resumes_versioned_checkpoint(
@@ -110,20 +101,14 @@ def test_concept_board_list_resumes_versioned_checkpoint(
     tmp_path: Path,
 ):
     concepts = [api_concept(index) for index in range(75)]
-    catalog = {item["f12"]: item["f14"] for item in concepts}
 
     first = EastMoneyConceptSource(
         min_interval=0,
         max_interval=0,
         state_dir=tmp_path,
     )
-    monkeypatch.setattr(
-        first,
-        "_fetch_concept_catalog",
-        lambda: (catalog, len(catalog)),
-    )
 
-    def first_fetch(url, _headers, page_label="", callback=None):
+    def first_fetch(url, _headers, page_label=""):
         page = int(parse_qs(urlparse(url).query)["pn"][0])
         if page == 2:
             return None
@@ -145,14 +130,9 @@ def test_concept_board_list_resumes_versioned_checkpoint(
         max_interval=0,
         state_dir=tmp_path,
     )
-    monkeypatch.setattr(
-        second,
-        "_fetch_concept_catalog",
-        lambda: (catalog, len(catalog)),
-    )
     resumed_pages = []
 
-    def second_fetch(url, _headers, page_label="", callback=None):
+    def second_fetch(url, _headers, page_label=""):
         page = int(parse_qs(urlparse(url).query)["pn"][0])
         resumed_pages.append(page)
         start = (page - 1) * 50
@@ -196,10 +176,9 @@ def test_member_request_uses_validated_browser_contract(
     source = EastMoneyConceptSource(min_interval=0, max_interval=0)
     captured = {}
 
-    def fetch(url, headers, page_label="", callback=None):
+    def fetch(url, headers, page_label=""):
         captured["query"] = parse_qs(urlparse(url).query)
         captured["headers"] = headers
-        captured["callback"] = callback
         captured["page_label"] = page_label
         return response(1, [api_stock(0)])
 
@@ -212,42 +191,46 @@ def test_member_request_uses_validated_browser_contract(
     assert captured["query"]["fid"] == ["f3"]
     assert captured["query"]["fs"] == ["b:BK1749"]
     assert captured["query"]["ut"] == ["8dec03ba335b81bf4ebdf7b29ec27d15"]
-    assert captured["query"]["cb"] == [captured["callback"]]
-    assert captured["headers"]["referer"] == (
-        "https://data.eastmoney.com/bkzj/BK1749.html"
+    assert captured["headers"]["user-agent"] in (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/121.0",
     )
-    assert "Windows NT 10.0" in captured["headers"]["user-agent"]
     assert captured["page_label"] == "BK1749/p1"
 
 
-def test_persistent_session_decodes_jsonp_without_exposing_cookie(
+def test_request_uses_raw_requests_get_without_session(
     monkeypatch: pytest.MonkeyPatch,
 ):
     source = EastMoneyConceptSource(min_interval=0, max_interval=0)
+    source._last_request_time = 0.0
+    source._request_count = 0
 
-    class Response:
-        status_code = 200
-        headers = {"content-type": "application/javascript"}
-        text = 'sampleCallback({"rc":0,"data":{"total":1,"diff":[]}});'
+    captured = []
 
-    class Session:
-        calls = []
+    def fake_get(url, *, headers, timeout, **kwargs):
+        captured.append((url, headers))
 
-        def get(self, url, *, headers, timeout):
-            self.calls.append((url, headers, timeout))
-            return Response()
+        class Resp:
+            status_code = 200
 
-    session = Session()
-    monkeypatch.setattr(source, "_session", session)
+            @staticmethod
+            def json():
+                return {"rc": 0, "data": {"total": 1, "diff": []}}
+
+        return Resp()
+
+    monkeypatch.setattr("ashare_pilot.themes.datasource.requests.get", fake_get)
     result = source._request_with_retry(
         "https://example.invalid/query",
         {"cookie": "must-not-appear-in-diagnostics"},
-        callback="sampleCallback",
     )
 
     assert result == {"rc": 0, "data": {"total": 1, "diff": []}}
-    assert source._last_request_error is None
-    assert len(session.calls) == 1
+    assert len(captured) == 1
+    assert captured[0][0] == "https://example.invalid/query"
 
 
 def test_legacy_100_row_checkpoint_resumes_safely_at_50_rows(
@@ -292,6 +275,14 @@ def test_fetch_stocks_cli_failure_is_nonzero_and_does_not_publish(
         ], ensure_ascii=False),
         encoding="utf-8",
     )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {
+            "concept_member_page_size": 50,
+            "concept_member_first_page_only": False,
+        },
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
     monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
     monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
     monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
@@ -391,6 +382,11 @@ def test_fetch_stocks_reset_starts_page_one_then_completed_default_skips(
     monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
     monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
     monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
     starts = []
 
     class CompleteSource:
@@ -435,6 +431,11 @@ def test_round_robin_resume_finishes_current_page_before_next_page(
     monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
     monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
     monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
     monkeypatch.setattr(concepts_fetch_stocks.time, "sleep", lambda _seconds: None)
     totals = {"A": 150, "B": 50, "C": 150, "D": 50}
     calls = []
@@ -804,3 +805,193 @@ def test_frozen_20260723_theme_roles_and_mapper_separation(
     assert aluminum["primary_theme"] == aluminum["sector"] == "有色金属"
     assert aluminum["market_board"] == "沪市主板"
     assert len(aluminum["themes"]) == 2
+
+
+def test_load_first_page_only_defaults_to_false(tmp_path: Path):
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({"fetch_settings": {}}),
+        encoding="utf-8",
+    )
+    assert load_first_page_only(config_path) is False
+
+
+def test_load_first_page_only_reads_true(tmp_path: Path):
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({
+            "fetch_settings": {
+                "concept_member_first_page_only": True,
+            }
+        }),
+        encoding="utf-8",
+    )
+    assert load_first_page_only(config_path) is True
+
+
+def test_load_first_page_only_reads_false(tmp_path: Path):
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({
+            "fetch_settings": {
+                "concept_member_first_page_only": False,
+            }
+        }),
+        encoding="utf-8",
+    )
+    assert load_first_page_only(config_path) is False
+
+
+def test_load_first_page_only_handles_non_bool(tmp_path: Path):
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({
+            "fetch_settings": {
+                "concept_member_first_page_only": 1,
+            }
+        }),
+        encoding="utf-8",
+    )
+    assert load_first_page_only(config_path) is True
+
+
+def test_first_page_only_forces_complete_after_one_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    concepts = [
+        {"code": "BK0001", "name": "多页概念"},
+        {"code": "BK0002", "name": "单页概念"},
+    ]
+    (cache / "concepts.json").write_text(
+        json.dumps(concepts, ensure_ascii=False), encoding="utf-8"
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({
+            "fetch_settings": {
+                "concept_member_first_page_only": True,
+            },
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    class FirstPageSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(
+            self, code, *, start_page, initial_stocks, on_page, max_pages, **_kwargs
+        ):
+            calls.append((code, start_page))
+            total = 150 if code == "BK0001" else 50
+            page_count = min(50, total - len(initial_stocks))
+            stocks = list(initial_stocks) + [
+                {"code": f"sz{code}{index:05d}", "name": f"{code}{index}"}
+                for index in range(len(initial_stocks), len(initial_stocks) + page_count)
+            ]
+            complete = len(stocks) == total
+            result = ConceptStocksFetchResult(
+                "complete" if complete else "partial",
+                stocks,
+                total,
+                start_page + 1,
+            )
+            on_page(result)
+            return result
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", FirstPageSource)
+    assert concepts_fetch_stocks.main(["--reset", "-q"]) == 0
+    assert calls == [("BK0001", 1), ("BK0002", 1)]
+
+    cached = json.loads(
+        (cache / "stocks" / "BK0001.json").read_text(encoding="utf-8")
+    )
+    assert cached["status"] == "complete"
+    assert cached["stock_count"] == 50
+    assert cached["reported_total"] == 50
+
+    cached2 = json.loads(
+        (cache / "stocks" / "BK0002.json").read_text(encoding="utf-8")
+    )
+    assert cached2["status"] == "complete"
+    assert cached2["stock_count"] == 50
+
+    assert not (cache / "checkpoints").exists()
+    assert not (cache / "progress.json").exists()
+
+
+def test_first_page_only_does_not_fetch_second_page(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    concepts = [
+        {"code": "BK0001", "name": "多页概念"},
+        {"code": "BK0002", "name": "单页概念"},
+    ]
+    (cache / "concepts.json").write_text(
+        json.dumps(concepts, ensure_ascii=False), encoding="utf-8"
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(
+        json.dumps({
+            "fetch_settings": {
+                "concept_member_first_page_only": True,
+            },
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    class FirstPageSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(
+            self, code, *, start_page, initial_stocks, on_page, max_pages, **_kwargs
+        ):
+            assert max_pages == 1
+            calls.append((code, start_page))
+            total = 150
+            page_count = min(50, total - len(initial_stocks))
+            stocks = list(initial_stocks) + [
+                {"code": f"sz{code}{index:05d}", "name": f"{code}{index}"}
+                for index in range(len(initial_stocks), len(initial_stocks) + page_count)
+            ]
+            complete = len(stocks) == total
+            result = ConceptStocksFetchResult(
+                "complete" if complete else "partial",
+                stocks,
+                total,
+                start_page + 1,
+            )
+            on_page(result)
+            return result
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", FirstPageSource)
+    assert concepts_fetch_stocks.main(["--reset", "-q"]) == 0
+    assert calls == [("BK0001", 1), ("BK0002", 1)]
+    assert not any(start == 2 for _, start in calls)
+
+    cached = json.loads(
+        (cache / "stocks" / "BK0001.json").read_text(encoding="utf-8")
+    )
+    assert cached["status"] == "complete"
+    assert cached["stock_count"] == 50

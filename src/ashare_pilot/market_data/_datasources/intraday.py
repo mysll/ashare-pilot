@@ -14,6 +14,8 @@ from urllib.parse import urlencode
 
 import requests
 
+from ashare_pilot.http_settings import http_get
+
 from .base import BaseDataSource, RateLimitConfig
 from .utils import format_price, format_volume, format_amount, format_percent, to_yi
 from .eastmoney import load_cookie
@@ -69,7 +71,7 @@ class EastMoneyIntradayDataSource(BaseDataSource):
 
     def _make_request(self, url: str) -> dict:
         try:
-            resp = requests.get(url, headers=self._get_push2_headers(), timeout=30)
+            resp = http_get(url, headers=self._get_push2_headers(), timeout=30)
             return resp.json()
         except Exception:
             return {}
@@ -117,7 +119,7 @@ class EastMoneyIntradayDataSource(BaseDataSource):
         """
         url = f"{INDEX_URL}?ut={INDEX_UT}&fields={INDEX_FIELDS}&secid={secid}"
         try:
-            resp = requests.get(url, headers=self._get_push2_headers(), timeout=10)
+            resp = http_get(url, headers=self._get_push2_headers(), timeout=10)
             data = resp.json()
         except Exception:
             return None
@@ -524,7 +526,7 @@ class EastMoneyIntradayDataSource(BaseDataSource):
         url = f"{NORTH_BOUND_URL}?{urlencode(params)}"
 
         try:
-            resp = requests.get(url, headers=self._get_push2_headers(), timeout=15)
+            resp = http_get(url, headers=self._get_push2_headers(), timeout=15)
             data = resp.json()
         except Exception:
             return {"error": "fetch failed", "total_net": "-"}

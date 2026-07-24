@@ -14,6 +14,8 @@ from typing import Any
 
 import requests
 
+from ashare_pilot.http_settings import http_get
+
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 TIMEOUT = 20
 
@@ -107,7 +109,7 @@ EM_HEADERS = {"User-Agent": UA, "Referer": "https://data.eastmoney.com/"}
 
 def fetch_eastmoney() -> list[dict[str, str]]:
     """东方财富 — 财经要闻"""
-    resp = requests.get(
+    resp = http_get(
         "https://np-listapi.eastmoney.com/comm/web/getFastNewsList",
         params={
             "client": "web",

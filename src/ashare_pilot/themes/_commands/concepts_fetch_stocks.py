@@ -26,6 +26,7 @@ from ashare_pilot.themes.datasource import EastMoneyConceptSource
 from ashare_pilot.themes.fetch_settings import (
     DEFAULT_CONCEPT_MEMBER_PAGE_SIZE,
     load_fetch_page_sizes,
+    load_first_page_only,
 )
 from ashare_pilot.themes.runtime import theme_cache_path, theme_config_path
 
@@ -308,6 +309,7 @@ def main(argv=None):
         _concept_page_size, member_page_size = load_fetch_page_sizes(
             THEME_CONFIG_FILE
         )
+        first_page_only = load_first_page_only(THEME_CONFIG_FILE)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"Error: invalid theme fetch settings: {exc}", file=sys.stderr)
         return 1
@@ -384,10 +386,22 @@ def main(argv=None):
             args.concept,
             concept.get("name", args.concept),
             page_size=member_page_size,
+            max_pages=1 if first_page_only else None,
         )
         stocks = result.stocks
         print(f"Fetched {len(stocks)} stocks ({result.status}).")
-        if result.status != "complete":
+        if first_page_only and stocks:
+            save_concept(args.concept, {
+                "concept_code": args.concept,
+                "concept_name": concept.get("name", args.concept),
+                "status": "complete",
+                "reported_total": len(stocks),
+                "stock_count": len(stocks),
+                "stocks": stocks,
+                "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            })
+            clear_checkpoint(args.concept)
+        elif result.status != "complete":
             print(f"Fetch incomplete at page {result.failed_page or result.next_page}: {result.error}", file=sys.stderr)
             return 1
 
@@ -553,7 +567,21 @@ def main(argv=None):
 
                 failed_by_code.pop(code, None)
                 save_failed(list(failed_by_code.values()))
-                if result.status == "complete":
+                if first_page_only:
+                    save_concept(code, {
+                        "concept_code": code,
+                        "concept_name": name,
+                        "status": "complete",
+                        "reported_total": len(result.stocks),
+                        "stock_count": len(result.stocks),
+                        "stocks": result.stocks,
+                        "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    })
+                    clear_checkpoint(code)
+                    cached_codes.add(code)
+                    action = "completed"
+                    print(f"  First page saved: {len(result.stocks)} stocks (done).")
+                elif result.status == "complete":
                     cached_codes.add(code)
                     action = "completed"
                     print(f"  Complete: {len(result.stocks)} stocks.")

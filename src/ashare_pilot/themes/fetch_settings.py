@@ -48,3 +48,23 @@ def load_fetch_page_sizes(
             DEFAULT_CONCEPT_MEMBER_PAGE_SIZE,
         ),
     )
+
+
+def load_first_page_only(
+    config_file: str | Path | None = None,
+) -> bool:
+    """Return whether to only fetch the first page for all concept members."""
+    path = Path(config_file) if config_file is not None else Path(
+        theme_config_path("theme-config.json")
+    )
+    with open(path, "r", encoding="utf-8") as stream:
+        config = json.load(stream)
+    settings = config.get("fetch_settings", {})
+    if not isinstance(settings, dict):
+        return False
+    value = settings.get("concept_member_first_page_only", False)
+    if isinstance(value, bool):
+        return value
+    if not value:
+        return False
+    return bool(value)

@@ -55,6 +55,4 @@ data/theme-library/metadata/
 
 
 # debug
-update_cookie_debug.bat
-update_theme_stock_debug.bat
-update_theme_stock_force.bat
+update_*_dev.bat

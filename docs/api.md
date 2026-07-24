@@ -4,59 +4,15 @@
 - 页面：`https://data.eastmoney.com/bkzj/gn.html`
 - 安全：Cookie 只从工作区 `.cookie` 读取，本文不保存凭据
 
-接口一 `dataapi/bkzj/getbkzj` 一次返回全部代码和名称，用于校验 total
-及代码/名称全集。它的字段不足以单独替换完整的 `concepts.json`。
-
-GET /dataapi/bkzj/getbkzj?key=f62&code=m%3A90%2Bt%3A3 HTTP/1.1
+概念版块第一页,默认每页50，url:https://data.eastmoney.com/bkzj/gn.html：
+GET /weblogin/api/qt/clist/get?np=1&fltt=1&invt=2&cb=jQuery37107928327313745926_1784858770219&fs=m%3A90%2Bt%3A3%2Bf%3A!50&fields=f12%2Cf13%2Cf14%2Cf1%2Cf2%2Cf4%2Cf3%2Cf152%2Cf20%2Cf8%2Cf104%2Cf105%2Cf128%2Cf140%2Cf141%2Cf207%2Cf208%2Cf209%2Cf136%2Cf222&fid=f3&pn=1&pz=20&po=1&dect=1&ut=fa5fd1943c7b386f172d6893dbfba10b&wbp2u=5869087587072820%7C0%7C1%7C0%7Cweb&_=1784858770225 HTTP/1.1
 Accept: */*
 Accept-Encoding: gzip, deflate, br, zstd
 Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7
 Connection: keep-alive
-Cookie: <redacted; loaded from .cookie>
-Host: data.eastmoney.com
-Referer: https://data.eastmoney.com/bkzj/gn.html
-Sec-Fetch-Dest: empty
-Sec-Fetch-Mode: cors
-Sec-Fetch-Site: same-origin
-User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
-X-Requested-With: XMLHttpRequest
-sec-ch-ua: "Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"
-sec-ch-ua-mobile: ?0
-sec-ch-ua-platform: "Windows"
-
-resp:
-{
-    "rc": 0,
-    "rt": 6,
-    "svr": 177617910,
-    "lt": 1,
-    "full": 1,
-    "dlmkts": "",
-    "dsc": "0",
-    "data": {
-        "total": 495,
-        "diff": [
-            {
-                "f12": "BK1648",
-                "f13": 90,
-                "f14": "电池技术",
-                "f62": 10951472128
-            }]
-    }
-}
-
-
-接口二 `push2/api/qt/clist/get` 按网页原生的每页 50 条返回完整行情详情，
-用于保持现有 `concepts.json` 字段合同。
-
-GET /api/qt/clist/get?cb=jQuery1123015924300167159444_1784806885737&fid=f62&po=1&pz=50&pn=1&np=1&fltt=2&invt=2&ut=8dec03ba335b81bf4ebdf7b29ec27d15&fs=m%3A90+t%3A3&fields=f12%2Cf14%2Cf2%2Cf3%2Cf62%2Cf184%2Cf66%2Cf69%2Cf72%2Cf75%2Cf78%2Cf81%2Cf84%2Cf87%2Cf204%2Cf205%2Cf124%2Cf1%2Cf13 HTTP/1.1
-Accept: */*
-Accept-Encoding: gzip, deflate, br, zstd
-Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7
-Connection: keep-alive
-Cookie: <redacted; loaded from .cookie>
+Cookie: qgqp_b_id=af4fde27e8e3741484e1e06c89b18cd8; st_nvi=Dv7IPWsQi2JVCW9rdCgLS9702; mtp=1; sid=; vtpst=|; ct=dUKJaBYf08yAYhs83M3N49x0QzpNi0BNUDwpfQUJZJeABQcFCKFiIDwsTII8xwlID4ZcFnI0qZc9NIZiXL2dhMW2M0tqF2DBX-p2qkEvqpx8XZmnsvQd2Rm2xpdixk4FtyBAJ_ybTv5gAJIEbRmGRZxhm7JT2To8XXwSq3L2dK0; ut=FobyicMgeV7bodPh3F8eYjtLNIxqzZflmQelDRXb22VuDEBUbyT1JT-AFBNEkAApqrUMIdooYVN-TIf6VZtNiiYcP0x-aTJZ52NDF_iQ3tGeodCXoBYM_vUNl3-ybxncWqcpPHod2zZJcvYaOP2K9mEGfK_ItVKRNKRyXZD9zV2mO6JLNy7WPRsGLXKJydr8bv_CrbeiLz8j_gsEy9a5KHbLDEukloKCioPHFlCFIjSH9PKKu1DcFcsl1is_t7c6gSWgOEUi46jf8O-lQQFn3EpXMjWRSZ-n; pi=5869087587072820%3Bc5869087587072820%3B%E8%82%A1%E5%8F%8Bz100282Q66%3Buqmd2%2Fx%2FzrehmhAZUjXLXLj4%2Fzcv2tk64Cpr3e45RKpXujOnBgq%2FYyPbT9u4ErE59yAuWqmiHjJfexRfiVJNMm0XzC9NPP%2FdtGEbYC1RMS6UHYo%2FGa%2FCzKKBPe2OPJasLfw8jgN5B3o%2BXutgTJjA8BunMBax%2B96PozU2qlr2Gz6C5AbbmYgj5eSrbMxt8K8wL31VwyHx%3BHp25SnszraaLb43hn8rVaITcBQHwaY1dqmuS2vDHj5hxSRw%2BUaq0ZVF024r2F1JwD3kFxPv7sp2wKAh6FnMOITgMh%2FJglWIDuE3Cw%2FDdogbrH9KKz8XFuM46wmNNOQVM44HoMiysN7Ehv7WT8LPKEDZ1u7j0eQ%3D%3D; uidal=5869087587072820%e8%82%a1%e5%8f%8bz100282Q66; st_si=87858862796506; nid18=020e9a775620cbf9a1710f09abd84bab; nid18_create_time=1784801307408; gviem=Dz5M1ed-2JlkpTXEcOUwJcaab; gviem_create_time=1784801307408; fullscreengg=1; fullscreengg2=1; st_asi=delete; wsc_checkuser_ok=1; st_pvi=64573443183295; st_sp=2026-04-15%2009%3A50%3A47; st_inirUrl=https%3A%2F%2Fpassport2.eastmoney.com%2F; st_sn=27; st_psi=20260724100336181-113200313002-4451204202
 Host: push2.eastmoney.com
-Referer: https://data.eastmoney.com/bkzj/gn.html
+Referer: https://quote.eastmoney.com/center/gridlist.html
 Sec-Fetch-Dest: script
 Sec-Fetch-Mode: no-cors
 Sec-Fetch-Site: same-site
@@ -65,11 +21,11 @@ sec-ch-ua: "Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"
 sec-ch-ua-mobile: ?0
 sec-ch-ua-platform: "Windows"
 
-resp:
-jQuery1123015924300167159444_1784806885737({
+响应：
+jQuery37107928327313745926_1784858770219({
     "rc": 0,
     "rt": 6,
-    "svr": 180606323,
+    "svr": 175640632,
     "lt": 1,
     "full": 1,
     "dlmkts": "",
@@ -78,42 +34,81 @@ jQuery1123015924300167159444_1784806885737({
         "total": 495,
         "diff": [{
             "f1": 2,
-            "f2": 833.27,
-            "f3": 2.87,
-            "f12": "BK1648",
+            "f2": 3327451,
+            "f3": 305,
+            "f4": 98401,
+            "f8": 973,
+            "f12": "BK1051",
             "f13": 90,
-            "f14": "电池技术",
-            "f62": 10951472128.0,
-            "f66": 6545331200.0,
-            "f69": 1.95,
-            "f72": 4406140928.0,
-            "f75": 1.31,
-            "f78": -4580184064.0,
-            "f81": -1.37,
-            "f84": -6311772160.0,
-            "f87": -1.88,
-            "f124": 1784792372,
-            "f184": 3.26,
-            "f204": "宁德时代",
-            "f205": "300750",
-            "f206": 0
-        }}
-})
+            "f14": "昨日连板_含一字",
+            "f20": 121010398000,
+            "f104": 9,
+            "f105": 6,
+            "f128": "五洲医疗",
+            "f140": "301234",
+            "f141": 0,
+            "f136": 2000,
+            "f152": 2,
+            "f207": "证通电子",
+            "f208": "002197",
+            "f209": 0,
+            "f222": -795
+        }]
+    }
+});
 
-## 生产合同与验证
+第二页：
+GET /weblogin/api/qt/clist/get?np=1&fltt=1&invt=2&cb=jQuery37107928327313745926_1784858770223&fs=m%3A90%2Bt%3A3%2Bf%3A!50&fields=f12%2Cf13%2Cf14%2Cf1%2Cf2%2Cf4%2Cf3%2Cf152%2Cf20%2Cf8%2Cf104%2Cf105%2Cf128%2Cf140%2Cf141%2Cf207%2Cf208%2Cf209%2Cf136%2Cf222&fid=f3&pn=2&pz=20&po=1&dect=1&ut=fa5fd1943c7b386f172d6893dbfba10b&wbp2u=5869087587072820%7C0%7C1%7C0%7Cweb&_=1784858770230 HTTP/1.1
+Accept: */*
+Accept-Encoding: gzip, deflate, br, zstd
+Accept-Language: zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7
+Connection: keep-alive
+Cookie: qgqp_b_id=af4fde27e8e3741484e1e06c89b18cd8; st_nvi=Dv7IPWsQi2JVCW9rdCgLS9702; mtp=1; sid=; vtpst=|; ct=dUKJaBYf08yAYhs83M3N49x0QzpNi0BNUDwpfQUJZJeABQcFCKFiIDwsTII8xwlID4ZcFnI0qZc9NIZiXL2dhMW2M0tqF2DBX-p2qkEvqpx8XZmnsvQd2Rm2xpdixk4FtyBAJ_ybTv5gAJIEbRmGRZxhm7JT2To8XXwSq3L2dK0; ut=FobyicMgeV7bodPh3F8eYjtLNIxqzZflmQelDRXb22VuDEBUbyT1JT-AFBNEkAApqrUMIdooYVN-TIf6VZtNiiYcP0x-aTJZ52NDF_iQ3tGeodCXoBYM_vUNl3-ybxncWqcpPHod2zZJcvYaOP2K9mEGfK_ItVKRNKRyXZD9zV2mO6JLNy7WPRsGLXKJydr8bv_CrbeiLz8j_gsEy9a5KHbLDEukloKCioPHFlCFIjSH9PKKu1DcFcsl1is_t7c6gSWgOEUi46jf8O-lQQFn3EpXMjWRSZ-n; pi=5869087587072820%3Bc5869087587072820%3B%E8%82%A1%E5%8F%8Bz100282Q66%3Buqmd2%2Fx%2FzrehmhAZUjXLXLj4%2Fzcv2tk64Cpr3e45RKpXujOnBgq%2FYyPbT9u4ErE59yAuWqmiHjJfexRfiVJNMm0XzC9NPP%2FdtGEbYC1RMS6UHYo%2FGa%2FCzKKBPe2OPJasLfw8jgN5B3o%2BXutgTJjA8BunMBax%2B96PozU2qlr2Gz6C5AbbmYgj5eSrbMxt8K8wL31VwyHx%3BHp25SnszraaLb43hn8rVaITcBQHwaY1dqmuS2vDHj5hxSRw%2BUaq0ZVF024r2F1JwD3kFxPv7sp2wKAh6FnMOITgMh%2FJglWIDuE3Cw%2FDdogbrH9KKz8XFuM46wmNNOQVM44HoMiysN7Ehv7WT8LPKEDZ1u7j0eQ%3D%3D; uidal=5869087587072820%e8%82%a1%e5%8f%8bz100282Q66; st_si=87858862796506; nid18=020e9a775620cbf9a1710f09abd84bab; nid18_create_time=1784801307408; gviem=Dz5M1ed-2JlkpTXEcOUwJcaab; gviem_create_time=1784801307408; fullscreengg=1; fullscreengg2=1; st_asi=delete; wsc_checkuser_ok=1; st_pvi=64573443183295; st_sp=2026-04-15%2009%3A50%3A47; st_inirUrl=https%3A%2F%2Fpassport2.eastmoney.com%2F; st_sn=28; st_psi=20260724100610588-113200313002-5577414106
+Host: push2.eastmoney.com
+Referer: https://quote.eastmoney.com/center/gridlist.html
+Sec-Fetch-Dest: script
+Sec-Fetch-Mode: no-cors
+Sec-Fetch-Site: same-site
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36
+sec-ch-ua: "Not;A=Brand";v="8", "Chromium";v="150", "Google Chrome";v="150"
+sec-ch-ua-mobile: ?0
+sec-ch-ua-platform: "Windows"
 
-- 固定 Windows Chrome 指纹并复用 HTTP Session。
-- Referer 为 `https://data.eastmoney.com/bkzj/gn.html`。
-- 分页合同使用 `fid=f62`、动态 JSONP 回调和网页当前 `ut`；`pz` 由
-  `config/themes/theme-config.json` 的
-  `fetch_settings.concept_board_page_size` 控制。
-- 成分股接口的 `pz` 由同一配置中的
-  `fetch_settings.concept_member_page_size` 控制。两个配置项的有效范围均为
-  1–100，当前值均为 50。
-- `concepts_fetch_state.json` 记录 schema 与请求合同；不兼容的旧 checkpoint
-  自动从第一页重新获取。
-- 任一分页失败只保存 checkpoint，不发布部分 `concepts.json`。
-- 两个接口的 total、代码集合和名称必须一致。
+响应：
+jQuery37107928327313745926_1784858770223({
+    "rc": 0,
+    "rt": 6,
+    "svr": 181735022,
+    "lt": 1,
+    "full": 1,
+    "dlmkts": "",
+    "dsc": "0",
+    "data": {
+        "total": 495,
+        "diff": [{
+            "f1": 2,
+            "f2": 201475,
+            "f3": 57,
+            "f4": 1145,
+            "f8": 139,
+            "f12": "BK0977",
+            "f13": 90,
+            "f14": "碳化硅",
+            "f20": 1397724960000,
+            "f104": 19,
+            "f105": 28,
+            "f128": "光力科技",
+            "f140": "300480",
+            "f141": 0,
+            "f136": 2002,
+            "f152": 2,
+            "f207": "奥瑞德",
+            "f208": "600666",
+            "f209": 1,
+            "f222": -353
+        }]
+    }
+}
 
-2026-07-23 live 验证：接口一返回 495 个板块；接口二连续完成 10 页并获得
-495 个唯一板块；代码和名称全集一致。
+
+版块股票:
