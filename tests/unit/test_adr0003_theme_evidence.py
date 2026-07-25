@@ -210,19 +210,15 @@ def test_request_uses_raw_requests_get_without_session(
 
     captured = []
 
+    class Resp:
+        status_code = 200
+        text = '{"rc": 0, "data": {"total": 1, "diff": []}}'
+
     def fake_get(url, *, headers, timeout, **kwargs):
         captured.append((url, headers))
-
-        class Resp:
-            status_code = 200
-
-            @staticmethod
-            def json():
-                return {"rc": 0, "data": {"total": 1, "diff": []}}
-
         return Resp()
 
-    monkeypatch.setattr("ashare_pilot.themes.datasource.requests.get", fake_get)
+    monkeypatch.setattr(source._session, "get", fake_get)
     result = source._request_with_retry(
         "https://example.invalid/query",
         {"cookie": "must-not-appear-in-diagnostics"},
@@ -245,10 +241,10 @@ def test_legacy_100_row_checkpoint_resumes_safely_at_50_rows(
         max_pages=1,
     )
     assert len(legacy_page.stocks) == 100
-    assert legacy_page.next_page == 2
+    assert legacy_page.next_page == 3
+    assert legacy_page.current_page_size == 50
 
     resumed, resumed_calls = source_with_pages(monkeypatch, {
-        2: response(150, [api_stock(i) for i in range(50, 100)]),
         3: response(150, [api_stock(i) for i in range(100, 150)]),
     })
     complete = resumed.fetch_concept_stocks(
@@ -260,7 +256,7 @@ def test_legacy_100_row_checkpoint_resumes_safely_at_50_rows(
 
     assert complete.status == "complete"
     assert len(complete.stocks) == 150
-    assert resumed_calls == [2, 3]
+    assert resumed_calls == [3]
 
 
 def test_fetch_stocks_cli_failure_is_nonzero_and_does_not_publish(
@@ -303,15 +299,7 @@ def test_fetch_stocks_cli_failure_is_nonzero_and_does_not_publish(
     assert concepts_fetch_stocks.main(["-q"]) == 1
     assert FailedSource.calls == ["BK0001"]
     assert not (cache / "stocks" / "BK0001.json").exists()
-    assert (cache / "checkpoints" / "BK0001.json").exists()
-    checkpoint = json.loads(
-        (cache / "checkpoints" / "BK0001.json").read_text(encoding="utf-8")
-    )
-    assert checkpoint["schema_version"] == "concept_stock_checkpoint.v3"
-    assert checkpoint["page_size"] == 50
-    assert checkpoint["last_completed_page"] == 0
-    assert checkpoint["next_page"] == checkpoint["failed_page"] == 1
-    assert checkpoint["fetched_count"] == 0
+    assert not (cache / "checkpoints" / "BK0001.json").exists()
 
 
 def test_theme_fetch_page_sizes_are_configurable_and_validated(tmp_path: Path):
@@ -412,7 +400,7 @@ def test_fetch_stocks_reset_starts_page_one_then_completed_default_skips(
     assert starts == [1]
 
 
-def test_round_robin_resume_finishes_current_page_before_next_page(
+def test_sequential_resume_after_failure(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ):
     cache = tmp_path / "cache"
@@ -441,48 +429,42 @@ def test_round_robin_resume_finishes_current_page_before_next_page(
     calls = []
     fail_once = {"C": True}
 
-    class RoundSource:
+    class SequentialSource:
         def __init__(self, **_kwargs):
             pass
 
         def fetch_concept_stocks(
             self, code, *, start_page, initial_stocks, on_page, max_pages, **_kwargs
         ):
-            assert max_pages == 1
             calls.append((code, start_page))
             if code == "C" and start_page == 1 and fail_once["C"]:
                 fail_once["C"] = False
                 return ConceptStocksFetchResult(
-                    "failed", initial_stocks, None, 1, 1, "request_failed"
+                    "failed", initial_stocks, None, 1, 1, "request_failed",
                 )
             total = totals[code]
-            page_count = min(100, total - len(initial_stocks))
             stocks = list(initial_stocks) + [
                 {"code": f"sz{code}{index:05d}", "name": f"{code}{index}"}
-                for index in range(len(initial_stocks), len(initial_stocks) + page_count)
+                for index in range(len(initial_stocks), total)
             ]
-            complete = len(stocks) == total
             result = ConceptStocksFetchResult(
-                "complete" if complete else "partial",
-                stocks,
-                total,
-                start_page + 1,
+                "complete", stocks, total, 2,
             )
             on_page(result)
             return result
 
-    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", RoundSource)
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", SequentialSource)
 
     assert concepts_fetch_stocks.main(["--reset", "-q"]) == 1
     assert calls == [("A", 1), ("B", 1), ("C", 1)]
     progress = json.loads((cache / "progress.json").read_text(encoding="utf-8"))
     assert progress["status"] == "failed"
-    assert progress["round_page"] == 1
+    assert progress["round_page"] is None
     assert progress["current_concept"]["code"] == "C"
 
     calls.clear()
     assert concepts_fetch_stocks.main(["-q"]) == 0
-    assert calls == [("C", 1), ("D", 1), ("A", 2), ("C", 2)]
+    assert calls == [("C", 1), ("D", 1)]
     assert not (cache / "progress.json").exists()
     assert not (cache / "checkpoints").exists()
 

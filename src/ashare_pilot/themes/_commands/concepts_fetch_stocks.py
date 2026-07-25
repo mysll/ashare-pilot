@@ -25,6 +25,7 @@ from pathlib import Path
 from ashare_pilot.themes.datasource import EastMoneyConceptSource
 from ashare_pilot.themes.fetch_settings import (
     DEFAULT_CONCEPT_MEMBER_PAGE_SIZE,
+    load_concept_request_delay,
     load_fetch_page_sizes,
     load_first_page_only,
 )
@@ -125,6 +126,18 @@ def load_checkpoint(code, page_size=DEFAULT_CONCEPT_MEMBER_PAGE_SIZE):
             flush=True,
         )
         path.unlink()
+        return None
+    return value
+
+
+def load_checkpoint_any(code):
+    """Load checkpoint regardless of page_size — used during adaptive fetches."""
+    path = checkpoint_path(code)
+    if not path.exists():
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        value = json.load(f)
+    if not isinstance(value, dict):
         return None
     return value
 
@@ -243,14 +256,17 @@ def fetch_one(
     page_size=DEFAULT_CONCEPT_MEMBER_PAGE_SIZE,
     max_pages=None,
 ):
-    checkpoint = load_checkpoint(code, page_size) or {}
+    checkpoint = load_checkpoint_any(code) or {}
+    checkpoint_pz = checkpoint.get("page_size")
+    effective_init_pz = checkpoint_pz if checkpoint_pz == 50 else page_size
 
     def persist(result):
-        save_checkpoint(code, result, page_size)
+        sz = getattr(result, "current_page_size", effective_init_pz)
+        save_checkpoint(code, result, sz)
 
     result = source.fetch_concept_stocks(
         code,
-        page_size=page_size,
+        page_size=effective_init_pz,
         start_page=checkpoint.get("next_page", 1),
         initial_stocks=checkpoint.get("stocks", []),
         known_total=checkpoint.get("total"),
@@ -310,6 +326,7 @@ def main(argv=None):
             THEME_CONFIG_FILE
         )
         first_page_only = load_first_page_only(THEME_CONFIG_FILE)
+        delay_min, delay_max = load_concept_request_delay(THEME_CONFIG_FILE)
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"Error: invalid theme fetch settings: {exc}", file=sys.stderr)
         return 1
@@ -373,8 +390,8 @@ def main(argv=None):
 
     source = EastMoneyConceptSource(
         requests_per_minute=15,
-        min_interval=3.0,
-        max_interval=5.0,
+        min_interval=delay_min,
+        max_interval=delay_max,
         verbose=args.verbose,
     )
 
@@ -452,6 +469,7 @@ def main(argv=None):
     failed = [
         item for item in load_failed()
         if item.get("code") not in ignored_codes
+        and item.get("code") not in cached_codes
     ]
     save_failed(failed)
     failed_codes = set(f["code"] for f in failed)
@@ -486,175 +504,154 @@ def main(argv=None):
         if item.get("code") in concept_by_code
     }
 
-    while True:
-        pending = [
-            concept
-            for concept in todo
-            if concept["code"] not in cached_codes
-        ]
-        if not pending:
-            break
+    pending = [concept for concept in todo if concept["code"] not in cached_codes]
+    total_pending = len(pending)
 
-        round_page = min(
-            next_page_for(concept["code"], member_page_size)
-            for concept in pending
+    for position, concept in enumerate(pending, 1):
+        code = concept["code"]
+        name = concept["name"]
+        remaining = total_pending - position
+        save_progress(
+            status="fetching",
+            round_page=None,
+            round_position=position,
+            round_size=total_pending,
+            current_concept={"code": code, "name": name},
+            completed_count=len(cached_codes),
+            remaining_count=remaining,
+            total_concepts=len(concepts),
         )
-        round_todo = [
-            concept
-            for concept in pending
-            if next_page_for(concept["code"], member_page_size) == round_page
-        ]
         print(
-            f"\nPage round {round_page}: {len(round_todo)} concept(s), "
-            f"{len(pending)} concept(s) remaining",
+            f"[{position}/{total_pending}] "
+            f"Fetching {name} ({code})...",
             flush=True,
         )
 
-        for position, concept in enumerate(round_todo, 1):
-            code = concept["code"]
-            name = concept["name"]
-            save_progress(
-                status="fetching",
-                round_page=round_page,
-                round_position=position,
-                round_size=len(round_todo),
-                current_concept={"code": code, "name": name},
-                completed_count=len(cached_codes),
-                remaining_count=len(pending),
-                total_concepts=len(concepts),
+        try:
+            result = fetch_one(
+                source,
+                code,
+                name,
+                page_size=member_page_size,
+                max_pages=1 if first_page_only else None,
             )
-            print(
-                f"[page {round_page} {position}/{len(round_todo)}] "
-                f"Fetching {name} ({code})...",
-                flush=True,
-            )
-
-            try:
-                result = fetch_one(
-                    source,
-                    code,
-                    name,
-                    page_size=member_page_size,
-                    max_pages=1,
-                )
-                if result.error or result.failed_page is not None:
-                    failure = {
-                        "code": code,
-                        "name": name,
-                        "error": result.error or result.status,
-                        "failed_page": result.failed_page or result.next_page,
-                        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    }
-                    failed_by_code[code] = failure
-                    save_failed(list(failed_by_code.values()))
-                    save_progress(
-                        status="failed",
-                        round_page=round_page,
-                        round_position=position,
-                        round_size=len(round_todo),
-                        current_concept={"code": code, "name": name},
-                        completed_count=len(cached_codes),
-                        remaining_count=len(pending),
-                        total_concepts=len(concepts),
-                        error=failure["error"],
-                    )
-                    print(
-                        f"  Incomplete ({len(result.stocks)}/{result.total or '?'}), "
-                        f"checkpoint saved: {failure['error']}."
-                    )
-                    print("  Stopping now so the caller can refresh the cookie and resume.")
-                    return 1
-
-                failed_by_code.pop(code, None)
-                save_failed(list(failed_by_code.values()))
-                if first_page_only:
-                    save_concept(code, {
-                        "concept_code": code,
-                        "concept_name": name,
-                        "status": "complete",
-                        "reported_total": len(result.stocks),
-                        "stock_count": len(result.stocks),
-                        "stocks": result.stocks,
-                        "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    })
-                    clear_checkpoint(code)
-                    cached_codes.add(code)
-                    action = "completed"
-                    print(f"  First page saved: {len(result.stocks)} stocks (done).")
-                elif result.status == "complete":
-                    cached_codes.add(code)
-                    action = "completed"
-                    print(f"  Complete: {len(result.stocks)} stocks.")
-                else:
-                    action = "page_complete"
-                    print(
-                        f"  Page {round_page} complete: "
-                        f"{len(result.stocks)}/{result.total or '?'} stocks cached."
-                    )
-                save_progress(
-                    status="in_progress",
-                    last_action=action,
-                    round_page=round_page,
-                    round_position=position,
-                    round_size=len(round_todo),
-                    current_concept={"code": code, "name": name},
-                    completed_count=len(cached_codes),
-                    remaining_count=len([
-                        item for item in todo
-                        if item["code"] not in cached_codes
-                    ]),
-                    total_concepts=len(concepts),
-                )
-
-                delay = random.uniform(3.0, 5.0)
-                print(f"  Waiting {delay:.1f}s...", flush=True)
-                time.sleep(delay)
-
-            except KeyboardInterrupt:
+            if result.error or result.failed_page is not None:
+                clear_checkpoint(code)
                 failure = {
                     "code": code,
                     "name": name,
-                    "error": "interrupted",
-                    "failed_page": round_page,
-                    "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-                failed_by_code[code] = failure
-                save_failed(list(failed_by_code.values()))
-                save_progress(
-                    status="interrupted",
-                    round_page=round_page,
-                    round_position=position,
-                    round_size=len(round_todo),
-                    current_concept={"code": code, "name": name},
-                    completed_count=len(cached_codes),
-                    remaining_count=len(pending),
-                    total_concepts=len(concepts),
-                )
-                print("\n\nInterrupted! Progress saved. Run again to continue.")
-                return 130
-            except Exception as exc:
-                failure = {
-                    "code": code,
-                    "name": name,
-                    "error": str(exc),
-                    "failed_page": round_page,
+                    "error": result.error or result.status,
+                    "failed_page": result.failed_page or result.next_page,
                     "time": time.strftime("%Y-%m-%d %H:%M:%S"),
                 }
                 failed_by_code[code] = failure
                 save_failed(list(failed_by_code.values()))
                 save_progress(
                     status="failed",
-                    round_page=round_page,
+                    round_page=None,
                     round_position=position,
-                    round_size=len(round_todo),
+                    round_size=total_pending,
                     current_concept={"code": code, "name": name},
                     completed_count=len(cached_codes),
-                    remaining_count=len(pending),
+                    remaining_count=remaining,
                     total_concepts=len(concepts),
-                    error=str(exc),
+                    error=failure["error"],
                 )
-                print(f"  Error: {exc}")
+                print(
+                    f"  Incomplete ({len(result.stocks)}/{result.total or '?'}), "
+                    f"checkpoint cleared: {failure['error']}."
+                )
+                print("  Stopping now so the caller can refresh the cookie and resume.")
                 return 1
+
+            failed_by_code.pop(code, None)
+            save_failed(list(failed_by_code.values()))
+            if first_page_only:
+                save_concept(code, {
+                    "concept_code": code,
+                    "concept_name": name,
+                    "status": "complete",
+                    "reported_total": len(result.stocks),
+                    "stock_count": len(result.stocks),
+                    "stocks": result.stocks,
+                    "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                })
+                clear_checkpoint(code)
+                cached_codes.add(code)
+                action = "completed"
+                print(f"  First page saved: {len(result.stocks)} stocks (done).")
+            elif result.status == "complete":
+                cached_codes.add(code)
+                action = "completed"
+                print(f"  Complete: {len(result.stocks)} stocks.")
+            else:
+                action = "page_complete"
+                print(
+                    f"  Partial: "
+                    f"{len(result.stocks)}/{result.total or '?'} stocks cached."
+                )
+            save_progress(
+                status="in_progress",
+                last_action=action,
+                round_page=None,
+                round_position=position,
+                round_size=total_pending,
+                current_concept={"code": code, "name": name},
+                completed_count=len(cached_codes),
+                remaining_count=remaining,
+                total_concepts=len(concepts),
+            )
+
+            if remaining > 0:
+                delay = random.uniform(delay_min, delay_max)
+                print(f"  Waiting {delay:.1f}s...", flush=True)
+                time.sleep(delay)
+
+        except KeyboardInterrupt:
+            failure = {
+                "code": code,
+                "name": name,
+                "error": "interrupted",
+                "failed_page": 0,
+                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            failed_by_code[code] = failure
+            save_failed(list(failed_by_code.values()))
+            save_progress(
+                status="interrupted",
+                round_page=None,
+                round_position=position,
+                round_size=total_pending,
+                current_concept={"code": code, "name": name},
+                completed_count=len(cached_codes),
+                remaining_count=remaining,
+                total_concepts=len(concepts),
+            )
+            print("\n\nInterrupted! Progress saved. Run again to continue.")
+            return 130
+        except Exception as exc:
+            failure = {
+                "code": code,
+                "name": name,
+                "error": str(exc),
+                "failed_page": 0,
+                "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+            }
+            failed_by_code[code] = failure
+            save_failed(list(failed_by_code.values()))
+            save_progress(
+                status="failed",
+                round_page=None,
+                round_position=position,
+                round_size=total_pending,
+                current_concept={"code": code, "name": name},
+                completed_count=len(cached_codes),
+                remaining_count=remaining,
+                total_concepts=len(concepts),
+                error=str(exc),
+            )
+            print(f"  Error: {exc}")
+            return 1
 
     all_failed = list(failed_by_code.values())
     save_failed(all_failed)

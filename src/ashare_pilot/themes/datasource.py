@@ -41,6 +41,7 @@ class ConceptStocksFetchResult:
     next_page: int
     failed_page: int | None = None
     error: str | None = None
+    current_page_size: int = 50
 
 
 def set_cookie_file(path: str | Path) -> None:
@@ -76,6 +77,13 @@ class EastMoneyConceptSource:
         self._max_interval = max_interval
         self.verbose = verbose
         self._state_dir = state_dir
+        self._session = requests.Session()
+        cookie_str = load_cookie()
+        if cookie_str:
+            for pair in cookie_str.split("; "):
+                if "=" in pair:
+                    key, val = pair.split("=", 1)
+                    self._session.cookies.set(key.strip(), val.strip())
 
     def _log(self, msg: str):
         if self.verbose:
@@ -84,14 +92,21 @@ class EastMoneyConceptSource:
     def _get_random_ua(self) -> str:
         return random.choice(USER_AGENTS)
 
-    def _get_push2_headers(self) -> dict:
-        cookie = load_cookie()
+    def _jsonp_cb(self) -> str:
+        ts = int(time.time() * 1000)
+        return f"jQuery1123{ts}_{ts}"
+
+    def _get_push2_headers(self, concept_code: str | None = None) -> dict:
+        if concept_code:
+            referer = f"https://data.eastmoney.com/bkzj/{concept_code}.html"
+        else:
+            referer = "https://data.eastmoney.com/bkzj/gn.html"
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
             "host": "push2.eastmoney.com",
-            "referer": "https://quote.eastmoney.com/",
+            "referer": referer,
             "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
@@ -99,7 +114,6 @@ class EastMoneyConceptSource:
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
             "user-agent": self._get_random_ua(),
-            "cookie": cookie,
         }
 
     def _wait_for_rate_limit(self):
@@ -139,9 +153,18 @@ class EastMoneyConceptSource:
                 }
                 if proxies is not None:
                     kwargs["proxies"] = proxies
-                resp = requests.get(url, **kwargs)
+                if self.verbose:
+                    ck = self._session.cookies.get_dict()
+                    key_cookies = {k: v for k, v in ck.items() if k in ("st_sn", "st_psi", "st_pvi", "st_si")}
+                    self._log(f"  cookies: {key_cookies}")
+                resp = self._session.get(url, **kwargs)
                 self._request_count += 1
-                data = resp.json()
+                text = resp.text
+                if text and not text.startswith("{"):
+                    idx = text.index("(")
+                    if idx > 0:
+                        text = text[idx + 1: text.rindex(")")]
+                data = json.loads(text)
                 return data
             except Exception:
                 if attempt < retries - 1:
@@ -233,6 +256,7 @@ class EastMoneyConceptSource:
                 print(f"  [{now}] Fetching page {page}...", flush=True)
 
             params = {
+                "cb": self._jsonp_cb(),
                 "fid": "f62",
                 "po": 1,
                 "pz": page_size,
@@ -366,14 +390,18 @@ class EastMoneyConceptSource:
 
         Args:
             concept_code: Concept sector code (e.g., "BK0493")
-            page_size: Number of stocks per page
+            page_size: Number of stocks per page for the first request.  If the
+                reported total exceeds this value the method switches to
+                page_size = 50 (matching browser behaviour) for every
+                subsequent page.
             start_page: First page to request when resuming.
             initial_stocks: Previously checkpointed, already de-duplicated members.
             known_total: Interface total captured by an earlier successful page.
             on_page: Called after every successful page with resumable state.
             max_pages: Maximum successful pages to fetch in this call. ``None``
-                fetches through completion; ``1`` supports round-robin paging.
+                fetches through completion; ``1`` fetches a single page.
         """
+        subsequent_pz = 50
         fs = f"b:{concept_code}"
         ut = EASTMONEY_MEMBER_UT
         fields = "f12,f13,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21"
@@ -387,14 +415,29 @@ class EastMoneyConceptSource:
                 seen_codes.add(code)
         page = max(1, int(start_page))
         total = int(known_total) if known_total is not None else None
-        headers = self._get_push2_headers()
+        headers = self._get_push2_headers(concept_code)
         pages_fetched = 0
+        current_pz = page_size
+        switched = False
+
+        def _mk_result(status, stocks, total, next_page, failed_page=None,
+                       error=None):
+            return ConceptStocksFetchResult(
+                status=status,
+                stocks=stocks,
+                total=total,
+                next_page=next_page,
+                failed_page=failed_page,
+                error=error,
+                current_page_size=current_pz,
+            )
 
         while True:
             params = {
+                "cb": self._jsonp_cb(),
                 "fid": "f3",
                 "po": 1,
-                "pz": page_size,
+                "pz": current_pz,
                 "pn": page,
                 "np": 1,
                 "fltt": 2,
@@ -414,13 +457,10 @@ class EastMoneyConceptSource:
                     f"\n  {concept_code} page {page} failed after retries. Cookie may have expired."
                 )
                 self._log("  Run: ashare-pilot market-data auth update-cookie")
-                return ConceptStocksFetchResult(
-                    status="partial" if results else "failed",
-                    stocks=results,
-                    total=total,
-                    next_page=page,
-                    failed_page=page,
-                    error="request_failed",
+                return _mk_result(
+                    "partial" if results else "failed",
+                    results, total, page,
+                    failed_page=page, error="request_failed",
                 )
 
             payload = data.get("data")
@@ -432,11 +472,9 @@ class EastMoneyConceptSource:
                 reported_total = None
             if reported_total is not None:
                 if total is not None and reported_total != total:
-                    return ConceptStocksFetchResult(
-                        status="partial" if results else "failed",
-                        stocks=results,
-                        total=reported_total,
-                        next_page=page,
+                    return _mk_result(
+                        "partial" if results else "failed",
+                        results, reported_total, page,
                         failed_page=page,
                         error=f"total_changed:{total}->{reported_total}",
                     )
@@ -445,13 +483,11 @@ class EastMoneyConceptSource:
             diff = payload.get("diff", [])
             diff = diff if isinstance(diff, list) else []
             if not diff:
-                if total == len(results):
-                    return ConceptStocksFetchResult("complete", results, total, page)
-                return ConceptStocksFetchResult(
-                    status="partial" if results else "failed",
-                    stocks=results,
-                    total=total,
-                    next_page=page,
+                if total is not None and len(results) == total:
+                    return _mk_result("complete", results, total, page)
+                return _mk_result(
+                    "partial" if results else "failed",
+                    results, total, page,
                     failed_page=page,
                     error=f"incomplete_count:{len(results)}/{total}",
                 )
@@ -512,32 +548,47 @@ class EastMoneyConceptSource:
                     results.append(stock)
                     seen_codes.add(full_code)
 
-            next_page = page + 1
             pages_fetched += 1
-            page_result = ConceptStocksFetchResult(
-                status="complete" if total is not None and len(results) == total else "partial",
-                stocks=results,
-                total=total,
-                next_page=next_page,
+            page_pz = current_pz
+
+            # --- adaptive page-size switch after the first page ---
+            if not switched and total is not None and total > page_size:
+                switched = True
+                current_pz = subsequent_pz
+                page = (page_size // current_pz) + 1  # e.g. 100→page 3 at pz=50
+            else:
+                page = page + 1
+
+            next_page = page
+            page_result = _mk_result(
+                "complete" if total is not None and len(results) == total else "partial",
+                results, total, next_page,
             )
             if on_page:
                 on_page(page_result)
 
             if total is not None and len(results) == total:
-                return ConceptStocksFetchResult("complete", results, total, next_page)
+                print(
+                    f"  Page {pages_fetched}: {len(results)}/{total} stocks (pz={page_pz})",
+                    flush=True,
+                )
+                return _mk_result("complete", results, total, next_page)
             if total is not None and len(results) > total:
-                return ConceptStocksFetchResult(
-                    status="partial",
-                    stocks=results,
-                    total=total,
-                    next_page=next_page,
-                    failed_page=page,
+                return _mk_result(
+                    "partial", results, total, next_page,
+                    failed_page=next_page - 1,
                     error=f"count_exceeds_total:{len(results)}/{total}",
                 )
             if max_pages is not None and pages_fetched >= max_pages:
                 return page_result
 
-            page = next_page
+            print(
+                f"  Page {pages_fetched}: {len(results)}/{total or '?'} stocks (pz={page_pz})",
+                flush=True,
+            )
+            delay = random.uniform(self._min_interval, self._max_interval)
+            print(f"  Sleeping {delay:.1f}s before next page...", flush=True)
+            time.sleep(delay)
 
 
 def _to_yi(val) -> str:
