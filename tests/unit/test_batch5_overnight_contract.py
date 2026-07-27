@@ -121,6 +121,29 @@ def test_compute_scores_empty_pool_is_safe():
     assert mod.compute_scores([]) == []
 
 
+def test_risk_penalty_increases_with_risk_raw():
+    mod = load_score_mod()
+    pool = [
+        make_stock(code="sz000001", change_pct="4%", turnover="8%"),
+        make_stock(code="sz000002", change_pct="7%", turnover="16%"),
+        make_stock(
+            code="sz000003",
+            change_pct="9.5%",
+            turnover="26%",
+            source_pool="limit_up",
+        ),
+    ]
+
+    scored = by_code(mod.compute_scores(pool))
+    low = scored["sz000001"]["score_trace"]["risk_penalty"]
+    medium = scored["sz000002"]["score_trace"]["risk_penalty"]
+    high = scored["sz000003"]["score_trace"]["risk_penalty"]
+
+    assert low["raw"] < medium["raw"] < high["raw"]
+    assert low["pct"] < medium["pct"] < high["pct"]
+    assert low["contrib"] < medium["contrib"] < high["contrib"]
+
+
 def test_classify_tier_alias_ignores_absolute_score():
     mod = load_score_mod()
     assert mod.classify_tier(score=10.0, rank=1, pool_size=100) == "A"

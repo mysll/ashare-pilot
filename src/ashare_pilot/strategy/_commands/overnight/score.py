@@ -11,7 +11,7 @@ Dimensions:
     Capital Continuity   25%  — main_net_inflow → percentile
     Tail Strength        20%  — price_position × turnover_quality → percentile
     Position Advantage   15%  — gaussian(|change_pct - 4%|) → percentile
-    Risk Penalty        -10%  — combined penalty → inverse percentile
+    Risk Penalty        -10%  — combined penalty → ascending percentile
 
 Output: ScoreObject with {value, rank, confidence, trace, tier}
 
@@ -63,20 +63,18 @@ def parse_float(val, default=0.0):
         return default
 
 
-def percentile_rank(values, value, invert=False):
-    """Return percentile rank 0-100 of value within values.
-    invert=True: low values get high percentile (for risk/penalty).
-    Returns 50 for zero-variance case.
+def percentile_rank(values, value):
+    """Return ascending percentile rank 0-100 of value within values.
+
+    Higher raw values receive higher percentiles. Returns 50 for the
+    zero-variance case.
     """
     if not values:
         return 50.0
     n = len(values)
     if max(values) - min(values) < 1e-9:
         return 50.0
-    if invert:
-        lower_count = sum(1 for v in values if v <= value)
-    else:
-        lower_count = sum(1 for v in values if v < value)
+    lower_count = sum(1 for v in values if v < value)
     return round(lower_count / n * 100, 1)
 
 
@@ -631,7 +629,7 @@ def compute_scores(pool, regime=None):
         capital_pct = percentile_rank(all_raws["capital"], r["capital"])
         tail_pct = percentile_rank(all_raws["tail"], r["tail"])
         position_pct = percentile_rank(all_raws["position"], r["position"])
-        risk_pct = percentile_rank(all_raws["risk"], r["risk"], invert=True)
+        risk_pct = percentile_rank(all_raws["risk"], r["risk"])
 
         intensity_pct = percentile_rank(all_raws["intensity"], r["intensity"])
         conviction_pct = percentile_rank(all_raws["conviction"], r["conviction"])
@@ -647,7 +645,7 @@ def compute_scores(pool, regime=None):
         conviction_contrib = scaled_contribution(conviction_pct, W["conviction"], capital_scale)
         consistency_contrib = scaled_contribution(consistency_pct, W["consistency"], capital_scale)
         trend_contrib = trend_pct * W["trend_quality"]
-        risk_contrib = (100.0 - risk_pct) * W["risk_penalty"]
+        risk_contrib = risk_pct * W["risk_penalty"]
 
         overnight_score = round(
             theme_contrib

@@ -39,7 +39,7 @@ uv run --frozen ashare-pilot strategy overnight score .cache/intraday/{YYYY-MM-D
 | Capital Continuity | 18% | Main force net inflow vs pool peers (percentile) |
 | Tail Strength | 14% | Price position within day range × volume ratio |
 | Position Advantage | 9% | Gaussian sweet spot on change% (peak ~4%) |
-| Risk Deduction | -10% | Soft penalty: high change%(≥9.5:+0.4,≥7:+0.2,≥5:+0.05), turnover(>25:+0.3,>15:+0.15,>10:+0.05), limit_up source(+0.15) |
+| Risk Deduction | -10% | Soft penalty: high change%(≥9.5:+0.4,≥7:+0.2,≥5:+0.05), turnover(>25:+0.3,>15:+0.15,>10:+0.05), limit_up source(+0.15); ascending risk percentile is directly subtracted |
 | Intensity | 9% | Capital efficiency: main_net_inflow / turnover |
 | Conviction | 9% | super_large_net / \|main_net_inflow\| |
 | Consistency | 5% | 4-tier capital directional alignment |
