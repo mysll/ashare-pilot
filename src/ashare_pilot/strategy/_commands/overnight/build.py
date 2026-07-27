@@ -92,6 +92,11 @@ def build(mapper: dict[str, Any]) -> dict[str, Any]:
         for stock in mapper.get("stocks", [])
         if isinstance(stock, dict) and isinstance(stock.get("reasoning"), dict)
     ]
+    pool_summary = (
+        mapper.get("pool_summary")
+        if isinstance(mapper.get("pool_summary"), dict)
+        else {}
+    )
     return {
         "schema_version": "intraday_overnight_strategy.v1",
         "date": mapper.get("date"),
@@ -108,6 +113,8 @@ def build(mapper: dict[str, Any]) -> dict[str, Any]:
         },
         "market": mapper.get("market_assessment"),
         "portfolio": mapper.get("strategy"),
+        "data_quality": pool_summary.get("data_quality_summary"),
+        "data_warning": pool_summary.get("pool_warning"),
         "positions": [stock for stock in stocks if stock.get("direction") != "观望"],
         "watchlist": [stock for stock in stocks if stock.get("direction") == "观望"],
     }

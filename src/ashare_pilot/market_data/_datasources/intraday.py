@@ -9,12 +9,11 @@ import json
 import os
 import random
 import time
+from dataclasses import dataclass
 from datetime import datetime
 from urllib.parse import urlencode
 
-import requests
-
-from ashare_pilot.http_settings import http_get
+from ashare_pilot.http_settings import browser_client_hint_headers, http_get
 
 from .base import BaseDataSource, RateLimitConfig
 from .utils import format_price, format_volume, format_amount, format_percent, to_yi
@@ -35,6 +34,30 @@ INDEX_FIELDS = "f43,f46,f60,f113,f114,f115,f116"
 A_STOCK_BASIC_FIELDS = "f2,f3,f4,f5,f6,f7,f8,f10,f12,f13,f14,f15,f16,f17,f18,f20,f21"
 
 
+@dataclass
+class AllStocksFetchResult:
+    """Paginated Sina result with explicit completeness evidence."""
+
+    status: str
+    stocks: list[dict]
+    page_size: int
+    pages_fetched: int
+    next_page: int
+    failed_page: int | None = None
+    error: str | None = None
+
+    def quality(self) -> dict:
+        return {
+            "status": self.status,
+            "stock_count": len(self.stocks),
+            "page_size": self.page_size,
+            "pages_fetched": self.pages_fetched,
+            "next_page": self.next_page,
+            "failed_page": self.failed_page,
+            "error": self.error,
+        }
+
+
 class EastMoneyIntradayDataSource(BaseDataSource):
     """Intraday data fetcher for East Money push2 API."""
 
@@ -47,23 +70,23 @@ class EastMoneyIntradayDataSource(BaseDataSource):
 
     def __init__(self, config: RateLimitConfig = None):
         super().__init__(config or self.DEFAULT_CONFIG)
+        self.last_all_stocks_quality: dict = {}
 
     def _get_push2_headers(self) -> dict:
         cookie = load_cookie("EASTMONEY_COOKIE")
+        user_agent = self._get_random_ua()
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
             "host": "push2.eastmoney.com",
             "referer": "https://quote.eastmoney.com/",
-            "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "script",
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
-            "user-agent": self._get_random_ua(),
+            "user-agent": user_agent,
             "cookie": cookie,
+            **browser_client_hint_headers(user_agent),
         }
 
     def _get_headers(self) -> dict:
@@ -76,18 +99,26 @@ class EastMoneyIntradayDataSource(BaseDataSource):
         except Exception:
             return {}
 
+    @staticmethod
+    def _is_bse_code(code: str, market: int | None = None) -> bool:
+        """Recognize current and legacy BSE codes, including old cache rows."""
+        c = str(code)
+        return market == 2 or (
+            len(c) == 6
+            and c.startswith(("4", "8", "92"))
+            and market in (0, 2, None)
+        )
+
     def _classify_stock(self, code: str, market: int) -> str:
         c = str(code)
-        if c.startswith("30"):
+        if self._is_bse_code(c, market):
+            return "北交所"
+        elif c.startswith("30"):
             return "创业板"
         elif c.startswith("688"):
             return "科创板"
         elif c.startswith("68"):
             return "科创板"
-        elif c.startswith("8") and len(c) >= 4 and market == 0:
-            return "北交所"
-        elif c.startswith("4") and len(c) >= 6 and market == 0:
-            return "北交所"
         elif c.startswith("6") and market == 1:
             return "沪市主板"
         elif (c.startswith("00") or c.startswith("30")) and market == 0:
@@ -184,7 +215,9 @@ class EastMoneyIntradayDataSource(BaseDataSource):
 
     def _to_full_code(self, code: str, market: int) -> str:
         c = str(code)
-        if market == 1:
+        if self._is_bse_code(c, market):
+            return f"bj{c}"
+        elif market == 1:
             return f"sh{c}"
         elif market == 0:
             return f"sz{c}"
@@ -254,7 +287,7 @@ class EastMoneyIntradayDataSource(BaseDataSource):
             market = 0
         elif symbol.startswith("bj"):
             code = symbol[2:]
-            market = 0
+            market = 2
         else:
             code = symbol
             market = 0
@@ -288,15 +321,23 @@ class EastMoneyIntradayDataSource(BaseDataSource):
             "float_mv": _f("nmc"),
         }
 
-    def fetch_all_astocks(self, cache_dir: str = None) -> list:
+    def fetch_all_astocks(
+        self,
+        cache_dir: str = None,
+        *,
+        resume_partial: bool = False,
+    ) -> list:
         """Fetch full A-stock list once, with file-based caching.
 
         Primary: Sina API pagination (reliable, ~55s for ~5500 stocks).
-        Caches converted stock records to all_stocks_cache.json.
+        Phase 0 may resume a same-day partial cache from its failed page.
+        Downstream consumers reuse the explicit complete/partial snapshot
+        without starting another fetch in the same pipeline run.
 
         Returns list of readable stock record dicts.
         """
         cache_path = None
+        cached = None
         today = datetime.now().strftime("%Y-%m-%d")
         if cache_dir:
             os.makedirs(cache_dir, exist_ok=True)
@@ -306,36 +347,82 @@ class EastMoneyIntradayDataSource(BaseDataSource):
                     with open(cache_path, "r", encoding="utf-8") as f:
                         cached = json.load(f)
                     if cached.get("date") == today:
-                        return cached.get("stocks", [])
+                        stocks = cached.get("stocks", [])
+                        status = cached.get("status")
+                        if status not in ("complete", "partial"):
+                            status = "partial"
+                        self.last_all_stocks_quality = {
+                            "status": status,
+                            "stock_count": len(stocks),
+                            "page_size": cached.get("page_size", 100),
+                            "pages_fetched": cached.get("pages_fetched"),
+                            "next_page": cached.get("next_page"),
+                            "failed_page": cached.get("failed_page"),
+                            "error": cached.get("error"),
+                        }
+                        if status == "complete" or not resume_partial:
+                            return stocks
                 except (json.JSONDecodeError, KeyError):
-                    pass
+                    cached = None
 
-        all_stocks = self._fetch_all_sina_paginated()
+        initial_stocks = []
+        start_page = 1
+        pages_fetched = 0
+        page_size = 100
+        if cached and cached.get("date") == today:
+            initial_stocks = cached.get("stocks", [])
+            page_size = int(cached.get("page_size") or 100)
+            pages_fetched = cached.get("pages_fetched")
+            if not isinstance(pages_fetched, int):
+                pages_fetched = (len(initial_stocks) + page_size - 1) // page_size
+            start_page = cached.get("next_page")
+            if not isinstance(start_page, int) or start_page < 1:
+                start_page = pages_fetched + 1
 
-        if cache_path and all_stocks:
+        result = self._fetch_all_sina_paginated_result(
+            start_page=start_page,
+            initial_stocks=initial_stocks,
+            pages_fetched=pages_fetched,
+            page_size=page_size,
+        )
+        self.last_all_stocks_quality = result.quality()
+
+        if cache_path:
             try:
                 with open(cache_path, "w", encoding="utf-8") as f:
                     json.dump({
+                        "schema_version": "intraday_all_stocks_cache.v2",
                         "date": today,
                         "fetched_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "stock_count": len(all_stocks),
+                        **result.quality(),
                         "source": "sina",
-                        "stocks": all_stocks,
+                        "stocks": result.stocks,
                     }, f, ensure_ascii=False)
             except Exception:
                 pass
 
-        return all_stocks
+        return result.stocks
 
     def _fetch_all_sina_paginated(self) -> list:
-        """Fetch all A-stocks from Sina API with pagination.
+        """Backward-compatible list-only wrapper for the paginated fetch."""
+        return self._fetch_all_sina_paginated_result().stocks
 
-        Sina caps at 100 per page. Uses 0.5–1.0s random delay between
-        pages to avoid rate limiting. Returns list of stock record dicts.
-        """
-        PAGE_SIZE = 100
-        all_stocks = []
-        page = 1
+    def _fetch_all_sina_paginated_result(
+        self,
+        *,
+        start_page: int = 1,
+        initial_stocks: list[dict] | None = None,
+        pages_fetched: int = 0,
+        page_size: int = 100,
+    ) -> AllStocksFetchResult:
+        """Fetch Sina pages, retrying the current page with increasing delays."""
+        all_stocks = list(initial_stocks or [])
+        seen = {
+            (stock.get("market"), str(stock.get("code") or ""))
+            for stock in all_stocks
+        }
+        page = max(1, int(start_page))
+        max_attempts = max(1, int(self.config.retry_times))
         headers = {
             "User-Agent": self._get_random_ua(),
             "Referer": "https://finance.sina.com.cn/",
@@ -343,28 +430,66 @@ class EastMoneyIntradayDataSource(BaseDataSource):
         }
 
         while True:
-            url = f"{SINA_LIST_URL}?page={page}&num={PAGE_SIZE}&sort=symbol&asc=1&node=hs_a"
-            try:
-                resp = requests.get(url, headers=headers, timeout=10)
-                data = resp.json()
-            except Exception:
-                break
+            url = f"{SINA_LIST_URL}?page={page}&num={page_size}&sort=symbol&asc=1&node=hs_a"
+            data = None
+            error = None
+            for attempt in range(max_attempts):
+                try:
+                    resp = http_get(url, headers=headers, timeout=10)
+                    status_code = getattr(resp, "status_code", 200)
+                    if status_code >= 400:
+                        raise RuntimeError(f"http_{status_code}")
+                    data = resp.json()
+                    if not isinstance(data, list):
+                        raise ValueError("response_not_list")
+                    if not data:
+                        raise ValueError("empty_page")
+                    error = None
+                    break
+                except Exception as exc:
+                    error = f"{type(exc).__name__}:{exc}"
+                    if attempt + 1 >= max_attempts:
+                        break
+                    retry_delay = (
+                        self.config.retry_backoff ** (attempt + 1)
+                        + random.uniform(0.25, 0.75)
+                    )
+                    time.sleep(retry_delay)
 
-            if not data or not isinstance(data, list) or len(data) == 0:
-                break
-
+            if error is not None:
+                return AllStocksFetchResult(
+                    status="partial",
+                    stocks=all_stocks,
+                    page_size=page_size,
+                    pages_fetched=pages_fetched,
+                    next_page=page,
+                    failed_page=page,
+                    error=error,
+                )
             for item in data:
                 rec = self._sina_to_stock_rec(item)
-                if rec.get("name") and rec.get("price") and rec.get("price") != 0:
+                key = (rec.get("market"), str(rec.get("code") or ""))
+                if (
+                    key not in seen
+                    and rec.get("name")
+                    and rec.get("price")
+                    and rec.get("price") != 0
+                ):
                     all_stocks.append(rec)
+                    seen.add(key)
 
-            if len(data) < PAGE_SIZE:
-                break
+            pages_fetched += 1
+            if len(data) < page_size:
+                return AllStocksFetchResult(
+                    status="complete",
+                    stocks=all_stocks,
+                    page_size=page_size,
+                    pages_fetched=pages_fetched,
+                    next_page=page + 1,
+                )
 
             page += 1
             time.sleep(random.uniform(0.5, 1.0))
-
-        return all_stocks
 
     def fetch_limit_up_pool(self, top: int = 200, all_stocks: list = None) -> list:
         """Fetch limit-up stock pool with formatted market data.

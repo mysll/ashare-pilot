@@ -101,8 +101,24 @@ def main(argv=None):
     # ── Phase 0: Prefetch all-stocks cache (once, shared by all downstream) ──
     print("\n--- Phase 0: Prefetch all-stocks cache ---")
     t0 = time.time()
-    all_stocks = _cache_ds.fetch_all_astocks(cache_dir=str(out_dir))
-    print(f"  Cached {len(all_stocks)} stocks in {time.time() - t0:.1f}s")
+    all_stocks = _cache_ds.fetch_all_astocks(
+        cache_dir=str(out_dir),
+        resume_partial=True,
+    )
+    cache_quality = _cache_ds.last_all_stocks_quality
+    cache_status = cache_quality.get("status", "unknown")
+    print(
+        f"  Cached {len(all_stocks)} stocks "
+        f"(status={cache_status}) in {time.time() - t0:.1f}s"
+    )
+    if cache_status == "partial":
+        print(
+            "  [WARN] Sina all-stock snapshot is partial: "
+            f"pages={cache_quality.get('pages_fetched')}, "
+            f"failed_page={cache_quality.get('failed_page')}, "
+            f"next_page={cache_quality.get('next_page')}, "
+            f"error={cache_quality.get('error')}"
+        )
     cache_dir_arg = str(out_dir)
 
     # ── Phase 1: Market Scan (parallel-ready independent calls) ──

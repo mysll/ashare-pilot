@@ -4,8 +4,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any
 
-import requests
-
+from ashare_pilot.http_settings import http_get
 from .base import BaseDataSource, RateLimitConfig
 from .kline_cache import (
     cache_checked_recently,
@@ -47,7 +46,7 @@ class SohuDataSource(BaseDataSource):
         }
 
     def _make_request(self, url: str) -> str:
-        resp = requests.get(url, headers=self._get_headers(), timeout=15)
+        resp = http_get(url, headers=self._get_headers(), timeout=15)
         return resp.content.decode("utf-8", errors="replace")
 
     def _to_sohu_code(self, stock_code: str) -> str | None:

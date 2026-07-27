@@ -16,6 +16,9 @@ import time
 
 from ashare_pilot.market_data._datasources import EastMoneyDataSource, SinaDataSource
 from ashare_pilot.market_data.runtime import workspace_path
+from ashare_pilot.market_data.settings import (
+    load_stock_money_flow_min_inflow_yuan,
+)
 
 _sina = SinaDataSource()
 _eastmoney = EastMoneyDataSource()
@@ -61,9 +64,16 @@ def compute_vwap(amount, volume):
     return round(amt / vol, 3)
 
 
-def fetch_indicators_for_codes(codes: list) -> dict:
+def fetch_indicators_for_codes(
+    codes: list,
+    *,
+    include_quality: bool = False,
+    min_main_inflow_yuan: int | None = None,
+):
     """Fetch real-time quotes, VWAP and money flow for a batch of stock codes."""
     results = {}
+    if min_main_inflow_yuan is None:
+        min_main_inflow_yuan = load_stock_money_flow_min_inflow_yuan()
 
     sina_results = {}
     try:
@@ -88,9 +98,28 @@ def fetch_indicators_for_codes(codes: list) -> dict:
         vwap_map[code] = compute_vwap(entry.get("amount", "0"), entry.get("volume", "0"))
 
     try:
-        all_money = _eastmoney.fetch_stock_money_flow(page_size=5000)
-    except Exception:
+        money_result = _eastmoney.fetch_stock_money_flow_adaptive(
+            target_codes=set(codes),
+            min_main_inflow_yuan=min_main_inflow_yuan,
+        )
+        all_money = money_result.rows
+        money_quality = money_result.quality(set(codes))
+    except Exception as exc:
         all_money = []
+        money_quality = {
+            "status": "unavailable",
+            "fetch_status": "unavailable",
+            "rows_fetched": 0,
+            "reported_total": None,
+            "pages_fetched": 0,
+            "failed_page": 1,
+            "error": f"unexpected_error:{type(exc).__name__}",
+            "stop_reason": None,
+            "min_main_inflow_yuan": min_main_inflow_yuan,
+            "requested_stock_count": len(codes),
+            "matched_stock_count": 0,
+            "coverage_pct": 0.0,
+        }
 
     money_map = {}
     for m in all_money:
@@ -99,7 +128,7 @@ def fetch_indicators_for_codes(codes: list) -> dict:
     for code in codes:
         entry = sina_results.get(code, {})
         mf = money_map.get(code, {})
-        results[code] = {
+        result = {
             "price": entry.get("price", "-"),
             "open": entry.get("open", "-"),
             "high": entry.get("high", "-"),
@@ -108,15 +137,28 @@ def fetch_indicators_for_codes(codes: list) -> dict:
             "volume": entry.get("volume", "0"),
             "amount": entry.get("amount", "0"),
             "vwap": vwap_map.get(code, 0.0),
-            "main_net_inflow": mf.get("main_net_inflow", "0.00"),
-            "main_ratio": mf.get("main_ratio", "-"),
-            "super_large_net": mf.get("super_large_net", "0.00"),
-            "large_net": mf.get("large_net", "0.00"),
-            "medium_net": mf.get("medium_net", "0.00"),
-            "small_net": mf.get("small_net", "0.00"),
-            "change_pct": mf.get("change_pct", "-"),
+            "money_flow_available": bool(mf),
+            "money_flow_minimum_filter_applied": (
+                money_quality.get("fetch_status") == "threshold_reached"
+                and not mf
+            ),
+            "min_main_inflow_yuan": min_main_inflow_yuan,
         }
+        if mf:
+            result.update({
+                "main_net_inflow": mf.get("main_net_inflow"),
+                "main_net_inflow_yuan": mf.get("main_net_inflow_yuan"),
+                "main_ratio": mf.get("main_ratio"),
+                "super_large_net": mf.get("super_large_net"),
+                "large_net": mf.get("large_net"),
+                "medium_net": mf.get("medium_net"),
+                "small_net": mf.get("small_net"),
+                "change_pct": mf.get("change_pct"),
+            })
+        results[code] = result
 
+    if include_quality:
+        return results, money_quality
     return results
 
 
@@ -164,7 +206,9 @@ def main(argv=None):
     print(f"Enriching {len(codes)} stocks...", file=sys.stderr)
 
     t0 = time.time()
-    indicator_data = fetch_indicators_for_codes(codes)
+    indicator_data, money_flow_quality = fetch_indicators_for_codes(
+        codes, include_quality=True
+    )
 
     for stock in pool:
         code = stock.get("code", "")
@@ -180,14 +224,37 @@ def main(argv=None):
                 "amount": enrich.get("amount", "0"),
                 "vwap": enrich.get("vwap", 0.0),
             },
-            "money_flow": {
-                "main_net_inflow": enrich.get("main_net_inflow", "0.00"),
-                "main_ratio": enrich.get("main_ratio", "-"),
-                "super_large_net": enrich.get("super_large_net", "0.00"),
-                "large_net": enrich.get("large_net", "0.00"),
-                "medium_net": enrich.get("medium_net", "0.00"),
-                "small_net": enrich.get("small_net", "0.00"),
-            },
+            "money_flow": (
+                {
+                    "available": True,
+                    "main_net_inflow": enrich.get("main_net_inflow"),
+                    "main_net_inflow_yuan": enrich.get("main_net_inflow_yuan"),
+                    "minimum_main_inflow_yuan": enrich.get(
+                        "min_main_inflow_yuan"
+                    ),
+                    "meets_minimum_main_inflow": True,
+                    "main_ratio": enrich.get("main_ratio"),
+                    "super_large_net": enrich.get("super_large_net"),
+                    "large_net": enrich.get("large_net"),
+                    "medium_net": enrich.get("medium_net"),
+                    "small_net": enrich.get("small_net"),
+                }
+                if enrich.get("money_flow_available")
+                else {
+                    "available": False,
+                    "minimum_filter_applied": enrich.get(
+                        "money_flow_minimum_filter_applied", False
+                    ),
+                    "minimum_main_inflow_yuan": enrich.get(
+                        "min_main_inflow_yuan"
+                    ),
+                    "missing_reason": (
+                        "below_configured_minimum_or_not_returned_by_endpoint"
+                        if enrich.get("money_flow_minimum_filter_applied")
+                        else "not_returned_in_fetched_money_flow_pages"
+                    ),
+                }
+            ),
         }
 
     elapsed = time.time() - t0
@@ -196,6 +263,9 @@ def main(argv=None):
     output = {
         "pool_size": len(pool),
         "enriched_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "data_quality": {
+            "money_flow": money_flow_quality,
+        },
         "compute_pool": pool,
     }
     if not args.no_board_filter and load_board_exclusions():

@@ -3,8 +3,7 @@
 import json
 from typing import Any
 
-import requests
-
+from ashare_pilot.http_settings import http_get
 from .base import BaseDataSource, RateLimitConfig
 from .utils import calc_price_precision, format_price
 
@@ -33,7 +32,7 @@ class TencentDataSource(BaseDataSource):
         }
 
     def _make_request(self, url: str, encoding: str = "gbk") -> str:
-        resp = requests.get(url, headers=self._get_headers(), timeout=10)
+        resp = http_get(url, headers=self._get_headers(), timeout=10)
         return resp.content.decode(encoding)
 
     def fetch_hk_quotes(self, codes: list) -> list:
@@ -92,7 +91,7 @@ class TencentDataSource(BaseDataSource):
             "User-Agent": self._get_random_ua(),
         }
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = http_get(url, headers=headers, timeout=10)
             data = resp.json()
         except Exception as e:
             return [{"error": str(e)}]

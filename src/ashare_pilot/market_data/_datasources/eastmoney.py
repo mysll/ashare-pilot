@@ -2,12 +2,14 @@
 
 import random
 import time
+import json
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
-from ashare_pilot.http_settings import http_get
+from ashare_pilot.http_settings import browser_client_hint_headers, http_get
 from ashare_pilot.market_data.runtime import workspace_path
 
 from .base import BaseDataSource, RateLimitConfig
@@ -20,9 +22,54 @@ MONEY_FLOW_URL = "https://push2.eastmoney.com/api/qt/clist/get"
 STOCK_MONEY_FLOW_URL = "https://push2.eastmoney.com/api/qt/clist/get"
 EASTMONEY_FIELDS = "f12,f14,f2,f3,f4,f5,f6,f7,f8,f10,f15,f16,f17,f18,f20,f21"
 STOCK_MONEY_FLOW_FIELDS = "f12,f14,f2,f3,f62,f184,f66,f69,f72,f75,f78,f81,f84,f87,f204,f205,f124,f1,f13"
+MAX_STOCK_MONEY_FLOW_FIRST_PAGE_SIZE = 100
+STOCK_MONEY_FLOW_SUBSEQUENT_PAGE_SIZE = 50
 
 # Custom cookie file path (can be set via --cookie argument)
 _custom_cookie_file: Path | None = None
+
+
+@dataclass
+class StockMoneyFlowFetchResult:
+    """Adaptive stock-money-flow result, including partial-fetch evidence."""
+
+    status: str
+    rows: list[dict[str, Any]]
+    reported_total: int | None
+    pages_fetched: int
+    failed_page: int | None = None
+    error: str | None = None
+    stop_reason: str | None = None
+    min_main_inflow_yuan: int | None = None
+
+    def quality(self, target_codes: set[str] | None = None) -> dict[str, Any]:
+        available_codes = {str(row.get("code") or "") for row in self.rows}
+        targets = target_codes or set()
+        matched = len(targets & available_codes)
+        requested = len(targets)
+        coverage = round(matched / requested * 100, 1) if requested else None
+        if requested:
+            completeness = (
+                "complete" if matched == requested
+                else "unavailable" if not self.rows
+                else "partial"
+            )
+        else:
+            completeness = self.status
+        return {
+            "status": completeness,
+            "fetch_status": self.status,
+            "rows_fetched": len(self.rows),
+            "reported_total": self.reported_total,
+            "pages_fetched": self.pages_fetched,
+            "failed_page": self.failed_page,
+            "error": self.error,
+            "stop_reason": self.stop_reason,
+            "min_main_inflow_yuan": self.min_main_inflow_yuan,
+            "requested_stock_count": requested,
+            "matched_stock_count": matched,
+            "coverage_pct": coverage,
+        }
 
 
 def set_cookie_file(path: str | Path) -> None:
@@ -391,20 +438,19 @@ class EastMoneyDataSource(BaseDataSource):
         # 从 .cookie 文件读取 cookie
         # 注意：不要手动设置 accept-encoding，让 requests 自动处理 gzip 解压
         cookie = load_cookie("EASTMONEY_COOKIE")
+        user_agent = self._get_random_ua()
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
             "host": "push2.eastmoney.com",
             "referer": "https://data.eastmoney.com/zjlx/detail.html",
-            "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "script",
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+            "user-agent": user_agent,
             "cookie": cookie,
+            **browser_client_hint_headers(user_agent),
         }
 
     def _get_push2_headers(self) -> dict:
@@ -412,20 +458,19 @@ class EastMoneyDataSource(BaseDataSource):
         # sec-ch-ua 必须与 user-agent 版本号一致
         # 注意：不要手动设置 accept-encoding，让 requests 自动处理 gzip 解压
         cookie = load_cookie("EASTMONEY_COOKIE")
+        user_agent = self._get_random_ua()
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
             "host": "push2.eastmoney.com",
             "referer": "https://quote.eastmoney.com/",
-            "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "script",
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+            "user-agent": user_agent,
             "cookie": cookie,
+            **browser_client_hint_headers(user_agent),
         }
 
     def fetch_stock_money_flow(
@@ -439,7 +484,7 @@ class EastMoneyDataSource(BaseDataSource):
 
         Args:
             page: Page number (default 1)
-            page_size: Number of stocks per page (default 50, max ~5000)
+            page_size: Number of stocks per page (East Money caps this at 100)
             sort_field: Field to sort by (default f62 = 主力净流入)
             sort_desc: Sort descending (default True)
 
@@ -450,15 +495,32 @@ class EastMoneyDataSource(BaseDataSource):
             - f78: 中单净流入
             - f84: 小单净流入
         """
-        # fs: 股票筛选条件
-        # m:0 = 深市, m:1 = 沪市
-        # t:6=A股, t:13=创业板, t:80=科创板, t:2=主板, t:23=科创板注册制, t:7=创业板注册制, t:3=创业板注册制
-        # f:!2 = 过滤掉ST股票
+        page_size = min(
+            MAX_STOCK_MONEY_FLOW_FIRST_PAGE_SIZE,
+            max(1, int(page_size)),
+        )
+        rows, _total, _error = self._fetch_stock_money_flow_page(
+            page=page,
+            page_size=page_size,
+            sort_field=sort_field,
+            sort_desc=sort_desc,
+        )
+        return rows
+
+    def _fetch_stock_money_flow_page(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        sort_field: str,
+        sort_desc: bool,
+    ) -> tuple[list[dict[str, Any]], int | None, str | None]:
+        """Fetch exactly one page without retrying a failed/limited response."""
         fs = "m:0+t:6+f:!2,m:0+t:13+f:!2,m:0+t:80+f:!2,m:1+t:2+f:!2,m:1+t:23+f:!2,m:0+t:7+f:!2,m:1+t:3+f:!2"
         ut = "8dec03ba335b81bf4ebdf7b29ec27d15"
-
+        callback = f"jQuery_callback_{int(time.time() * 1000)}_{page}"
         params = {
-            "cb": "jQuery_callback",
+            "cb": callback,
             "fid": sort_field,
             "po": "1" if sort_desc else "0",
             "pz": str(page_size),
@@ -480,22 +542,36 @@ class EastMoneyDataSource(BaseDataSource):
             resp = http_get(url, headers=headers, timeout=30)
             self._request_count += 1
             text = resp.text
-        except Exception:
-            return []
+        except Exception as exc:
+            return [], None, f"request_failed:{type(exc).__name__}"
 
         # Parse JSONP response
-        if not text.startswith("jQuery_callback"):
-            return []
-        json_str = text[len("jQuery_callback("):-2]  # Remove callback wrapper and trailing ");"
+        prefix = f"{callback}("
+        if not text.startswith(prefix):
+            return [], None, "invalid_jsonp"
+        json_str = text[len(prefix):].rstrip()
+        if json_str.endswith(";"):
+            json_str = json_str[:-1]
+        if not json_str.endswith(")"):
+            return [], None, "invalid_jsonp"
         try:
-            data = eval(json_str)  # JSON is valid Python dict
-        except Exception:
-            return []
+            data = json.loads(json_str[:-1])
+        except (TypeError, ValueError):
+            return [], None, "invalid_json"
 
         if not data or data.get("rc") != 0:
-            return []
+            return [], None, f"api_rc:{data.get('rc') if isinstance(data, dict) else 'invalid'}"
 
-        diff = data.get("data", {}).get("diff", [])
+        payload = data.get("data")
+        if not isinstance(payload, dict):
+            return [], None, "missing_data"
+        diff = payload.get("diff", [])
+        if not isinstance(diff, list):
+            return [], None, "invalid_diff"
+        try:
+            reported_total = int(payload.get("total"))
+        except (TypeError, ValueError):
+            reported_total = None
         results = []
         for item in diff:
             code = item.get("f12", "")
@@ -526,6 +602,7 @@ class EastMoneyDataSource(BaseDataSource):
                     "price": format_price(item.get("f2")),
                     "change_pct": format_percent(item.get("f3")),
                     "main_net_inflow": to_yi(parse_val("f62")),  # 主力净流入
+                    "main_net_inflow_yuan": parse_val("f62"),
                     "main_ratio": format_percent(parse_val("f184")),  # 主力净流入占比
                     # 分档资金流向
                     "super_large_net": to_yi(parse_val("f66")),  # 超大单净流入
@@ -539,4 +616,121 @@ class EastMoneyDataSource(BaseDataSource):
                     "source": "eastmoney",
                 }
             )
-        return results
+        return results, reported_total, None
+
+    def fetch_stock_money_flow_adaptive(
+        self,
+        *,
+        target_codes: set[str] | None = None,
+        sort_field: str = "f62",
+        sort_desc: bool = True,
+        min_main_inflow_yuan: int | None = None,
+    ) -> StockMoneyFlowFetchResult:
+        """Fetch 100 rows first, then 50-row pages, preserving partial success.
+
+        With a 100-row first page, the next 50-row request must start at
+        ``pn=3`` so ranks 101-150 are fetched rather than ranks 51-100 again.
+        A later rate-limit/error ends the fetch immediately; successful pages
+        are returned and are never discarded or fetched again in this call.
+        """
+        targets = {str(code) for code in (target_codes or set()) if code}
+        rows: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        page = 1
+        page_size = MAX_STOCK_MONEY_FLOW_FIRST_PAGE_SIZE
+        pages_fetched = 0
+        reported_total: int | None = None
+
+        while True:
+            page_rows, page_total, error = self._fetch_stock_money_flow_page(
+                page=page,
+                page_size=page_size,
+                sort_field=sort_field,
+                sort_desc=sort_desc,
+            )
+            if error:
+                return StockMoneyFlowFetchResult(
+                    "partial" if rows else "unavailable",
+                    rows,
+                    reported_total,
+                    pages_fetched,
+                    failed_page=page,
+                    error=error,
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+            if reported_total is None:
+                reported_total = page_total
+            elif page_total is not None and page_total != reported_total:
+                return StockMoneyFlowFetchResult(
+                    "partial" if rows else "unavailable",
+                    rows,
+                    page_total,
+                    pages_fetched,
+                    failed_page=page,
+                    error=f"total_changed:{reported_total}->{page_total}",
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+
+            pages_fetched += 1
+            for row in page_rows:
+                raw_inflow = row.get("main_net_inflow_yuan")
+                if (
+                    min_main_inflow_yuan is not None
+                    and isinstance(raw_inflow, (int, float))
+                    and raw_inflow < min_main_inflow_yuan
+                ):
+                    continue
+                code = str(row.get("code") or "")
+                if code and code not in seen:
+                    rows.append(row)
+                    seen.add(code)
+
+            if targets and targets <= seen:
+                return StockMoneyFlowFetchResult(
+                    "complete",
+                    rows,
+                    reported_total,
+                    pages_fetched,
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+            if not page_rows:
+                return StockMoneyFlowFetchResult(
+                    "partial" if rows else "unavailable",
+                    rows,
+                    reported_total,
+                    pages_fetched,
+                    failed_page=page,
+                    error="empty_page_before_complete",
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+            page_tail_inflow = page_rows[-1].get("main_net_inflow_yuan")
+            if (
+                min_main_inflow_yuan is not None
+                and isinstance(page_tail_inflow, (int, float))
+                and page_tail_inflow <= min_main_inflow_yuan
+            ):
+                return StockMoneyFlowFetchResult(
+                    "threshold_reached",
+                    rows,
+                    reported_total,
+                    pages_fetched,
+                    stop_reason="main_inflow_below_threshold",
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+            if reported_total is not None and len(rows) >= reported_total:
+                return StockMoneyFlowFetchResult(
+                    "complete",
+                    rows,
+                    reported_total,
+                    pages_fetched,
+                    min_main_inflow_yuan=min_main_inflow_yuan,
+                )
+
+            if page_size == MAX_STOCK_MONEY_FLOW_FIRST_PAGE_SIZE:
+                page_size = STOCK_MONEY_FLOW_SUBSEQUENT_PAGE_SIZE
+                page = (
+                    MAX_STOCK_MONEY_FLOW_FIRST_PAGE_SIZE
+                    // STOCK_MONEY_FLOW_SUBSEQUENT_PAGE_SIZE
+                ) + 1
+            else:
+                page += 1

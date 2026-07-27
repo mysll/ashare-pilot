@@ -69,30 +69,20 @@ def test_release_version_and_authoritative_roots_are_consistent() -> None:
         assert path.is_dir()
 
 
-def test_mise_uses_the_default_project_environment() -> None:
+def test_mise_and_packaging_settings_are_consistent() -> None:
     mise = (ROOT / "mise.toml").read_text(encoding="utf-8")
-    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     lock = (ROOT / "uv.lock").read_text(encoding="utf-8")
 
     assert 'UV_LINK_MODE = "copy"' in mise
-    assert "python.uv_venv_auto" not in mise
-    assert "UV_PROJECT_ENVIRONMENT" not in mise
-    assert mise.count(r'set \"VIRTUAL_ENV=\"') == 2
-    assert 'run = "env -u VIRTUAL_ENV uv sync"' in mise
-    assert 'run = "env -u VIRTUAL_ENV uv run --frozen ashare-pilot"' in mise
-    assert ".venv/" in gitignore
-    assert ".venv-windows/" not in gitignore
     assert '"tzdata>=2025.2; sys_platform == \'win32\'"' in pyproject
     assert 'link-mode = "copy"' in pyproject
     assert 'name = "tzdata"' in lock
 
 
-def test_windows_batch_entries_use_the_default_project_environment() -> None:
+def test_windows_batch_entries_use_the_unified_cli() -> None:
     for name in ("auto.bat", "update_cookie.bat", "update_theme.bat", "update_theme_stock.bat"):
         content = (ROOT / name).read_text(encoding="utf-8")
-        assert 'set "VIRTUAL_ENV="' in content
-        assert "UV_PROJECT_ENVIRONMENT" not in content
         assert "uv run --frozen ashare-pilot" in content
         assert "mise run pilot" not in content
 

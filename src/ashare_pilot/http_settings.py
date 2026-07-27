@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 from functools import lru_cache
 from typing import Any
@@ -56,7 +57,7 @@ def _load_http_proxies(path: str) -> dict[str, str] | None:
 
 
 def request_proxies() -> dict[str, str] | None:
-    """Proxies dict for a single requests call, or None to use defaults."""
+    """Return the project-configured proxies, or None for a direct connection."""
     return load_http_proxies()
 
 
@@ -85,37 +86,67 @@ def check_proxy_reachable(proxies: dict[str, str] | None = None) -> str:
 
 
 def http_get(url: str, **kwargs: Any) -> requests.Response:
-    """requests.get with optional proxy from config/setting.json."""
-    if "proxies" not in kwargs:
-        proxies = load_http_proxies()
-        if proxies is not None:
-            kwargs["proxies"] = proxies
-    return requests.get(url, **kwargs)
+    """GET using only proxy settings from config/setting.json."""
+    kwargs.pop("proxies", None)
+    with configured_session() as session:
+        return session.get(url, **kwargs)
 
 
 def apply_session_proxies(session: requests.Session) -> None:
-    """Apply config proxy to a requests.Session when configured."""
+    """Make config/setting.json the session's only proxy source."""
+    session.trust_env = False
+    session.proxies.clear()
     proxies = load_http_proxies()
     if proxies is not None:
-        session.proxies.clear()
         session.proxies.update(proxies)
-        # Prefer explicit config over HTTP(S)_PROXY / NO_PROXY env.
-        session.trust_env = False
+
+
+def configured_session() -> requests.Session:
+    """Create a Session that never reads proxy settings from the environment."""
+    session = requests.Session()
+    apply_session_proxies(session)
+    return session
 
 
 def describe_proxy_for_request(
     session: requests.Session, url: str
 ) -> str:
-    """Return the effective proxy URL requests would use for *url*."""
+    """Return the config-selected proxy URL for *url*, or ``none``."""
     proxies = load_http_proxies()
     if proxies is None:
         return "none"
-    try:
-        merged = session.merge_environment_settings(
-            url, proxies, stream=False, verify=True, cert=None
-        )
-        effective = merged.get("proxies") or {}
-    except Exception:
-        effective = proxies
     scheme = "https" if url.startswith("https://") else "http"
-    return str(effective.get(scheme) or effective.get(scheme.rstrip("s")) or effective or "none")
+    return str(proxies.get(scheme) or proxies.get(scheme.rstrip("s")) or "none")
+
+
+_CHROME_VERSION = re.compile(r"(?:Chrome|Chromium)/(\d+)")
+
+
+def browser_client_hint_headers(user_agent: str) -> dict[str, str]:
+    """Build Client Hints consistent with a Chromium user agent.
+
+    Firefox and other non-Chromium user agents must not send Chromium-only
+    ``sec-ch-ua`` headers.
+    """
+    match = _CHROME_VERSION.search(user_agent)
+    if match is None:
+        return {}
+
+    version = match.group(1)
+    if "Windows" in user_agent:
+        platform = "Windows"
+    elif "Macintosh" in user_agent or "Mac OS X" in user_agent:
+        platform = "macOS"
+    elif "Linux" in user_agent:
+        platform = "Linux"
+    else:
+        platform = "Unknown"
+
+    return {
+        "sec-ch-ua": (
+            f'"Not;A=Brand";v="8", "Chromium";v="{version}", '
+            f'"Google Chrome";v="{version}"'
+        ),
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": f'"{platform}"',
+    }

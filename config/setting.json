@@ -2,5 +2,8 @@
   "schema_version": "setting.v1",
   "http": {
     "proxy": ""
+  },
+  "market_data": {
+    "stock_money_flow_min_inflow_yuan": 5000000
   }
 }

@@ -123,6 +123,64 @@ def market_chips(mapper: dict[str, Any] | None) -> str:
     return "".join(chips)
 
 
+def data_completeness(doc: dict[str, Any], mapper: dict[str, Any] | None) -> tuple[str, str, str]:
+    quality = doc.get("data_quality")
+    if not isinstance(quality, dict) and isinstance(mapper, dict):
+        summary = mapper.get("pool_summary")
+        quality = summary.get("data_quality_summary") if isinstance(summary, dict) else {}
+    quality = quality if isinstance(quality, dict) else {}
+    money = quality.get("money_flow") if isinstance(quality.get("money_flow"), dict) else {}
+    status = str(money.get("status") or "unknown")
+    requested = money.get("requested_stock_count")
+    matched = money.get("matched_stock_count")
+    coverage = money.get("coverage_pct")
+    pages = money.get("pages_fetched")
+    failed_page = money.get("failed_page")
+    fetch_status = money.get("fetch_status")
+    threshold_yuan = money.get("min_main_inflow_yuan")
+
+    if fetch_status == "threshold_reached":
+        threshold_wan = (
+            round(float(threshold_yuan) / 10_000)
+            if isinstance(threshold_yuan, (int, float))
+            else "未知"
+        )
+        return (
+            "partial",
+            "资金流数据按最低额度过滤",
+            f"主力净流入最低额度为 {threshold_wan} 万元；"
+            f"分析池覆盖 {matched}/{requested} 只（{coverage}%），"
+            f"使用 {pages} 个分页后达到阈值边界并主动停止。"
+            "未覆盖股票不进入可执行机会池。",
+        )
+
+    if status == "complete":
+        return (
+            "complete",
+            "资金流数据完整",
+            f"分析池覆盖 {matched}/{requested} 只（{coverage}%），共使用 {pages} 个成功分页。",
+        )
+    if status == "partial":
+        detail = (
+            f"分析池仅覆盖 {matched}/{requested} 只（{coverage}%）；"
+            f"已保留 {pages} 个成功分页"
+        )
+        if failed_page:
+            detail += f"，第 {failed_page} 页失败后未重新抓取"
+        return "partial", "资金流数据部分完整", detail + "。未覆盖股票不按净流入为 0 处理。"
+    if status == "unavailable":
+        return (
+            "unavailable",
+            "资金流数据不可用",
+            "本次未取得可用资金流分页，评分已跳过资金流绝对地板；请降低对结果的信赖。",
+        )
+    return (
+        "unknown",
+        "数据完整性未确认",
+        "当前策略合同未携带资金流覆盖元数据，无法确认分析池的数据完整性。",
+    )
+
+
 def strategy_rows(items: list[dict[str, Any]]) -> str:
     rows = []
     for item in items:
@@ -242,6 +300,7 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     subtitle = market.get("tomorrow_expectation") or market.get("reasoning_trace")
     index_chips = market_chips(mapper)
     market_reason, market_reason_detail = split_market_reason(market.get("reasoning_trace"))
+    completeness_kind, completeness_title, completeness_detail = data_completeness(doc, mapper)
 
     return f"""<!doctype html>
 <html lang="zh-CN">
@@ -264,6 +323,10 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     .meta{{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;max-width:460px}} .meta span{{padding:6px 10px;border:1px solid var(--line);border-radius:999px;color:var(--sub);background:rgba(9,18,28,.8);font-size:12px}}
     .cockpit{{display:grid;grid-template-columns:1.15fr 1fr 1fr;gap:14px}} .card,.panel,.execution-card,.watch-group{{border:1px solid var(--line);border-radius:14px;
       background:linear-gradient(180deg,rgba(17,25,35,.97),rgba(10,17,26,.97));box-shadow:0 18px 44px rgba(0,0,0,.24)}}
+    .data-quality{{margin:0 0 14px;padding:12px 15px;border:1px solid var(--line);border-radius:10px;background:rgba(96,165,250,.08);color:#cbd7e4}}
+    .data-quality b{{margin-right:10px;color:var(--blue)}} .data-quality.complete{{background:rgba(50,213,131,.09);border-color:rgba(50,213,131,.28)}} .data-quality.complete b{{color:var(--fall)}}
+    .data-quality.partial,.data-quality.unknown{{background:var(--warn-soft);border-color:rgba(253,176,34,.34)}} .data-quality.partial b,.data-quality.unknown b{{color:var(--warn)}}
+    .data-quality.unavailable{{background:var(--danger-soft);border-color:rgba(240,68,56,.34)}} .data-quality.unavailable b{{color:#ff746b}}
     .cockpit-card{{min-height:235px;padding:19px;position:relative;overflow:hidden}} .cockpit-card:before{{content:"";position:absolute;inset:0 auto auto 0;width:100%;height:2px;background:linear-gradient(90deg,var(--accent),transparent 70%)}}
     .card-label,.kicker{{color:var(--sub);font-size:12px;letter-spacing:.12em;text-transform:uppercase}} .market-call{{margin:20px 0 8px;font-size:25px;font-weight:800;color:var(--strong)}}
     .market-tag{{display:inline-flex;padding:4px 9px;border:1px solid rgba(253,176,34,.34);border-radius:6px;color:var(--warn);background:var(--warn-soft);font-weight:700}}
@@ -307,6 +370,8 @@ def render(doc: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
     <div><h1>隔夜策略决策看板</h1><p class="subtitle">{esc(subtitle)}</p></div>
     <div class="meta"><span>日期 {date}</span><span>更新时间 {esc(generated_time(doc.get('generated_at')))}</span><span>数据源 overnight_strategy.json / intraday_mapper.json</span></div>
   </div></header>
+
+  <aside class="data-quality {esc(completeness_kind)}"><b>数据完整性 · {esc(completeness_title)}</b><span>{esc(completeness_detail)}</span></aside>
 
   <section class="cockpit">
     <article class="card cockpit-card">

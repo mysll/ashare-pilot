@@ -10,7 +10,10 @@ from urllib.parse import urlencode
 
 import requests
 
-from ashare_pilot.http_settings import load_http_proxies
+from ashare_pilot.http_settings import (
+    apply_session_proxies,
+    browser_client_hint_headers,
+)
 from ashare_pilot.themes.runtime import workspace_path
 
 EASTMONEY_LIST_URL = "https://push2.eastmoney.com/api/qt/clist/get"
@@ -78,6 +81,7 @@ class EastMoneyConceptSource:
         self.verbose = verbose
         self._state_dir = state_dir
         self._session = requests.Session()
+        apply_session_proxies(self._session)
         cookie_str = load_cookie()
         if cookie_str:
             for pair in cookie_str.split("; "):
@@ -101,19 +105,18 @@ class EastMoneyConceptSource:
             referer = f"https://data.eastmoney.com/bkzj/{concept_code}.html"
         else:
             referer = "https://data.eastmoney.com/bkzj/gn.html"
+        user_agent = self._get_random_ua()
         return {
             "accept": "*/*",
             "accept-language": "zh-CN,zh;q=0.9,en;q=0.8,zh-TW;q=0.7",
             "connection": "keep-alive",
             "host": "push2.eastmoney.com",
             "referer": referer,
-            "sec-ch-ua": '"Chromium";v="146", "Not-A.Brand";v="24", "Google Chrome";v="146"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
             "sec-fetch-dest": "script",
             "sec-fetch-mode": "no-cors",
             "sec-fetch-site": "same-site",
-            "user-agent": self._get_random_ua(),
+            "user-agent": user_agent,
+            **browser_client_hint_headers(user_agent),
         }
 
     def _wait_for_rate_limit(self):
@@ -146,13 +149,10 @@ class EastMoneyConceptSource:
             self._wait_for_rate_limit()
             self._check_rate_limit()
             try:
-                proxies = load_http_proxies()
                 kwargs: dict[str, Any] = {
                     "headers": headers,
                     "timeout": timeout,
                 }
-                if proxies is not None:
-                    kwargs["proxies"] = proxies
                 if self.verbose:
                     ck = self._session.cookies.get_dict()
                     key_cookies = {k: v for k, v in ck.items() if k in ("st_sn", "st_psi", "st_pvi", "st_si")}

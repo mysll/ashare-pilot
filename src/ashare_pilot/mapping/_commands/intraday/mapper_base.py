@@ -74,6 +74,7 @@ def main(argv=None) -> int:
                 "quality_filtered_count", "floor_rejected_count",
                 "opportunity_pool_size", "score_stats", "pool_warning",
                 "regime_snapshot", "data_quality_summary",
+                "money_flow_available",
                 "i14_applied_count", "i14_skipped_no_quick_score", "vwap_missing_count",
             )
         },

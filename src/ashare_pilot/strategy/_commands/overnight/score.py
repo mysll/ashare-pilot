@@ -488,9 +488,26 @@ def scaled_contribution(percentile: float, weight: float, scale: float) -> float
 
 
 # Absolute quality floor for opportunity-pool entry.
-# main_net_inflow (亿) must be net positive; trend_quality raw must clear this.
+# Fetched main_net_inflow (亿) must be net positive; the configurable minimum
+# is enforced by adaptive pagination before this generic floor is evaluated.
 FLOOR_MIN_INFLOW = 0.0
 FLOOR_MIN_TREND = 0.3
+
+
+def stock_money_flow_available(stock):
+    """Distinguish a fetched zero value from a stock absent in partial pages."""
+    mf = stock.get("enriched", {}).get("money_flow", {})
+    if not isinstance(mf, dict):
+        return False
+    if "available" in mf:
+        return mf.get("available") is True
+    return is_present_number(mf, "main_net_inflow")
+
+
+def stock_money_flow_below_minimum(stock):
+    """True when adaptive pagination intentionally filtered this stock."""
+    mf = stock.get("enriched", {}).get("money_flow", {})
+    return isinstance(mf, dict) and mf.get("minimum_filter_applied") is True
 
 
 def money_flow_available(pool):
@@ -501,14 +518,14 @@ def money_flow_available(pool):
     whole pool. In that case the inflow floor must be SKIPPED rather than
     rejecting every stock — otherwise a data outage silently empties the pool.
     """
-    nonzero = sum(
-        1 for s in pool
-        if parse_float(s.get("enriched", {}).get("money_flow", {}).get("main_net_inflow", "0")) != 0
-    )
-    return nonzero > 0
+    return any(stock_money_flow_available(s) for s in pool)
 
 
-def passes_absolute_floor(stock, check_inflow=True):
+def passes_absolute_floor(
+    stock,
+    check_inflow=True,
+    require_minimum_inflow=False,
+):
     """Absolute quality gate, independent of percentile rank.
 
     Percentile scoring is RELATIVE — on a weak day the 'best of the worst'
@@ -528,7 +545,9 @@ def passes_absolute_floor(stock, check_inflow=True):
     trend_raw = extract_trend_quality_raw(stock)
 
     reasons = []
-    if check_inflow and inflow <= FLOOR_MIN_INFLOW:
+    if require_minimum_inflow:
+        reasons.append("主力资金净流入未达到配置最低额度")
+    elif check_inflow and inflow <= FLOOR_MIN_INFLOW:
         reasons.append("主力资金净流出")
     if trend_raw < FLOOR_MIN_TREND:
         reasons.append("趋势质量不达标")
@@ -542,7 +561,7 @@ def compute_confidences(stock, raw_values, all_raws_by_dim):
     enriched = stock.get("enriched", {})
 
     mf = enriched.get("money_flow", {})
-    has_money_flow = 1 if parse_float(mf.get("main_net_inflow", "0")) != 0 else 0
+    has_money_flow = 1 if stock_money_flow_available(stock) else 0
     rt = enriched.get("real_time", {})
     has_real_time = 1 if parse_float(rt.get("price", 0)) > 0 else 0
     data_checks = [has_money_flow, has_real_time, 1]  # scan data always present
@@ -721,6 +740,7 @@ def main(argv=None):
         data = json.load(f)
 
     pool = data.get("compute_pool", [])
+    input_data_quality = data.get("data_quality", {}) if isinstance(data, dict) else {}
     if isinstance(data, list):
         pool = data
 
@@ -751,10 +771,28 @@ def main(argv=None):
     # standalone merit before a stock can enter the opportunity pool.
     # If money-flow data is unavailable pool-wide, skip the inflow condition
     # so a data outage does not silently empty the pool.
+    money_quality = (
+        input_data_quality.get("money_flow", {})
+        if isinstance(input_data_quality, dict)
+        and isinstance(input_data_quality.get("money_flow"), dict)
+        else {}
+    )
+    threshold_filter_active = money_quality.get("fetch_status") == "threshold_reached"
     mf_available = money_flow_available(scored)
     floor_rejected = []
     for s in scored:
-        ok, reason = passes_absolute_floor(s, check_inflow=mf_available)
+        below_minimum = (
+            threshold_filter_active and stock_money_flow_below_minimum(s)
+        )
+        ok, reason = passes_absolute_floor(
+            s,
+            check_inflow=(
+                mf_available
+                and stock_money_flow_available(s)
+                and not below_minimum
+            ),
+            require_minimum_inflow=below_minimum,
+        )
         s["floor_pass"] = ok
         if not ok:
             s["floor_reason"] = reason
@@ -768,11 +806,41 @@ def main(argv=None):
     # Empty-pool fallback: never silently return nothing. If the floor + tier
     # gate cleared everyone, surface the top-ranked tier-A/B/C candidates with
     # an explicit warning so the Reasoning layer can decide to stand aside.
-    pool_warning = ""
-    if not mf_available:
+    quality_stats["money_flow"] = money_quality
+    money_status = money_quality.get("status")
+    if threshold_filter_active:
+        threshold_yuan = money_quality.get("min_main_inflow_yuan")
+        threshold_wan = (
+            round(float(threshold_yuan) / 10_000)
+            if isinstance(threshold_yuan, (int, float))
+            else "未知"
+        )
+        pool_warning = (
+            f"主力资金流按配置最低净流入 {threshold_wan} 万元过滤："
+            f"覆盖 {money_quality.get('matched_stock_count', 0)}/"
+            f"{money_quality.get('requested_stock_count', len(scored))} 只；"
+            "达到阈值边界后主动停止分页，未覆盖股票不进入可执行机会池"
+        )
+    elif money_status == "partial":
+        coverage = money_quality.get("coverage_pct")
+        pool_warning = (
+            "主力资金流数据不完整："
+            f"覆盖 {money_quality.get('matched_stock_count', 0)}/"
+            f"{money_quality.get('requested_stock_count', len(scored))} 只"
+            f"（{coverage if coverage is not None else '未知'}%），"
+            f"已保留前 {money_quality.get('pages_fetched', 0)} 页成功数据；"
+            "未覆盖股票不执行资金流地板，不按净流入为 0 处理"
+        )
+    elif not mf_available:
         pool_warning = "主力资金流数据整体缺失，已跳过资金地板检查——评分可信度下降，Reasoning层需谨慎"
+    else:
+        pool_warning = ""
     if not opportunity_pool:
-        tier_candidates = [s for s in scored if s["tier"] in ("A", "B", "C")]
+        tier_candidates = [
+            s for s in scored
+            if s["tier"] in ("A", "B", "C")
+            and not stock_money_flow_below_minimum(s)
+        ]
         if tier_candidates:
             degrade_note = (
                 "绝对质量地板过滤后无合格标的；以下为降级候选(未通过地板)，"

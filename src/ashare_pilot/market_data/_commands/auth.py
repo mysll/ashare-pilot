@@ -15,6 +15,8 @@ import threading
 import requests
 import websocket
 
+from ashare_pilot.http_settings import http_get
+
 
 def find_chrome():
     paths = [
@@ -74,7 +76,7 @@ def wait_for_cdp(port=9222, timeout=30):
     last_err = None
     while time.time() - start < timeout:
         try:
-            resp = requests.get(f"http://localhost:{port}/json/version", timeout=2)
+            resp = http_get(f"http://localhost:{port}/json/version", timeout=2)
             if resp.ok:
                 return True
             last_err = f"HTTP {resp.status_code}"
@@ -89,7 +91,7 @@ def wait_for_cdp(port=9222, timeout=30):
 
 
 def get_cdp_ws_url(port=9222):
-    resp = requests.get(f"http://localhost:{port}/json")
+    resp = http_get(f"http://localhost:{port}/json")
     pages = resp.json()
     for page in pages:
         if page["type"] == "page":
@@ -99,7 +101,13 @@ def get_cdp_ws_url(port=9222):
 
 class CDPClient:
     def __init__(self, ws_url):
-        self.ws = websocket.create_connection(ws_url, timeout=10)
+        # CDP is a localhost connection. Explicitly bypass websocket-client's
+        # HTTP(S)_PROXY environment fallback.
+        self.ws = websocket.create_connection(
+            ws_url,
+            timeout=10,
+            http_no_proxy=["*"],
+        )
         self._id = 0
 
     def send(self, method, params=None):

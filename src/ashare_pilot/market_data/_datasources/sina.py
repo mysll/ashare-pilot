@@ -5,8 +5,7 @@ import re
 from datetime import datetime, timedelta
 from typing import Any
 
-import requests
-
+from ashare_pilot.http_settings import http_get
 from .base import BaseDataSource, RateLimitConfig
 from .kline_cache import (
     cache_checked_recently,
@@ -46,7 +45,7 @@ class SinaDataSource(BaseDataSource):
         }
 
     def _make_request(self, url: str, encoding: str = "gb18030") -> str:
-        resp = requests.get(url, headers=self._get_headers(), timeout=10)
+        resp = http_get(url, headers=self._get_headers(), timeout=10)
         try:
             return resp.content.decode(encoding)
         except UnicodeDecodeError:
@@ -237,7 +236,7 @@ class SinaDataSource(BaseDataSource):
             "Referer": "https://quotes.sina.cn/",
         }
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = http_get(url, headers=headers, timeout=10)
             data = resp.json()
         except Exception as e:
             return [{"error": str(e)}]
@@ -273,7 +272,7 @@ class SinaDataSource(BaseDataSource):
             "Referer": "https://finance.sina.com.cn/",
         }
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = http_get(url, headers=headers, timeout=10)
             if resp.status_code != 200:
                 return None
             text = resp.text
@@ -367,7 +366,7 @@ class SinaDataSource(BaseDataSource):
             "Referer": "https://finance.sina.com.cn/",
         }
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = http_get(url, headers=headers, timeout=10)
             if resp.status_code != 200:
                 return None
             text = resp.text.strip()
@@ -392,7 +391,7 @@ class SinaDataSource(BaseDataSource):
             "Referer": "https://quotes.sina.cn/",
         }
         try:
-            resp = requests.get(url, headers=headers, timeout=10)
+            resp = http_get(url, headers=headers, timeout=10)
             data = resp.json()
         except Exception:
             return None

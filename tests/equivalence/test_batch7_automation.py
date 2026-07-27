@@ -93,7 +93,11 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
     (tmp_path / "pyproject.toml").write_text("[project]\nname='fixture'\nversion='0'\n", encoding="utf-8")
     (tmp_path / "config").mkdir()
     commands: list[list[str]] = []
-    monkeypatch.setattr(intraday._cache_ds, "fetch_all_astocks", lambda cache_dir: [])
+    monkeypatch.setattr(
+        intraday._cache_ds,
+        "fetch_all_astocks",
+        lambda cache_dir, **_kwargs: [],
+    )
 
     def fake_run(command: list[str], label: str = "") -> dict:
         commands.append(command)

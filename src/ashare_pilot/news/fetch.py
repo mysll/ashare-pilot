@@ -12,9 +12,7 @@ from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Any
 
-import requests
-
-from ashare_pilot.http_settings import http_get
+from ashare_pilot.http_settings import configured_session, http_get
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 TIMEOUT = 20
@@ -62,7 +60,7 @@ def _cls_sign(params: dict[str, str]) -> str:
 
 def fetch_thepaper() -> list[dict[str, str]]:
     """澎湃新闻热门"""
-    resp = requests.get(
+    resp = http_get(
         "https://cache.thepaper.cn/contentapi/wwwIndex/rightSidebar",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
@@ -84,7 +82,7 @@ def fetch_cls() -> list[dict[str, str]]:
     base_params = {"app": "CailianpressWeb", "name": "telegraph", "os": "web", "sv": "8.7.9"}
     sign = _cls_sign(base_params)
     base_params["sign"] = sign
-    resp = requests.get(
+    resp = http_get(
         "https://www.cls.cn/api/cache",
         params=base_params,
         headers={"User-Agent": UA},
@@ -148,7 +146,7 @@ def fetch_eastmoney() -> list[dict[str, str]]:
 
 def fetch_wallstreetcn() -> list[dict[str, str]]:
     """华尔街见闻 — 实时快讯"""
-    resp = requests.get(
+    resp = http_get(
         "https://api-one-wscn.awtmt.com/apiv1/content/lives",
         params={"channel": "global-channel", "limit": "30"},
         headers={"User-Agent": UA},
@@ -172,7 +170,7 @@ def fetch_wallstreetcn() -> list[dict[str, str]]:
 
 def fetch_xueqiu() -> list[dict[str, str]]:
     """雪球热帖"""
-    session = requests.Session()
+    session = configured_session()
     session.headers.update({"User-Agent": UA})
     r1 = session.get("https://xueqiu.com/hq", timeout=TIMEOUT)
     r1.raise_for_status()
@@ -207,7 +205,7 @@ def fetch_xueqiu() -> list[dict[str, str]]:
 
 def fetch_people_politics() -> list[dict[str, str]]:
     """人民网 — 政治新闻（通过主站抓取）"""
-    resp = requests.get(
+    resp = http_get(
         "http://www.people.com.cn/",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
@@ -235,7 +233,7 @@ def fetch_people_politics() -> list[dict[str, str]]:
 
 def fetch_stcn() -> list[dict[str, str]]:
     """证券时报 — 资本市场新闻"""
-    resp = requests.get(
+    resp = http_get(
         "https://www.stcn.com/",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
@@ -258,7 +256,7 @@ def fetch_stcn() -> list[dict[str, str]]:
 
 def fetch_yicai() -> list[dict[str, str]]:
     """第一财经 — 综合财经新闻"""
-    resp = requests.get(
+    resp = http_get(
         "https://www.yicai.com/",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
@@ -297,7 +295,7 @@ def fetch_yicai() -> list[dict[str, str]]:
 
 def fetch_21jingji() -> list[dict[str, str]]:
     """21世纪经济报道 — 深度财经"""
-    resp = requests.get(
+    resp = http_get(
         "https://www.21jingji.com/",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
@@ -330,7 +328,7 @@ _SINA_IGNORE = {"股票", "新股", "港股", "美股", "基金", "期货", "外
 
 def fetch_sina() -> list[dict[str, str]]:
     """新浪财经 — 综合财经新闻"""
-    resp = requests.get(
+    resp = http_get(
         "https://finance.sina.com.cn/",
         headers={"User-Agent": UA},
         timeout=TIMEOUT,
