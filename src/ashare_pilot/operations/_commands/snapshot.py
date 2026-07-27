@@ -74,8 +74,8 @@ def file_sha256(path: Path) -> str:
 
 def parse_strategies(doc: dict[str, Any], expected_date: str) -> dict[str, dict[str, Any]]:
     schema = doc.get("schema_version")
-    if schema not in {"daily_strategy.v1", "daily_strategy.v2"}:
-        raise ValueError("strategy.json schema_version must be daily_strategy.v1 or daily_strategy.v2")
+    if schema != "daily_strategy.v3":
+        raise ValueError("strategy.json schema_version must be daily_strategy.v3")
     if doc.get("date") != expected_date:
         raise ValueError(f"strategy.json date mismatch: expected {expected_date}, got {doc.get('date')!r}")
     stocks = doc.get("stocks")
@@ -90,22 +90,14 @@ def parse_strategies(doc: dict[str, Any], expected_date: str) -> dict[str, dict[
         if code in strategies:
             raise ValueError(f"strategy.json contains duplicate code: {code}")
         normalized = dict(stock)
-        preopen_plan = stock.get("preopen_plan") if isinstance(stock.get("preopen_plan"), dict) else {
-            "decision": "CONDITIONAL",
-            "earliest_entry_time": "09:35:05",
-            "latest_entry_time": "10:00:00",
-            "requires_first_bar": True,
-            "requires_market_confirmation": True,
-            "requires_theme_confirmation": False,
-            "entry_setup": "WATCH_ONLY" if stock.get("entry_profile") == "暂不参与" else "FIRST_BAR_OR_PULLBACK",
-            "pre_entry_invalidations": [stock.get("no_buy_condition") or "条件失效则取消"],
-            "projection_warning": "projected_from_daily_strategy_v1",
-        }
+        preopen_plan = stock.get("preopen_plan")
+        if not isinstance(preopen_plan, dict):
+            raise ValueError(f"strategy.json {code} missing preopen_plan")
         normalized.update({
             "profile": stock.get("entry_profile", ""),
             "trigger": stock.get("entry_trigger", ""),
             "no_buy": stock.get("no_buy_condition", ""),
-            "position": stock.get("position_budget"),
+            "position_tier": stock.get("position_tier"),
             "strategy_schema_version": schema,
             "preopen_plan": preopen_plan,
             "t1_risk_plan": stock.get("t1_risk_plan"),
@@ -452,7 +444,7 @@ def main(argv=None) -> int:
         }
 
     output = {
-        "schema_version": "intraday_operation_snapshot.v2",
+        "schema_version": "intraday_operation_snapshot.v3",
         "date": args.date,
         "generated_at": iso_market(snapshot_time),
         "snapshot_slot": selected_slot,

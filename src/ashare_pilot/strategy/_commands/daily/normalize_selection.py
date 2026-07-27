@@ -13,6 +13,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from ashare_pilot.position_tier import POSITION_TIER_RANK
+
 from .validate_strategy import PREOPEN_DECISIONS, ENTRY_SETUPS, REGIME_STOCK_LIMITS
 
 
@@ -39,11 +41,12 @@ def exclusion_reason(stock: dict[str, Any]) -> str | None:
 def priority(item: tuple[int, dict[str, Any]]) -> tuple[Any, ...]:
     index, stock = item
     plan = stock.get("preopen_plan", {})
-    actionable = plan.get("decision") == "CONDITIONAL" and float(stock.get("position_budget") or 0) > 0
+    tier = str(stock.get("position_tier") or "WATCH_ONLY")
+    actionable = plan.get("decision") == "CONDITIONAL" and tier != "WATCH_ONLY"
     return (
         -(1 if actionable else 0),
         -RATING_RANK.get(stock.get("rating"), 0),
-        -float(stock.get("position_budget") or 0),
+        -POSITION_TIER_RANK.get(tier, 0),
         index,
     )
 
@@ -57,8 +60,8 @@ def compact_observation(stock: dict[str, Any], reason: str) -> dict[str, str]:
 
 
 def normalize(doc: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    if doc.get("schema_version") != "daily_strategy.v2":
-        raise ValueError("normalize_strategy_selection only supports daily_strategy.v2")
+    if doc.get("schema_version") != "daily_strategy.v3":
+        raise ValueError("normalize_strategy_selection only supports daily_strategy.v3")
     stocks = doc.get("stocks")
     if not isinstance(stocks, list):
         raise ValueError("stocks must be list")

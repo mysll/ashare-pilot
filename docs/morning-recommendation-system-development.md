@@ -12,9 +12,9 @@
 
 - P0-A 完整 K 线选择、首根 K 与最新完整 K 分离；
 - P0-B 三指数 `regime_live` 与 `global_action`；
-- P0-C 机械类别上限、仓位单调缩减、T+1 控制；
-- `operation_snapshot.v2`、`operation_decision.v1` 及验证器；
-- `daily_strategy.v2` 校验和历史 v1 保守投影；
+- P0-C 机械类别上限、定性仓位档位单调降级、T+1 控制；
+- `operation_snapshot.v3`、`operation_decision.v2` 及验证器；
+- `daily_strategy.v3` 定性仓位校验；
 - P2 `--slot`、09:35/09:40 多快照、原子 latest 写入；
 - P2 类别状态迁移和策略池主题确认；
 - `--quotes-fixture`、`--intraday-fixture-dir`、`--no-network` 离线回放入口；
@@ -24,10 +24,10 @@
 
 Review修复：
 
-- v2 `portfolio_limits`已传播到盘中快照，并在全部A类生成后统一执行单股、单主题、相关标的数量和总新开仓限制；
-- v2个股`t1_risk_plan`原样投影到`t1_controls.t1_exit_plan`，通用计划只用于历史v1；
-- 盘前时间使用`datetime.time.fromisoformat`做语义校验，v2执行层遇到非法时间直接失败，不再静默回退。
-- 增加迟到交付闸门：09:40无前序快照最高B且仓位0；09:45及以后无前序快照只允许C/D；09:45有09:40前序时才允许继续评估B→A。
+- v3 `portfolio_limits` 已传播到盘中快照，并按总参与只数、单主题只数和相关标的数量统一限制；
+- v3 个股 `t1_risk_plan` 原样投影到 `t1_controls.t1_exit_plan`；
+- 盘前时间使用`datetime.time.fromisoformat`做语义校验，v3执行层遇到非法时间直接失败，不再静默回退。
+- 增加迟到交付闸门：09:40无前序快照最高B且 `WATCH_ONLY`；09:45及以后无前序快照只允许C/D；09:45有09:40前序时才允许继续评估B→A。
 
 仍待完成：
 
@@ -553,7 +553,7 @@ def test_market_breadth_missing_never_yields_normal(): ...
 
 ---
 
-## 7. P0-C：机械分类、仓位上限与 T+1
+## 7. P0-C：机械分类、定性仓位档位与 T+1
 
 ### 7.1 新增模块
 
@@ -570,11 +570,12 @@ CLASS_RANK = {"D": 0, "C": 1, "B": 2, "A": 3}
 
 
 @dataclass
-class PositionCaps:
-    morning_budget: float
-    market_adjusted_max: float
-    signal_adjusted_max: float
-    final_max: float
+class PositionTiers:
+    morning: str
+    market_adjusted: str
+    signal_adjusted: str
+    portfolio_adjusted: str
+    final: str
 
 
 @dataclass
@@ -583,7 +584,7 @@ class MechanicalDecision:
     max_allowed_class: str
     class_reasons: list[str]
     hard_blocks: list[str]
-    position: PositionCaps
+    position_tier: PositionTiers
 ```
 
 ### 7.3 机械分类函数
@@ -608,7 +609,7 @@ def compute_mechanical_decision(
 5. pre-entry invalidations
 6. theme cap（P2 前可为 unknown）
 7. stock price/volume/VWAP/anchor signals
-8. position cap
+8. qualitative position tier downgrade
 9. mechanical class
 ```
 
@@ -644,34 +645,35 @@ return C
 
 不要使用自由文本包含关系判断盘前不买条件作为唯一实现。P0 可保留规则映射，P1 应把关键条件结构化进 `preopen_plan`。
 
-### 7.5 仓位上限
+### 7.5 定性仓位档位
 
 ```python
-def compute_position_caps(
-    morning_budget: float,
+def compute_position_tiers(
+    morning_tier: str,
     global_action: str,
     mechanical_class: str,
     data_warning_count: int,
-) -> PositionCaps:
+) -> PositionTiers:
     ...
 ```
 
-建议初始系数：
+建议降档规则：
 
-| 条件 | 系数 |
-|---|---:|
-| `NORMAL` | 1.0 |
-| `SELECTIVE` | 0.5 |
-| `WAIT` | 0.0 |
-| `NO_NEW_BUY` | 0.0 |
-| A | 1.0 |
-| B/C/D | 0.0，未触发前不形成可执行仓位 |
-| 非严重 data warning | 再乘 0.5 或降级，不允许增加 |
+| 条件 | 档位处理 |
+|---|---|
+| `NORMAL` | 保持盘前档位 |
+| `SELECTIVE` | `STANDARD→LIGHT`，`LIGHT→WATCH_ONLY` |
+| `WAIT` | `WATCH_ONLY` |
+| `NO_NEW_BUY` | `WATCH_ONLY` |
+| A | 保持当前档位 |
+| B/C/D | `WATCH_ONLY`，未触发前不形成可执行意图 |
+| 非严重 data warning | 至少降一级，不允许增加 |
 
 核心 invariant：
 
 ```python
-0 <= final_max <= signal_adjusted_max <= market_adjusted_max <= morning_budget
+rank(final) <= rank(portfolio_adjusted) <= rank(signal_adjusted)
+<= rank(market_adjusted) <= rank(morning)
 ```
 
 任何违反都由 validator 报错。
@@ -770,29 +772,14 @@ validator 检查禁止词不能简单全局扫描“止损”，因为历史规�
 .agents/skills/daily-trading-review/scripts/generate_verification_json.py
 ```
 
-### 8.2 兼容策略
+### 8.2 合同切换策略
 
-迁移窗口：
+- validator 只接受 `daily_strategy.v3`；
+- 新运行只生成定性 `position_tier`；
+- 不读取、不迁移、不回填旧数值仓位合同；
+- 回测样本从 v3 启用日期重新起算，避免合同变化混合。
 
-- validator 同时接受 v1/v2；
-- 新运行默认生成 v2；
-- 历史 v1 文件不回填；
-- v1 在操作层投影为保守默认计划；
-- 正式样本起点记录 v2 启用日期；
-- 回测分开统计 v1/v2，避免合同变化混合。
-
-### 8.3 v1 投影函数
-
-```python
-def normalize_strategy_contract(doc: dict[str, Any]) -> dict[str, Any]:
-    if doc["schema_version"] == "daily_strategy.v2":
-        return doc
-    if doc["schema_version"] == "daily_strategy.v1":
-        return project_v1_to_internal_v2(doc)
-    raise ValueError(...)
-```
-
-v1 保守投影：
+### 8.3 v3 定性计划
 
 ```python
 preopen_plan = {
@@ -801,23 +788,20 @@ preopen_plan = {
     "latest_entry_time": "10:00:00",
     "requires_first_bar": True,
     "requires_market_confirmation": True,
-    "requires_theme_confirmation": False,
+    "requires_theme_confirmation": True,
     "entry_setup": map_profile_to_setup(stock),
     "pre_entry_invalidations": [stock.get("no_buy_condition")],
-    "projection_warning": "projected_from_daily_strategy_v1",
 }
 ```
 
-不得把 v1 投影为 09:30 可买。
+`position_tier` 只允许 `WATCH_ONLY|LIGHT|STANDARD`，不得附带百分比。
 
 ### 8.4 validator 结构
 
 重构为：
 
 ```python
-def validate_common(doc, errors): ...
-def validate_v1(doc, errors): ...
-def validate_v2(doc, errors): ...
+def validate_v3(doc, errors): ...
 def validate_portfolio_limits(doc, errors): ...
 def validate_preopen_plan(stock, index, errors): ...
 def validate_t1_plan(stock, index, errors): ...
@@ -827,22 +811,21 @@ CLI 增加：
 
 ```bash
 python .../validate_strategy_json.py predict/2026-07-13/strategy.json
-python .../validate_strategy_json.py predict/2026-07-13/strategy.json --require-v2
+python .../validate_strategy_json.py predict/2026-07-13/strategy.json
 ```
 
-`daily-market-analysis` 正式流水线使用 `--require-v2`；历史检查不使用。
+validator 只接受 `daily_strategy.v3`。
 
 ### 8.5 下游兼容
 
 `render_daily_report_html.py`：
 
-- 保持读取原字段；
-- v2 增加“最早入场时间”“需要开盘确认”“T+1 风险”展示；
+- 展示“最早入场时间”“需要开盘确认”“T+1 风险”和定性仓位档位；
 - 不从 HTML 反向解析数据。
 
 `generate_verification_json.py`：
 
-- 原有股票、profile 字段继续读取；
+- 读取 `position_tier`，不记录数值仓位；
 - 增加记录 strategy schema version；
 - 增加确认槽位和执行决策关联字段，但允许为空。
 
@@ -1110,7 +1093,10 @@ fixture 应脱敏但不得修改影响计算的价格、时间和量。
 ```python
 self.assertEqual(snapshot["market_confirmation"]["global_action"], "NO_NEW_BUY")
 self.assertLessEqual(CLASS_RANK[stock["max_allowed_class"]], CLASS_RANK["C"])
-self.assertLessEqual(stock["position"]["final_max"], stock["position"]["morning_budget"])
+self.assertLessEqual(
+    POSITION_TIER_RANK[stock["position_tier"]["final"]],
+    POSITION_TIER_RANK[stock["position_tier"]["morning"]],
+)
 ```
 
 对 generated_at、路径和 reason 顺序使用归一化比较。

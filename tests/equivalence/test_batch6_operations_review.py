@@ -61,21 +61,42 @@ def test_completed_kline_and_mechanical_classification_match_legacy() -> None:
     ]
     market = new_market.build_market_confirmation(copy.deepcopy(quotes), "strong-sector")
     assert market == old_market.build_market_confirmation(copy.deepcopy(quotes), "strong-sector")
-    strategy = {"direction": "看多", "profile": "趋势跟随", "position": 0.02, "no_buy": "破位取消"}
+    strategy = {
+        "direction": "看多", "profile": "趋势跟随", "position_tier": "STANDARD",
+        "no_buy": "破位取消", "strategy_schema_version": "daily_strategy.v3",
+        "preopen_plan": {"decision": "CONDITIONAL"},
+        "t1_risk_plan": {
+            "overnight_risk": "medium", "gap_up_action": "兑现", "flat_open_action": "观察",
+            "gap_down_action": "不补仓", "max_holding_days": 2,
+        },
+    }
     signals = {
         "data_warning": [], "below_vwap": False, "high_open_fade": False,
         "extended_from_anchor": False, "near_ma5": True, "near_ma20": False,
         "first_bar": {"red_flag": False, "price_strength_confirmed": True},
         "latest_completed_bar": {"price_strength_confirmed": True, "volume_confirmed": True},
     }
-    assert new_classification.compute_mechanical_decision(strategy, signals, market, at) == old_classification.compute_mechanical_decision(strategy, signals, market, at)
+    decision = new_classification.compute_mechanical_decision(strategy, signals, market, at)
+    assert decision["position_tier"] == {
+        "morning": "STANDARD", "market_adjusted": "LIGHT",
+        "signal_adjusted": "LIGHT", "final": "LIGHT",
+    }
 
 
 def test_stock_snapshot_and_html_match_legacy() -> None:
     old_snapshot = load_old("legacy_snapshot_batch6", OPERATION_SCRIPTS / "build_operation_snapshot.py", OPERATION_SCRIPTS)
     old_render = load_old("legacy_operation_render_batch6", OPERATION_SCRIPTS / "render_operation_guide_html.py", OPERATION_SCRIPTS)
     at = datetime(2026, 7, 10, 9, 40, 10, tzinfo=new_time.MARKET_TZ)
-    strategy = {"code": "sz000001", "name": "测试", "sector": "银行", "direction": "看多", "profile": "趋势跟随", "anchor": "MA5", "position": 0.02, "no_buy": "跌破MA5取消"}
+    strategy = {
+        "code": "sz000001", "name": "测试", "sector": "银行", "direction": "看多",
+        "profile": "趋势跟随", "anchor": "MA5", "position_tier": "STANDARD",
+        "no_buy": "跌破MA5取消", "strategy_schema_version": "daily_strategy.v3",
+        "preopen_plan": {"decision": "CONDITIONAL"},
+        "t1_risk_plan": {
+            "overnight_risk": "medium", "gap_up_action": "兑现", "flat_open_action": "观察",
+            "gap_down_action": "不补仓", "max_holding_days": 2,
+        },
+    }
     mapper = {"ma5": 10, "ma20": 9.5, "atr": 0.5, "high20": 11, "low20": 8}
     quote = {"code": "sz000001", "name": "测试", "price": 10.2, "open": 10, "high": 10.3, "low": 9.9, "percent": 2, "yestclose": 10, "amount": 1020000, "volume": 100000, "time": "2026-07-10 09:40:01"}
     market = {"global_action": "SELECTIVE"}
@@ -83,11 +104,14 @@ def test_stock_snapshot_and_html_match_legacy() -> None:
         {"time": "2026-07-10 09:35:00", "open": 10, "high": 10.2, "low": 9.9, "close": 10.1, "volume": 100},
         {"time": "2026-07-10 09:40:00", "open": 10.1, "high": 10.3, "low": 10, "close": 10.2, "volume": 160},
     ]
-    old_stock = old_snapshot.build_stock_snapshot("sz000001", strategy, mapper, quote, at, market, bars)
     new_stock = new_snapshot.build_stock_snapshot("sz000001", strategy, mapper, quote, at, market, bars)
-    assert new_stock == old_stock
-    decision = {"schema_version": "intraday_operation_decision.v1", "date": "2026-07-10", "generated_at": at.isoformat(), "global_action": "SELECTIVE", "portfolio": {}, "stocks": []}
-    assert new_render.render(decision, None) == old_render.render(decision, None)
+    assert new_stock["decision_guardrails"]["position_tier"]["market_adjusted"] == "LIGHT"
+    decision = {
+        "schema_version": "intraday_operation_decision.v2", "date": "2026-07-10",
+        "generated_at": at.isoformat(), "global_action": "SELECTIVE",
+        "portfolio": {"actionable_positions": 0, "allocation": {"limits": {}}}, "stocks": [],
+    }
+    assert "仓位档位" in new_render.render(decision, None)
 
 
 def test_state_transition_and_immutable_publish_match_legacy(tmp_path: Path) -> None:
@@ -97,14 +121,13 @@ def test_state_transition_and_immutable_publish_match_legacy(tmp_path: Path) -> 
         "code": "sz000001",
         "decision_guardrails": {
             "mechanical_class": "A", "max_allowed_class": "A", "class_reasons": [],
-            "position": {"morning_budget": 0.02, "market_adjusted_max": 0.01, "signal_adjusted_max": 0.01, "final_max": 0.01},
+            "position_tier": {"morning": "STANDARD", "market_adjusted": "LIGHT", "signal_adjusted": "LIGHT", "final": "LIGHT"},
         },
     }
-    old_current = [copy.deepcopy(stock)]
     new_current = [copy.deepcopy(stock)]
-    old_delivery = old_transition.apply_delivery_gate(old_current, "09:40", False)
     new_delivery = __import__("ashare_pilot.operations.operation_transition", fromlist=["apply_delivery_gate"]).apply_delivery_gate(new_current, "09:40", False)
-    assert (new_delivery, new_current) == (old_delivery, old_current)
+    assert new_delivery["execution_action"] == "WAIT_SECOND_CONFIRMATION"
+    assert new_current[0]["decision_guardrails"]["position_tier"]["final"] == "WATCH_ONLY"
 
     for runner, prefix in ((old_runner, "old"), (new_runner, "new")):
         pending = tmp_path / f".{prefix}.pending"
@@ -130,9 +153,25 @@ def test_operation_runner_offline_commit_is_complete_and_idempotent(tmp_path: Pa
     predict.mkdir(parents=True)
     intraday.mkdir(parents=True)
     strategy = {
-        "schema_version": "daily_strategy.v1", "date": "2026-07-10",
-        "market": {"regime_hint": "strong-sector"},
-        "stocks": [{"code": "sz000001", "name": "测试", "sector": "银行", "direction": "看多", "entry_profile": "趋势跟随", "anchor": "MA5", "entry_trigger": "确认后参与", "no_buy_condition": "转弱取消", "position_budget": 0.02}],
+        "schema_version": "daily_strategy.v3", "date": "2026-07-10",
+        "market": {"regime_prior": "strong-sector", "requires_open_confirmation": True},
+        "portfolio_limits": {"max_new_positions": 3, "max_theme_positions": 2, "max_correlated_names": 2},
+        "stocks": [{
+            "code": "sz000001", "name": "测试", "sector": "银行", "direction": "看多",
+            "rating": "4★", "entry_profile": "趋势跟随", "anchor": "MA5",
+            "entry_trigger": "确认后参与", "no_buy_condition": "转弱取消",
+            "position_tier": "STANDARD", "horizon": "T+1",
+            "preopen_plan": {
+                "decision": "CONDITIONAL", "earliest_entry_time": "09:35:05",
+                "latest_entry_time": "10:00:00", "requires_first_bar": True,
+                "requires_market_confirmation": True, "requires_theme_confirmation": True,
+                "entry_setup": "MOMENTUM", "pre_entry_invalidations": ["转弱取消"],
+            },
+            "t1_risk_plan": {
+                "overnight_risk": "medium", "gap_up_action": "兑现", "flat_open_action": "观察",
+                "gap_down_action": "不补仓", "max_holding_days": 2,
+            },
+        }],
     }
     mapper = {
         "schema_version": "daily_mapper.v1", "date": "2026-07-10",

@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, time
 from typing import Any
 
+from ashare_pilot.position_tier import POSITION_TIERS, lower_position_tier
+
 
 CLASS_RANK = {"D": 0, "C": 1, "B": 2, "A": 3}
 
@@ -30,6 +32,9 @@ def compute_mechanical_decision(
     }
     action = market.get("global_action")
     preopen = strategy.get("preopen_plan") if isinstance(strategy.get("preopen_plan"), dict) else {}
+    morning_tier = strategy.get("position_tier")
+    if morning_tier not in POSITION_TIERS:
+        raise ValueError(f"invalid position_tier: {morning_tier!r}")
 
     def plan_time(key: str, fallback: time) -> time:
         value = preopen.get(key)
@@ -37,14 +42,19 @@ def compute_mechanical_decision(
             try:
                 return time.fromisoformat(value)
             except ValueError as exc:
-                if strategy.get("strategy_schema_version") == "daily_strategy.v2":
-                    raise ValueError(f"invalid v2 preopen_plan.{key}: {value!r}") from exc
+                if strategy.get("strategy_schema_version") == "daily_strategy.v3":
+                    raise ValueError(f"invalid v3 preopen_plan.{key}: {value!r}") from exc
         return fallback
 
     earliest = plan_time("earliest_entry_time", time(9, 35, 5))
     latest_time = plan_time("latest_entry_time", time(10, 0))
 
-    if direction in {"看空", "中性"} or profile == "暂不参与" or preopen.get("decision") == "WATCH_ONLY":
+    if (
+        direction in {"看空", "中性"}
+        or profile == "暂不参与"
+        or preopen.get("decision") == "WATCH_ONLY"
+        or morning_tier == "WATCH_ONLY"
+    ):
         hard_blocks.append("morning_strategy_not_buyable")
     if any(item in severe_warnings for item in warnings):
         hard_blocks.append("data_warning")
@@ -91,17 +101,16 @@ def compute_mechanical_decision(
             reasons.append("no_actionable_setup")
         mechanical = cap_class(mechanical, maximum)
 
-    morning = strategy.get("position")
-    if not isinstance(morning, (int, float)):
-        morning = strategy.get("position_budget")
-    morning = float(morning) if isinstance(morning, (int, float)) else 0.0
-    market_factor = 1.0 if action == "NORMAL" else 0.5 if action == "SELECTIVE" else 0.0
-    market_max = morning * market_factor
-    signal_max = market_max if mechanical == "A" else 0.0
+    market_tier = (
+        morning_tier if action == "NORMAL"
+        else lower_position_tier(morning_tier) if action == "SELECTIVE"
+        else "WATCH_ONLY"
+    )
+    signal_tier = market_tier if mechanical == "A" else "WATCH_ONLY"
     configured_t1 = strategy.get("t1_risk_plan")
     if isinstance(configured_t1, dict):
         t1_exit_plan = {
-            "source": "daily_strategy.v2",
+            "source": "daily_strategy.v3",
             "overnight_risk": configured_t1.get("overnight_risk"),
             "gap_up_action": configured_t1.get("gap_up_action"),
             "flat_open_action": configured_t1.get("flat_open_action"),
@@ -109,24 +118,17 @@ def compute_mechanical_decision(
             "max_holding_days": configured_t1.get("max_holding_days"),
         }
     else:
-        t1_exit_plan = {
-            "source": "legacy_v1_fallback",
-            "overnight_risk": "unknown",
-            "gap_up_action": "次日高开但承接不足时分批兑现",
-            "flat_open_action": "次日平开后反弹失败时退出",
-            "gap_down_action": "次日低开禁止补仓，优先控制风险",
-            "max_holding_days": 1,
-        }
+        raise ValueError("daily_strategy.v3 requires t1_risk_plan")
     return {
         "mechanical_class": mechanical,
         "max_allowed_class": maximum,
         "class_reasons": reasons,
         "hard_blocks": hard_blocks,
-        "position": {
-            "morning_budget": round(morning, 6),
-            "market_adjusted_max": round(market_max, 6),
-            "signal_adjusted_max": round(signal_max, 6),
-            "final_max": round(signal_max, 6),
+        "position_tier": {
+            "morning": morning_tier,
+            "market_adjusted": market_tier,
+            "signal_adjusted": signal_tier,
+            "final": signal_tier,
         },
         "t1_controls": {
             "same_day_sell_allowed": False,

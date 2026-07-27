@@ -15,7 +15,7 @@ def load(path: str) -> dict:
 
 
 ROLE_TAGS = {"ThemeLibrary", "MarketActive", "NewsDirect", "MultiTheme", "Anchor", "LHB"}
-LIVE_PROFILE_FIELDS = ("playbook", "preferred_anchor", "chase_policy", "entry_window", "stop_policy", "time_horizon", "position_budget")
+LIVE_PROFILE_FIELDS = ("playbook", "preferred_anchor", "chase_policy", "entry_window", "stop_policy", "time_horizon")
 
 
 def source_grounding(stock: dict) -> dict:
@@ -57,7 +57,7 @@ def compare(before: dict, after: dict, mode: str = "frozen") -> dict:
     field_differences = {}
     before_by_code = {item.get("code"): item for item in b}
     after_by_code = {item.get("code"): item for item in a}
-    locked_fields = ("rating", "position_budget", "entry_profile", "anchor", "rules_applied")
+    locked_fields = ("rating", "position_tier", "entry_profile", "anchor", "rules_applied")
     profile_differences = {}
     source_grounding_differences = {}
     for code in before_codes:

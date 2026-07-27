@@ -4,21 +4,19 @@
 
 ```json
 {
-  "schema_version": "daily_strategy_draft.tmp.v1",
+  "schema_version": "daily_strategy_draft.tmp.v2",
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601",
   "source": {"strategy_input_sha256": "输入 source 要求的精确 canonical hash"},
   "market": {
     "regime_prior": "panic|weak|neutral|strong-sector",
     "requires_open_confirmation": true,
-    "position_multiplier": 1.0,
     "stop_atr_multiplier": 1.5,
     "notes": "最终 regime 理由"
   },
   "portfolio_limits": {
-    "max_new_exposure": 0.10,
-    "max_theme_exposure": 0.04,
-    "max_single_stock": 0.02,
+    "max_new_positions": 7,
+    "max_theme_positions": 3,
     "max_correlated_names": 2
   },
   "stocks": [],
@@ -47,7 +45,7 @@ uv run --frozen ashare-pilot strategy daily build-llm-input --hash-only predict/
   "anchor": "MA5|MA10|MA20|OPEN|VWAP|首根5min|FLEX|无|—",
   "entry_trigger": "非空",
   "no_buy_condition": "非空",
-  "position_budget": 0.02,
+  "position_tier": "WATCH_ONLY|LIGHT|STANDARD",
   "horizon": "T+1",
   "preopen_plan": {
     "decision": "CONDITIONAL|WATCH_ONLY",
@@ -85,9 +83,16 @@ uv run --frozen ashare-pilot strategy daily build-llm-input --hash-only predict/
 {"preferred_anchor":{"value":"MA5","reason":"R68强主线切换MA5"}}
 ```
 
-白名单：`playbook`、`preferred_anchor`、`chase_policy`、`entry_window`、`stop_policy`、`time_horizon`、`position_budget`、`invalidation`、`note`、`max_extension_atr`，以及只能取 Step 2 精确值或两位小数值的 `ref_ma20/ref_ma5/ref_high20`；`ref_ma10` 只能为 null。
+白名单：`playbook`、`preferred_anchor`、`chase_policy`、`entry_window`、`stop_policy`、`time_horizon`、`invalidation`、`note`、`max_extension_atr`，以及只能取 Step 2 精确值或两位小数值的 `ref_ma20/ref_ma5/ref_high20`；`ref_ma10` 只能为 null。
 
-profile 的 position budget 必须与 stock 一致，time horizon 必须与 stock 的 T+1 一致。无变化时使用空对象。
+`position_tier` 只属于 selected stock，不进入 profile 或 profile overrides：
+
+- `WATCH_ONLY`：仅观察，不形成新买入意图；
+- `LIGHT`：轻仓意图，不代表任何固定百分比、金额、股数或手数；
+- `STANDARD`：标准仓意图，不代表任何固定百分比、金额、股数或手数。
+
+禁止输出 `position_budget`、`position_multiplier`、任何 exposure 百分比或数值仓位上限。
+profile 的 time horizon 必须与 stock 的 T+1 一致。无变化时使用空对象。
 
 `exclusion_overrides` 只能引用未入选且存在于输入中的候选，每个代码最多一次：
 

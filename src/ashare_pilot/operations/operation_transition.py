@@ -41,13 +41,13 @@ def apply_delivery_gate(
         status = "LATE_OBSERVE_ONLY"
         action = "OBSERVE_ONLY"
     for stock in stocks:
-        guard = stock.get("decision_guardrails", {})
+        guard = stock["decision_guardrails"]
         guard["max_allowed_class"] = cap_class(guard.get("max_allowed_class", "D"), maximum)
         guard["mechanical_class"] = cap_class(guard.get("mechanical_class", "D"), maximum)
         guard.setdefault("class_reasons", []).append(f"delivery_gate:{status.lower()}")
-        position = guard.get("position", {})
-        position["signal_adjusted_max"] = 0.0
-        position["final_max"] = 0.0
+        position = guard["position_tier"]
+        position["signal_adjusted"] = "WATCH_ONLY"
+        position["final"] = "WATCH_ONLY"
     return {
         "delivery_status": status,
         "execution_action": action,
@@ -75,7 +75,7 @@ def apply_previous_snapshot(
     warnings: list[str] = []
     for stock in stocks:
         code = stock.get("code")
-        guard = stock.get("decision_guardrails", {})
+        guard = stock["decision_guardrails"]
         current = guard.get("mechanical_class", "D")
         old_stock = previous_by_code.get(code)
         old = old_stock.get("decision_guardrails", {}).get("mechanical_class") if old_stock else None
@@ -86,13 +86,13 @@ def apply_previous_snapshot(
             guard["mechanical_class"] = old
             guard["max_allowed_class"] = old
             if old != "A":
-                guard["position"]["signal_adjusted_max"] = 0.0
-                guard["position"]["final_max"] = 0.0
+                guard["position_tier"]["signal_adjusted"] = "WATCH_ONLY"
+                guard["position_tier"]["final"] = "WATCH_ONLY"
             adjusted = True
         if current != "A":
-            position = guard.get("position", {})
-            position["signal_adjusted_max"] = 0.0
-            position["final_max"] = 0.0
+            position = guard["position_tier"]
+            position["signal_adjusted"] = "WATCH_ONLY"
+            position["final"] = "WATCH_ONLY"
         stock["transition"] = {
             "previous_class": old,
             "current_class": current,

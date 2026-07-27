@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate intraday_operation_snapshot.v2 artifacts."""
+"""Validate intraday_operation_snapshot.v3 artifacts."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from typing import Any
 
 from ashare_pilot.operations.mechanical_classification import CLASS_RANK
 from ashare_pilot.operations.operation_time import parse_market_datetime
+from ashare_pilot.position_tier import POSITION_TIERS, POSITION_TIER_RANK
 
 
 def add(errors: list[str], path: str, message: str) -> None:
@@ -30,8 +31,8 @@ def validate(
     require_references: bool = False,
 ) -> list[str]:
     errors: list[str] = []
-    if doc.get("schema_version") != "intraday_operation_snapshot.v2":
-        add(errors, "schema_version", "must be intraday_operation_snapshot.v2")
+    if doc.get("schema_version") != "intraday_operation_snapshot.v3":
+        add(errors, "schema_version", "must be intraday_operation_snapshot.v3")
     date_text = doc.get("date")
     if not isinstance(date_text, str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", date_text):
         add(errors, "date", "must be YYYY-MM-DD")
@@ -94,8 +95,8 @@ def validate(
         return errors
     seen: set[str] = set()
     source_schema = doc.get("source_strategy", {}).get("schema_version") if isinstance(doc.get("source_strategy"), dict) else None
-    allocated_total = 0.0
-    allocated_by_theme: dict[str, float] = {}
+    allocated_total = 0
+    allocated_by_theme: dict[str, int] = {}
     allocated_names_by_theme: dict[str, int] = {}
     for index, stock in enumerate(stocks):
         base = f"stocks[{index}]"
@@ -138,37 +139,39 @@ def validate(
             add(errors, f"{base}.decision_guardrails.max_allowed_class", "late initial 09:40 caps class at B")
         if delivery_action == "OBSERVE_ONLY" and maximum in {"A", "B"}:
             add(errors, f"{base}.decision_guardrails.max_allowed_class", "late observe-only snapshot caps class at C")
-        position = guard.get("position")
+        position = guard.get("position_tier")
         if not isinstance(position, dict):
-            add(errors, f"{base}.decision_guardrails.position", "must be object")
+            add(errors, f"{base}.decision_guardrails.position_tier", "must be object")
         else:
-            portfolio_max = position.get("portfolio_adjusted_max", position.get("signal_adjusted_max"))
-            values = [position.get(key) for key in ("morning_budget", "market_adjusted_max", "signal_adjusted_max")] + [portfolio_max, position.get("final_max")]
-            if not all(isinstance(value, (int, float)) and not isinstance(value, bool) for value in values):
-                add(errors, f"{base}.decision_guardrails.position", "all caps must be numeric")
-            elif not (0 <= values[4] <= values[3] <= values[2] <= values[1] <= values[0] <= 1):
-                add(errors, f"{base}.decision_guardrails.position", "caps must monotonically decrease")
+            values = [position.get(key) for key in ("morning", "market_adjusted", "signal_adjusted", "portfolio_adjusted", "final")]
+            if not all(value in POSITION_TIERS for value in values):
+                add(errors, f"{base}.decision_guardrails.position_tier", "all stages must be qualitative tiers")
+            elif not all(
+                POSITION_TIER_RANK[left] >= POSITION_TIER_RANK[right]
+                for left, right in zip(values, values[1:])
+            ):
+                add(errors, f"{base}.decision_guardrails.position_tier", "tiers must monotonically decrease")
             else:
-                allocated = float(values[4])
-                allocated_total += allocated
-                if allocated > 0:
+                allocated = values[4]
+                if allocated != "WATCH_ONLY":
+                    allocated_total += 1
                     theme = str(stock.get("strategy", {}).get("sector") or "未分类")
-                    allocated_by_theme[theme] = allocated_by_theme.get(theme, 0.0) + allocated
+                    allocated_by_theme[theme] = allocated_by_theme.get(theme, 0) + 1
                     allocated_names_by_theme[theme] = allocated_names_by_theme.get(theme, 0) + 1
-                if delivery_action in {"WAIT_SECOND_CONFIRMATION", "OBSERVE_ONLY"} and allocated != 0:
-                    add(errors, f"{base}.decision_guardrails.position.final_max", "delivery gate requires zero position")
+                if delivery_action in {"WAIT_SECOND_CONFIRMATION", "OBSERVE_ONLY"} and allocated != "WATCH_ONLY":
+                    add(errors, f"{base}.decision_guardrails.position_tier.final", "delivery gate requires WATCH_ONLY")
         controls = guard.get("t1_controls")
         if not isinstance(controls, dict) or controls.get("same_day_sell_allowed") is not False:
             add(errors, f"{base}.decision_guardrails.t1_controls", "new position must forbid same-day sell")
         elif not isinstance(controls.get("t1_exit_plan"), dict):
             add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan", "must be object")
-        elif source_schema == "daily_strategy.v2":
+        elif source_schema == "daily_strategy.v3":
             plan = controls["t1_exit_plan"]
-            if plan.get("source") != "daily_strategy.v2":
-                add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.source", "must preserve v2 plan")
+            if plan.get("source") != "daily_strategy.v3":
+                add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.source", "must preserve v3 plan")
             for key in ("overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action", "max_holding_days"):
                 if plan.get(key) is None:
-                    add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.{key}", "missing v2 field")
+                    add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.{key}", "missing v3 field")
         transition = stock.get("transition")
         if not isinstance(transition, dict) or transition.get("current_class") != mechanical:
             add(errors, f"{base}.transition", "must match mechanical class")
@@ -180,32 +183,26 @@ def validate(
         if not isinstance(limits, dict):
             add(errors, "portfolio_allocation.limits", "must be object")
         else:
-            total_limit = limits.get("max_new_exposure")
-            theme_limit = limits.get("max_theme_exposure")
-            single_limit = limits.get("max_single_stock")
+            total_limit = limits.get("max_new_positions")
+            theme_limit = limits.get("max_theme_positions")
             correlated_limit = limits.get("max_correlated_names")
-            if source_schema == "daily_strategy.v2" and limits.get("source") != "daily_strategy.v2":
-                add(errors, "portfolio_allocation.limits.source", "must preserve v2 portfolio limits")
-            if isinstance(total_limit, (int, float)) and allocated_total > total_limit + 1e-9:
-                add(errors, "portfolio_allocation", "allocated exposure exceeds total limit")
+            if source_schema != "daily_strategy.v3" or limits.get("source") != "daily_strategy.v3":
+                add(errors, "portfolio_allocation.limits.source", "must preserve v3 portfolio limits")
+            if isinstance(total_limit, int) and allocated_total > total_limit:
+                add(errors, "portfolio_allocation", "allocated positions exceed total limit")
             for theme, value in allocated_by_theme.items():
-                if isinstance(theme_limit, (int, float)) and value > theme_limit + 1e-9:
-                    add(errors, f"portfolio_allocation.{theme}", "allocated exposure exceeds theme limit")
+                if isinstance(theme_limit, int) and value > theme_limit:
+                    add(errors, f"portfolio_allocation.{theme}", "allocated positions exceed theme limit")
                 if isinstance(correlated_limit, int) and allocated_names_by_theme[theme] > correlated_limit:
                     add(errors, f"portfolio_allocation.{theme}", "allocated names exceed correlated limit")
-            if isinstance(single_limit, (int, float)):
-                for index, stock in enumerate(stocks):
-                    final_max = stock.get("decision_guardrails", {}).get("position", {}).get("final_max")
-                    if isinstance(final_max, (int, float)) and final_max > single_limit + 1e-9:
-                        add(errors, f"stocks[{index}].decision_guardrails.position.final_max", "exceeds single-stock limit")
-        recorded = allocation.get("allocated_exposure")
-        if not isinstance(recorded, (int, float)) or abs(recorded - allocated_total) > 1e-6:
-            add(errors, "portfolio_allocation.allocated_exposure", "does not match stock total")
+        recorded = allocation.get("allocated_positions")
+        if recorded != allocated_total:
+            add(errors, "portfolio_allocation.allocated_positions", "does not match stock total")
     return errors
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(description="Validate operation snapshot v2")
+    parser = argparse.ArgumentParser(description="Validate operation snapshot v3")
     parser.add_argument("path")
     parser.add_argument("--portable", action="store_true", help="Allow referenced files to be absent")
     args = parser.parse_args(argv)

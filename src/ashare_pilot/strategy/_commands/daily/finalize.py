@@ -23,7 +23,8 @@ from .validate_strategy import (
     REGIME_STOCK_LIMITS, STOP_POLICIES, validate as validate_strategy,
 )
 
-DRAFT_SCHEMA = "daily_strategy_draft.tmp.v1"
+DRAFT_SCHEMA = "daily_strategy_draft.tmp.v2"
+FINAL_SCHEMA = "daily_strategy.v3"
 NEWS_RE = re.compile(r"news#\d+")
 KNOWN_ROLE_TAGS = {"ThemeLibrary", "MarketActive", "NewsDirect", "MultiTheme", "Anchor", "LHB"}
 PROFILE_OVERRIDE_ENUMS = {
@@ -31,7 +32,7 @@ PROFILE_OVERRIDE_ENUMS = {
     "entry_window": ENTRY_WINDOWS, "stop_policy": STOP_POLICIES, "time_horizon": HORIZONS,
 }
 PROFILE_OVERRIDE_FIELDS = set(PROFILE_OVERRIDE_ENUMS) | {
-    "position_budget", "invalidation", "note", "max_extension_atr",
+    "invalidation", "note", "max_extension_atr",
     "ref_ma20", "ref_ma10", "ref_ma5", "ref_high20",
 }
 
@@ -58,7 +59,7 @@ def candidate_index(compact: dict[str, Any]) -> tuple[list[str], dict[str, dict[
 
 
 def draft_contract_errors(draft: dict[str, Any]) -> list[str]:
-    """Run the final v2 contract against draft-owned fields before materialize.
+    """Run the final v3 contract against draft-owned fields before materialize.
 
     A valid placeholder profile prevents Python-owned profile materialization
     from masking or delaying errors in LLM-owned stock decisions.
@@ -77,9 +78,10 @@ def draft_contract_errors(draft: dict[str, Any]) -> list[str]:
     if not isinstance(market, dict):
         errors.append("market: must be object")
     else:
-        for field in ("position_multiplier", "stop_atr_multiplier"):
-            if not isinstance(market.get(field), (int, float)) or isinstance(market.get(field), bool):
-                errors.append(f"market.{field}: must be number")
+        if not isinstance(market.get("stop_atr_multiplier"), (int, float)) or isinstance(market.get("stop_atr_multiplier"), bool):
+            errors.append("market.stop_atr_multiplier: must be number")
+        if "position_multiplier" in market:
+            errors.append("market.position_multiplier: forbidden; v3 uses qualitative position tiers")
         if not isinstance(market.get("notes"), str) or not market.get("notes", "").strip():
             errors.append("market.notes: must be non-empty string")
 
@@ -87,7 +89,7 @@ def draft_contract_errors(draft: dict[str, Any]) -> list[str]:
     provisional_stocks: list[Any] = []
     required = {
         "code", "name", "sector", "direction", "rating", "entry_profile", "anchor",
-        "entry_trigger", "no_buy_condition", "position_budget", "horizon", "preopen_plan",
+        "entry_trigger", "no_buy_condition", "position_tier", "horizon", "preopen_plan",
         "t1_risk_plan", "rules_applied", "profile_trace", "reasoning", "profile_overrides",
     }
     for index, stock in enumerate(stocks):
@@ -113,16 +115,15 @@ def draft_contract_errors(draft: dict[str, Any]) -> list[str]:
         provisional["profile"] = {
             "playbook": "PULLBACK", "preferred_anchor": "FLEX", "chase_policy": "NO_CHASE",
             "entry_window": "ANY", "stop_policy": "ATR_1.5", "time_horizon": "T+1",
-            "position_budget": stock.get("position_budget"),
         }
         provisional_stocks.append(provisional)
 
     provisional_doc = {
-        "schema_version": "daily_strategy.v2", "date": draft.get("date"),
+        "schema_version": FINAL_SCHEMA, "date": draft.get("date"),
         "market": draft.get("market"), "portfolio_limits": draft.get("portfolio_limits"),
         "stocks": provisional_stocks, "observation_pool": [],
     }
-    errors.extend(validate_strategy(provisional_doc, require_v2=True))
+    errors.extend(validate_strategy(provisional_doc))
     return errors
 
 
@@ -147,7 +148,7 @@ def validate_profile_overrides(overrides: Any, stock: dict[str, Any], base: str,
             errors.append(f"{path}.value: invalid enum {value!r}")
         elif field in {"invalidation", "note"} and (not isinstance(value, str) or not value.strip()):
             errors.append(f"{path}.value: must be non-empty string")
-        elif field in {"position_budget", "max_extension_atr", "ref_ma20", "ref_ma5", "ref_high20"} and not isinstance(value, (int, float)):
+        elif field in {"max_extension_atr", "ref_ma20", "ref_ma5", "ref_high20"} and not isinstance(value, (int, float)):
             errors.append(f"{path}.value: must be number")
         elif field == "ref_ma10" and value is not None:
             errors.append(f"{path}.value: ref_ma10 must remain null because it is absent from Step 2 inputs")
@@ -158,9 +159,6 @@ def validate_profile_overrides(overrides: Any, stock: dict[str, Any], base: str,
             source_value = stock.get("_candidate_strategy_inputs", {}).get(source_key)
             if isinstance(source_value, (int, float)) and value not in {source_value, round(source_value, 2)}:
                 errors.append(f"{path}.value: must equal exact or 2-decimal Step 2 source value")
-    budget = overrides.get("position_budget") if isinstance(overrides, dict) else None
-    if isinstance(budget, dict) and budget.get("value") != stock.get("position_budget"):
-        errors.append(f"{base}.profile_overrides.position_budget: must equal selected stock position_budget")
     horizon = overrides.get("time_horizon") if isinstance(overrides, dict) else None
     if isinstance(horizon, dict) and horizon.get("value") != stock.get("horizon"):
         errors.append(f"{base}.profile_overrides.time_horizon: must equal selected stock horizon")
@@ -260,6 +258,7 @@ def recompute_profile(candidate: dict[str, Any], compact: dict[str, Any], regime
         candidate.get("scores", {}).get("theme_heat"), index_percent(indices, "sh000688"), None,
     )
     profile.pop("code", None)
+    profile.pop("position_tier", None)
     profile.update({
         "ref_ma20": strategy_inputs.get("ma20"), "ref_ma10": None,
         "ref_ma5": strategy_inputs.get("ma5"), "ref_high20": strategy_inputs.get("high20"),
@@ -283,8 +282,6 @@ def materialize(draft: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
         stock = {key: value for key, value in draft_stock.items() if key != "profile_overrides"}
         profile = recompute_profile(candidates[stock["code"]], compact, regime)
         stock["profile"] = apply_overrides(profile, draft_stock.get("profile_overrides", {}))
-        if stock["profile"].get("position_budget") != stock.get("position_budget"):
-            raise ValueError(f"{stock['code']} final profile position_budget contradicts selected stock")
         if stock["profile"].get("time_horizon") != stock.get("horizon"):
             raise ValueError(f"{stock['code']} final profile time_horizon contradicts selected stock")
         selected.append(stock)
@@ -309,7 +306,7 @@ def materialize(draft: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
             reason = f"完整候选比较后未入选；主主题：{primary}"
         observations.append({"code": code, "name": candidate.get("name") or code, "reason": reason})
     return {
-        "schema_version": "daily_strategy.v2", "date": draft["date"],
+        "schema_version": FINAL_SCHEMA, "date": draft["date"],
         "generated_at": draft.get("generated_at"), "market": draft.get("market"),
         "portfolio_limits": draft.get("portfolio_limits"), "stocks": selected,
         "observation_pool": observations,
@@ -348,7 +345,7 @@ def main(argv=None) -> int:
                        "llm_input_bytes": compact_path.stat().st_size, "llm_output_bytes": draft_path.stat().st_size},
                       validation_retries=args.validation_retries, timing_method=llm_timing_method)
         strategy = materialize(draft, compact)
-        validation_errors = validate_strategy(strategy, require_v2=True)
+        validation_errors = validate_strategy(strategy)
         if validation_errors:
             raise ValueError("final strategy validation failed:\n" + "\n".join(f"  - {item}" for item in validation_errors))
         view = load(input_dir / "mapper.strategy_view.json")

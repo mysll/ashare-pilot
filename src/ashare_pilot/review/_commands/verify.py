@@ -109,7 +109,7 @@ def rows_from_codes(codes: list[str]) -> list[dict[str, Any]]:
             "评级": None,
             "交易策略": None,
             "入场条件": None,
-            "仓位": None,
+            "仓位档位": None,
             "持仓": None,
             "anchor_kind": None,
         })
@@ -141,7 +141,7 @@ def rows_from_strategy_json(path: Path) -> tuple[str, list[dict[str, Any]]]:
             "评级": stock.get("rating"),
             "交易策略": stock.get("entry_profile"),
             "入场条件": stock.get("entry_trigger"),
-            "仓位": stock.get("position_budget"),
+            "仓位档位": stock.get("position_tier"),
             "持仓": stock.get("horizon"),
             "anchor_kind": None if anchor in (None, "无", "—") else anchor,
             "strategy_json": stock,
@@ -162,7 +162,7 @@ def parse_strategy(strategy_path: Path) -> tuple[str, list[dict[str, Any]]]:
             continue
         header = split_row(line)
         idx = {name: next((j for j, h in enumerate(header) if name in h), None)
-               for name in ("代码", "名称", "板块", "方向", "评级", "交易策略", "入场条件", "仓位", "持仓")}
+               for name in ("代码", "名称", "板块", "方向", "评级", "交易策略", "入场条件", "仓位档位", "持仓")}
         j = i + 2
         while j < len(lines) and lines[j].startswith("|") and "---" not in lines[j]:
             cells = split_row(lines[j])
@@ -425,7 +425,7 @@ def build_verification(
             "rating": row.get("评级"),
             "strategy": row.get("交易策略"),
             "entry_condition": row.get("入场条件"),
-            "position_budget": row.get("仓位"),
+            "position_tier": row.get("仓位档位"),
             "horizon": row.get("持仓"),
             "prices": {
                 "open": round2(to_float(day.get("open"))),

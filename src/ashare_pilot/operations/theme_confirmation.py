@@ -75,6 +75,6 @@ def apply_theme_caps(stocks: list[dict[str, Any]], themes: dict[str, dict[str, A
         mechanical = guard.get("mechanical_class", "D")
         if CLASS_RANK.get(mechanical, 0) > CLASS_RANK.get(maximum, 0):
             guard["mechanical_class"] = maximum
-            guard["position"]["signal_adjusted_max"] = 0.0
-            guard["position"]["final_max"] = 0.0
+            guard["position_tier"]["signal_adjusted"] = "WATCH_ONLY"
+            guard["position_tier"]["final"] = "WATCH_ONLY"
         stock["theme_confirmation"] = confirmation

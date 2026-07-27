@@ -48,7 +48,7 @@ def position_state(price, ma20, atr, board_streak, high20):
 
 
 def _profile(code, playbook, anchor, chase, entry_window,
-             stop_policy, time_horizon, position_budget,
+             stop_policy, time_horizon, position_tier,
              invalidation, note, ref_ma20, ref_ma5, ref_high20,
              max_extension_atr=2.5):
     return {
@@ -59,7 +59,7 @@ def _profile(code, playbook, anchor, chase, entry_window,
         "entry_window": entry_window,
         "stop_policy": stop_policy,
         "time_horizon": time_horizon,
-        "position_budget": position_budget,
+        "position_tier": position_tier,
         "invalidation": invalidation,
         "note": note,
         "ref_ma20": ref_ma20,
@@ -95,7 +95,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
                 playbook="DEFENSIVE", anchor="MA20",
                 chase="NO_CHASE", entry_window="MORNING_DIP",
                 stop_policy="ATR_2.0", time_horizon="T+1",
-                position_budget=0.01,
+                position_tier="LIGHT",
                 invalidation="大盘继续恶化或个股破MA20",
                 note="R70 弱市观测30min",
                 ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -104,7 +104,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
             playbook="WATCH_ONLY", anchor="FLEX",
             chase="NO_CHASE", entry_window="TAIL",
             stop_policy="ATR_2.0", time_horizon="T+1",
-            position_budget=0,
+            position_tier="WATCH_ONLY",
             invalidation="弱市无交易信号",
             note="弱/恐慌市场, 仅观察",
             ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -116,7 +116,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
             playbook="LIMIT_UP_CONT", anchor="OPEN",
             chase="OPEN_PROBE_OK", entry_window="OPEN",
             stop_policy="PCT_R35", time_horizon="T+1",
-            position_budget=0.02,
+            position_tier="STANDARD",
             invalidation="板块热度<4★或炸板",
             note="R35-v4 涨停延续试探",
             ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -129,7 +129,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
             playbook="MOMENTUM", anchor="MA5",
             chase="MA5_ONLY", entry_window="OPEN",
             stop_policy="ATR_1.5", time_horizon="T+1",
-            position_budget=0.02,
+            position_tier="STANDARD",
             invalidation="板块涨幅<2%或科创50回落",
             note="R68 强势主线MA5基准",
             ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -142,7 +142,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
             playbook="WATCH_ONLY", anchor="FLEX",
             chase="NO_CHASE", entry_window="TAIL",
             stop_policy="ATR_1.5", time_horizon="T+1",
-            position_budget=0,
+            position_tier="WATCH_ONLY",
             invalidation="位置过高, 等尾盘或次日回踩",
             note="EXTENDED 不追高",
             ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -153,7 +153,7 @@ def compute_trade_profile(code, raw_obs, cp, regime, mainline,
         playbook="PULLBACK", anchor="MA20",
         chase="NO_CHASE", entry_window="ANY",
         stop_policy="ATR_1.5", time_horizon="T+1",
-        position_budget=0.02,
+        position_tier="STANDARD",
         invalidation="跌破MA20且板块热度<3★",
         note="震荡回踩MA20",
         ref_ma20=ref_ma20, ref_ma5=ref_ma5,
@@ -247,12 +247,12 @@ def main(argv=None):
     if args.json:
         output_str = json.dumps(profiles, ensure_ascii=False, indent=2)
     else:
-        lines = ["Code        Playbook       Anchor  Chase          Budget  Stop     Invalidation"]
+        lines = ["Code        Playbook       Anchor  Chase          Position    Stop     Invalidation"]
         lines.append("-" * 80)
         for p in profiles:
             lines.append(
                 f"{p['code']:<12} {p['playbook']:<14} {p['preferred_anchor']:<7} "
-                f"{p['chase_policy']:<14} {p['position_budget']:>5.0%}  "
+                f"{p['chase_policy']:<14} {p['position_tier']:<11} "
                 f"{p['stop_policy']:<8} {p.get('invalidation', '-')[:30]}"
             )
         output_str = "\n".join(lines)

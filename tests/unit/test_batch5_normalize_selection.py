@@ -7,7 +7,7 @@ from copy import deepcopy
 from ashare_pilot.strategy._commands.daily.normalize_selection import normalize
 
 
-def v2_doc():
+def v3_doc():
     profile = {
         "playbook": "PULLBACK", "preferred_anchor": "MA5", "chase_policy": "MA5_ONLY",
         "entry_window": "MORNING_DIP", "stop_policy": "ATR_1.5", "time_horizon": "T+1",
@@ -16,7 +16,7 @@ def v2_doc():
         "code": "sz000001", "name": "平安银行", "sector": "银行", "direction": "偏多",
         "rating": "3★", "entry_profile": "回调布局", "anchor": "MA5",
         "entry_trigger": "等待开盘确认", "no_buy_condition": "市场转弱则取消",
-        "position_budget": 0.01, "horizon": "T+1", "profile": profile,
+        "position_tier": "LIGHT", "horizon": "T+1", "profile": profile,
         "reasoning": {"source_basis": "银行主题候选，来自 ThemeLibrary"},
         "preopen_plan": {
             "decision": "CONDITIONAL", "earliest_entry_time": "09:40:05",
@@ -31,11 +31,11 @@ def v2_doc():
         },
     }
     return {
-        "schema_version": "daily_strategy.v2", "date": "2026-07-13",
+        "schema_version": "daily_strategy.v3", "date": "2026-07-13",
         "market": {"regime_prior": "neutral", "requires_open_confirmation": True},
         "portfolio_limits": {
-            "max_new_exposure": 0.1, "max_theme_exposure": 0.04,
-            "max_single_stock": 0.02, "max_correlated_names": 2,
+            "max_new_positions": 7, "max_theme_positions": 3,
+            "max_correlated_names": 2,
         },
         "stocks": [stock], "observation_pool": [],
     }
@@ -43,7 +43,7 @@ def v2_doc():
 
 class NormalizeSelectionTests(unittest.TestCase):
     def test_skip_none_rows_move_to_observation(self):
-        doc = v2_doc()
+        doc = v3_doc()
         skipped = deepcopy(doc["stocks"][0])
         skipped["code"] = "sz000002"
         skipped["preopen_plan"]["decision"] = "SKIP"
@@ -56,7 +56,7 @@ class NormalizeSelectionTests(unittest.TestCase):
         self.assertEqual(summary["moved_to_observation"], 1)
 
     def test_weak_regime_truncates_to_seven(self):
-        doc = v2_doc()
+        doc = v3_doc()
         doc["market"]["regime_prior"] = "weak"
         doc["stocks"] = [dict(deepcopy(doc["stocks"][0]), code=f"sz0000{i:02d}") for i in range(1, 10)]
         normalized, summary = normalize(doc)
@@ -65,7 +65,7 @@ class NormalizeSelectionTests(unittest.TestCase):
         self.assertEqual(len(normalized["observation_pool"]), 2)
 
     def test_non_buyable_rows_move_to_observation(self):
-        doc = v2_doc()
+        doc = v3_doc()
         doc["stocks"][0]["direction"] = "看空"
         normalized, _ = normalize(doc)
         self.assertEqual(normalized["stocks"], [])

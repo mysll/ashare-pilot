@@ -16,6 +16,8 @@ from datetime import time
 from pathlib import Path
 from typing import Any
 
+from ashare_pilot.position_tier import POSITION_TIERS
+
 
 REGIMES = {"panic", "weak", "neutral", "strong-sector"}
 DIRECTIONS = {"看多", "偏多", "中性", "看空"}
@@ -27,7 +29,7 @@ CHASE_POLICIES = {"NO_CHASE", "MA5_ONLY", "OPEN_PROBE_OK"}
 ENTRY_WINDOWS = {"OPEN", "MORNING_DIP", "TAIL", "ANY"}
 STOP_POLICIES = {"ATR_1.5", "ATR_2.0", "PCT_R35", "—"}
 HORIZONS = {"T+0", "T+1", "SWING", "中期", "—"}
-STRATEGY_SCHEMAS = {"daily_strategy.v1", "daily_strategy.v2"}
+STRATEGY_SCHEMAS = {"daily_strategy.v3"}
 PREOPEN_DECISIONS = {"CONDITIONAL", "WATCH_ONLY"}
 ENTRY_SETUPS = {"LIMIT_UP_CONT", "MOMENTUM", "FIRST_BAR_OR_PULLBACK", "PULLBACK", "DEFENSIVE", "WATCH_ONLY"}
 REGIME_STOCK_LIMITS = {"strong-sector": 10, "neutral": 10, "weak": 7, "panic": 5}
@@ -55,7 +57,7 @@ def validate_preopen_plan(stock: dict[str, Any], i: int, errors: list[str]) -> N
     base = f"stocks[{i}].preopen_plan"
     plan = stock.get("preopen_plan")
     if not isinstance(plan, dict):
-        err(errors, base, "must be object for daily_strategy.v2")
+        err(errors, base, "must be object for daily_strategy.v3")
         return
     enum(errors, plan.get("decision"), f"{base}.decision", PREOPEN_DECISIONS)
     enum(errors, plan.get("entry_setup"), f"{base}.entry_setup", ENTRY_SETUPS)
@@ -93,7 +95,7 @@ def validate_t1_plan(stock: dict[str, Any], i: int, errors: list[str]) -> None:
     base = f"stocks[{i}].t1_risk_plan"
     plan = stock.get("t1_risk_plan")
     if not isinstance(plan, dict):
-        err(errors, base, "must be object for daily_strategy.v2")
+        err(errors, base, "must be object for daily_strategy.v3")
         return
     for key in ("overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action"):
         if not isinstance(plan.get(key), str) or not plan.get(key):
@@ -108,8 +110,9 @@ def validate_stock(stock: dict[str, Any], i: int, errors: list[str], schema: str
     required = [
         "code", "name", "sector", "direction", "rating",
         "entry_profile", "anchor", "entry_trigger", "no_buy_condition",
-        "position_budget", "horizon", "profile",
+        "horizon", "profile",
     ]
+    required.append("position_tier")
     for key in required:
         if key not in stock:
             err(errors, f"{base}.{key}", "missing required field")
@@ -128,12 +131,9 @@ def validate_stock(stock: dict[str, Any], i: int, errors: list[str], schema: str
     enum(errors, stock.get("anchor"), f"{base}.anchor", ANCHORS)
     enum(errors, stock.get("horizon"), f"{base}.horizon", HORIZONS)
 
-    budget = stock.get("position_budget")
-    if budget is not None:
-        if not is_number(budget):
-            err(errors, f"{base}.position_budget", "must be number or null")
-        elif not 0 <= budget <= 1:
-            err(errors, f"{base}.position_budget", "must be between 0 and 1")
+    enum(errors, stock.get("position_tier"), f"{base}.position_tier", POSITION_TIERS)
+    if "position_budget" in stock:
+        err(errors, f"{base}.position_budget", "forbidden; use qualitative position_tier")
 
     rules = stock.get("rules_applied", [])
     if rules is not None and not (isinstance(rules, list) and all(isinstance(x, str) for x in rules)):
@@ -159,26 +159,31 @@ def validate_stock(stock: dict[str, Any], i: int, errors: list[str], schema: str
         optional_number(errors, profile.get(key), f"{base}.profile.{key}")
 
     if "position_budget" in profile:
-        optional_number(errors, profile.get("position_budget"), f"{base}.profile.position_budget")
-    if schema == "daily_strategy.v2":
-        reasoning = stock.get("reasoning")
-        if not isinstance(reasoning, dict):
-            err(errors, f"{base}.reasoning", "must be object for daily_strategy.v2")
-        elif not isinstance(reasoning.get("source_basis"), str) or not reasoning.get("source_basis", "").strip():
-            err(errors, f"{base}.reasoning.source_basis", "must be non-empty for every selected stock")
-        if stock.get("horizon") != "T+1":
-            err(errors, f"{base}.horizon", "daily_strategy.v2 A-share new positions must use T+1")
-        validate_preopen_plan(stock, i, errors)
-        validate_t1_plan(stock, i, errors)
+        err(errors, f"{base}.profile.position_budget", "forbidden")
+    if "position_tier" in profile:
+        err(errors, f"{base}.profile.position_tier", "position tier belongs only to the selected stock")
+    reasoning = stock.get("reasoning")
+    if not isinstance(reasoning, dict):
+        err(errors, f"{base}.reasoning", "must be object for daily_strategy.v3")
+    elif not isinstance(reasoning.get("source_basis"), str) or not reasoning.get("source_basis", "").strip():
+        err(errors, f"{base}.reasoning.source_basis", "must be non-empty for every selected stock")
+    if stock.get("horizon") != "T+1":
+        err(errors, f"{base}.horizon", "daily_strategy.v3 A-share new positions must use T+1")
+    validate_preopen_plan(stock, i, errors)
+    plan = stock.get("preopen_plan")
+    if isinstance(plan, dict):
+        if stock.get("position_tier") == "WATCH_ONLY" and plan.get("decision") != "WATCH_ONLY":
+            err(errors, f"{base}.preopen_plan.decision", "WATCH_ONLY position tier requires WATCH_ONLY decision")
+        if stock.get("position_tier") in {"LIGHT", "STANDARD"} and plan.get("decision") != "CONDITIONAL":
+            err(errors, f"{base}.preopen_plan.decision", "actionable position tier requires CONDITIONAL decision")
+    validate_t1_plan(stock, i, errors)
 
 
-def validate(doc: dict[str, Any], require_v2: bool = False) -> list[str]:
+def validate(doc: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     schema = doc.get("schema_version")
     if schema not in STRATEGY_SCHEMAS:
         err(errors, "schema_version", f"must be one of {sorted(STRATEGY_SCHEMAS)}")
-    if require_v2 and schema != "daily_strategy.v2":
-        err(errors, "schema_version", "daily_strategy.v2 required")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         err(errors, "date", "must be YYYY-MM-DD")
 
@@ -186,9 +191,9 @@ def validate(doc: dict[str, Any], require_v2: bool = False) -> list[str]:
     if not isinstance(market, dict):
         err(errors, "market", "must be object")
     else:
-        regime = market.get("regime_prior") if schema == "daily_strategy.v2" else market.get("regime_hint")
-        enum(errors, regime, f"market.{'regime_prior' if schema == 'daily_strategy.v2' else 'regime_hint'}", REGIMES)
-        if schema == "daily_strategy.v2" and market.get("requires_open_confirmation") is not True:
+        regime = market.get("regime_prior")
+        enum(errors, regime, "market.regime_prior", REGIMES)
+        if market.get("requires_open_confirmation") is not True:
             err(errors, "market.requires_open_confirmation", "must be true")
 
     stocks = doc.get("stocks")
@@ -208,29 +213,39 @@ def validate(doc: dict[str, Any], require_v2: bool = False) -> list[str]:
                     err(errors, f"stocks[{i}].code", f"duplicate code {code}")
                 seen.add(code)
             validate_stock(stock, i, errors, schema if isinstance(schema, str) else "")
-    if schema == "daily_strategy.v2":
+    if schema == "daily_strategy.v3":
         limits = doc.get("portfolio_limits")
         if not isinstance(limits, dict):
             err(errors, "portfolio_limits", "must be object")
         else:
-            for key in ("max_new_exposure", "max_theme_exposure", "max_single_stock"):
+            forbidden = {"max_new_exposure", "max_theme_exposure", "max_single_stock"} & set(limits)
+            if forbidden:
+                err(errors, "portfolio_limits", f"numeric exposure limits forbidden in v3: {sorted(forbidden)}")
+            for key in ("max_new_positions", "max_theme_positions", "max_correlated_names"):
                 value = limits.get(key)
-                if not is_number(value) or not 0 <= value <= 1:
-                    err(errors, f"portfolio_limits.{key}", "must be number in [0, 1]")
+                if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                    err(errors, f"portfolio_limits.{key}", "must be positive integer")
+            total = limits.get("max_new_positions")
+            theme = limits.get("max_theme_positions")
             correlated = limits.get("max_correlated_names")
-            if not isinstance(correlated, int) or isinstance(correlated, bool) or correlated < 1:
-                err(errors, "portfolio_limits.max_correlated_names", "must be positive integer")
-            total = limits.get("max_new_exposure")
-            theme = limits.get("max_theme_exposure")
-            single = limits.get("max_single_stock")
-            if all(is_number(value) for value in (total, theme, single)):
+            if all(isinstance(value, int) and not isinstance(value, bool) for value in (total, theme, correlated)):
                 if theme > total:
-                    err(errors, "portfolio_limits.max_theme_exposure", "must not exceed max_new_exposure")
-                if single > theme or single > total:
-                    err(errors, "portfolio_limits.max_single_stock", "must not exceed theme or total exposure")
-                for i, stock in enumerate(stocks if isinstance(stocks, list) else []):
-                    if isinstance(stock, dict) and is_number(stock.get("position_budget")) and stock["position_budget"] > single:
-                        err(errors, f"stocks[{i}].position_budget", "must not exceed portfolio_limits.max_single_stock")
+                    err(errors, "portfolio_limits.max_theme_positions", "must not exceed max_new_positions")
+                if correlated > theme:
+                    err(errors, "portfolio_limits.max_correlated_names", "must not exceed max_theme_positions")
+                actionable = [
+                    stock for stock in (stocks if isinstance(stocks, list) else [])
+                    if isinstance(stock, dict) and stock.get("position_tier") != "WATCH_ONLY"
+                ]
+                if len(actionable) > total:
+                    err(errors, "stocks", "actionable position tiers exceed max_new_positions")
+                by_theme: dict[str, int] = {}
+                for stock in actionable:
+                    sector = str(stock.get("sector") or "")
+                    by_theme[sector] = by_theme.get(sector, 0) + 1
+                for sector, count in by_theme.items():
+                    if count > theme:
+                        err(errors, f"stocks[{sector}]", "actionable position tiers exceed max_theme_positions")
         regime = market.get("regime_prior") if isinstance(market, dict) else None
         stock_limit = REGIME_STOCK_LIMITS.get(regime)
         if isinstance(stocks, list) and stock_limit is not None and len(stocks) > stock_limit:
@@ -247,7 +262,7 @@ def validate(doc: dict[str, Any], require_v2: bool = False) -> list[str]:
                 err(errors, f"stocks[{i}].entry_profile", "暂不参与 must be placed in observation_pool, not stocks")
         observation = doc.get("observation_pool")
         if not isinstance(observation, list):
-            err(errors, "observation_pool", "must be list for daily_strategy.v2")
+            err(errors, "observation_pool", f"must be list for {schema}")
         else:
             observation_seen: set[str] = set()
             for i, item in enumerate(observation):
@@ -280,7 +295,6 @@ def main(argv=None) -> None:
     parser = argparse.ArgumentParser(description="Validate strategy.json")
     parser.add_argument("path", help="Path to strategy.json")
     parser.add_argument("--pretty", action="store_true", help="Print normalized JSON on success")
-    parser.add_argument("--require-v2", action="store_true", help="Reject legacy daily_strategy.v1")
     args = parser.parse_args(argv)
 
     path = Path(args.path)
@@ -291,7 +305,7 @@ def main(argv=None) -> None:
         print("[ERROR] root must be object", file=sys.stderr)
         sys.exit(1)
 
-    errors = validate(doc, require_v2=args.require_v2)
+    errors = validate(doc)
     if errors:
         print(f"[ERROR] {path} failed validation ({len(errors)} errors):", file=sys.stderr)
         for item in errors:

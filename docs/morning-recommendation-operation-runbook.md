@@ -215,14 +215,14 @@ market_confirmation.global_action
 
 ```text
 final_class
-final_position_max
+final_position_tier
 trigger
 t1_controls
 ```
 
 | 类别 | 操作 |
 |---|---|
-| A | 条件已确认，可在仓位上限内人工执行 |
+| A | 条件已确认，可按定性仓位档位人工判断 |
 | B | 等触发，不提前买入 |
 | C | 只观察，不主动买 |
 | D | 当天放弃，后续不得升级 |
@@ -271,7 +271,7 @@ uv run --frozen ashare-pilot operations decision validate \
 | 09:35→09:40 | 操作 |
 |---|---|
 | B→A | 第二根K线确认，可以考虑执行 |
-| A→A | 信号持续，维持机器仓位上限 |
+| A→A | 信号持续，维持机器仓位档位 |
 | A→B/C/D | 未成交则取消；已成交标记T+1风险 |
 | B→C/D | 等待失败，停止执行 |
 | C→A | 默认禁止 |
@@ -290,29 +290,30 @@ uv run --frozen ashare-pilot operations decision validate \
 3. `global_action`不是`WAIT`或`NO_NEW_BUY`；
 4. 当前价格没有在决策生成后快速偏离；
 5. 没有个人已有持仓或风险冲突；
-6. 买入仓位不超过`final_position_max`；
+6. 不得把 `final_position_tier` 人工升级；
 7. 能接受买入后当天无法卖出的T+1风险。
 
 ### 8.1 仓位约束
 
-必须满足：
+档位必须单调不升级：
 
 ```text
-final_position_max
-<= signal_adjusted_max
-<= market_adjusted_max
-<= morning_budget
+final
+<= portfolio_adjusted
+<= signal_adjusted
+<= market_adjusted
+<= morning
 ```
 
 例如：
 
 ```text
-morning_budget       = 2.0%
-market_adjusted_max  = 1.0%
-final_position_max   = 1.0%
+morning              = STANDARD
+market_adjusted      = LIGHT
+final                = LIGHT
 ```
 
-实际最多买账户资金的1%，不能人工恢复成盘前2%。
+这只表达从标准仓降为轻仓的定性意图，不代表账户百分比、金额或手数。
 
 ### 8.2 多股票选择
 
@@ -320,7 +321,7 @@ final_position_max   = 1.0%
 - 优先主题状态为`CONFIRMED`的标的；
 - 优先09:35至09:40保持或升级的标的；
 - 优先不远离锚点、没有高开回落的标的；
-- 遵守strategy中的总仓、单主题和单股预算。
+- 遵守 strategy 中总参与只数、单主题只数和相关标的数量限制。
 
 ---
 
@@ -430,14 +431,14 @@ execution_action = OBSERVE_ONLY
 ```text
 [ ] 09:15 检查环境与自动调度
 [ ] 09:20 运行 daily-market-analysis
-[ ] 09:29前校验 news、mapper、strategy v2
+[ ] 09:29前校验 news、mapper、strategy v3
 [ ] 09:30-09:35 不直接买入
 [ ] 09:35:05 运行第一次 operation confirmation
 [ ] 检查 global_action
 [ ] 只记录A类，不执行B/C/D
 [ ] 09:40:05 使用09:35快照运行第二次确认
 [ ] 只执行验证通过的A类
-[ ] 仓位不超过 final_position_max
+[ ] 不人工升级 final_position_tier
 [ ] 记录实际成交
 [ ] 成交后按T+1管理，不做当天卖出止损
 [ ] 10:00后停止开盘追涨

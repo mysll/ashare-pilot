@@ -15,7 +15,7 @@ from ashare_pilot.market_data.runtime import workspace_path
 
 from .trade_profile import compute_trade_profile
 
-SCHEMA = "strategy_llm_input.tmp.v1"
+SCHEMA = "strategy_llm_input.tmp.v2"
 SCORE_KEYS = ("composite", "tech", "theme_heat", "news_impact", "auction", "money_flow")
 PATTERN_KEYS = ("heat", "leader", "auction", "rotation", "volume")
 NEWS_RE = re.compile(r"^news#(\d+)$")

@@ -104,9 +104,9 @@ The script:
 - fetches today's 5-minute K-line for each strategy stock
 - discards any 5-minute bucket that is not complete at snapshot time
 - separates the fixed 09:30-09:35 `first_bar` from `latest_completed_bar`
-- computes mechanical execution signals, class caps, position caps, and T+1 controls
+- computes mechanical execution signals, class caps, qualitative position tiers, and T+1 controls
 - applies aggregate `portfolio_limits` after all stock/theme/transition decisions:
-  single-stock cap, theme exposure, correlated-name count, then total new exposure
+  total-position count, theme-position count, then correlated-name count
 
 The runner validates the generated current snapshot and decision automatically.
 For manual diagnostics, validate the current projections with:
@@ -149,17 +149,16 @@ predict/{YYYY-MM-DD}/strategy.json
 predict/{YYYY-MM-DD}/mapper.json
 ```
 
-Use `operation_decision.json` as the source for final class and position. The
+Use `operation_decision.json` as the source for final class and qualitative position tier. The
 snapshot provides supporting signals only. The HTML board must not invent a class or
-position that differs from the validated decision contract.
+position tier that differs from the validated decision contract.
 
 Before considering any A row, require
 `delivery_confirmation.execution_action=EVALUATE`. Both
-`WAIT_SECOND_CONFIRMATION` and `OBSERVE_ONLY` require zero new exposure.
+`WAIT_SECOND_CONFIRMATION` and `OBSERVE_ONLY` require `WATCH_ONLY`.
 
-For `daily_strategy.v2`, stock-specific `t1_risk_plan` fields are preserved
-verbatim into `t1_controls.t1_exit_plan` with `source=daily_strategy.v2`.
-Generic T+1 text is allowed only for projected historical v1 strategies.
+For `daily_strategy.v3`, stock-specific `t1_risk_plan` fields are preserved
+verbatim into `t1_controls.t1_exit_plan` with `source=daily_strategy.v3`.
 
 The snapshot also contains `theme_confirmations` derived from the bounded daily
 strategy pool and per-stock `transition` metadata. `FAILED`/`FADING` themes cap
@@ -184,7 +183,7 @@ Style contract (must match renderer): **Bloomberg Terminal × 投委会 Memo × 
 - Quant board tables + A/B execution cards + C/D watch cards + theme radar + risk limits
 
 Prefer the deterministic renderer. LLM narrative is optional and must not diverge
-from `final_class` / `final_position_max` in the decision JSON.
+from `final_class` / `final_position_tier` in the decision JSON.
 
 ## Operation Classes
 
@@ -206,7 +205,7 @@ mechanical class, but MUST NOT upgrade above `max_allowed_class`.
 | global_action | Rule |
 |---|---|
 | `NORMAL` | A is mechanically possible |
-| `SELECTIVE` | A is possible only when stock confirmation passes; position is reduced |
+| `SELECTIVE` | A is possible only when stock confirmation passes; `STANDARD` is reduced to `LIGHT` |
 | `WAIT` | Every stock is capped at B |
 | `NO_NEW_BUY` | Every stock is capped at C/D; no new position |
 
@@ -244,7 +243,7 @@ Use A only when:
 - no `high_open_fade`
 - not hard-risk or data-warning
 - `decision_guardrails.max_allowed_class = A`
-- final position does not exceed `decision_guardrails.position.final_max`
+- final position tier equals `decision_guardrails.position_tier.final`
 
 Prefer A when also:
 - `above_ma5 = true`
@@ -292,9 +291,9 @@ Primary deliverable: `operation/{date}/operation_guide.html` via
 HTML sections (fixed by renderer):
 
 1. **Topbar** — 盘中操作总控台 · date/slot/generated time
-2. **Cockpit** — market regime + indices · portfolio exposure/A-B-C-D counts · class mix
-3. **投委会纪要** — 5-bullet IC memo (call, exposure, A list, B list, discipline)
-4. **一句话操作总表** — class/code/name/sector/morning/price/position/trigger/reason
+2. **Cockpit** — market regime + indices · actionable-name/A-B-C-D counts · class mix
+3. **投委会纪要** — 5-bullet IC memo (call, qualitative tier, A list, B list, discipline)
+4. **一句话操作总表** — class/code/name/sector/morning/price/position tier/trigger/reason
 5. **A/B 执行卡片** — 30s cards: 早盘意图 / 当前信号 flags / 操作 / 触发或失效 / T+1
 6. **C/D 观察与回避** — short reason cards only
 7. **主题确认雷达** — theme_state / advance / VWAP ratios
@@ -320,10 +319,10 @@ convention).
 - Do not output exact order prices unless they already exist as MA/ATR anchors in mapper/strategy.
 - Do not recommend adding to a stock with `D`.
 - If data is missing, downgrade; never upgrade based on guesswork.
-- Never exceed the morning `position_budget` or any mechanical position cap.
+- Never upgrade the morning `position_tier` or any mechanically reduced tier.
 - Never exceed `portfolio_allocation.limits`; final allocation order is
   deterministic by rating, confirmed theme, sustained confirmation, requested
-  budget, then stock code.
+  qualitative tier, then stock code.
 - For a new A-share position, never write "跌破即卖出" as a same-day action.
   Express the level as a pre-entry cancellation condition; after execution it
   becomes a T+1 risk alert and next-day exit-plan input.

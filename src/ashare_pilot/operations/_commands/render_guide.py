@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ashare_pilot.position_tier import POSITION_TIER_LABELS
+
 from ashare_pilot.market_data.runtime import workspace_path
 
 def workspace_root() -> Path:
@@ -257,7 +259,7 @@ def merge_rows(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> lis
                 "final_class": item.get("final_class"),
                 "mechanical_class": item.get("mechanical_class"),
                 "max_allowed_class": item.get("max_allowed_class"),
-                "final_position_max": item.get("final_position_max"),
+                "final_position_tier": item.get("final_position_tier"),
                 "trigger": item.get("trigger"),
                 "reasons": reasons,
                 "hard_blocks": item.get("hard_blocks") or [],
@@ -268,7 +270,7 @@ def merge_rows(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> lis
                 "anchor": strategy.get("anchor"),
                 "entry_trigger": strategy.get("entry_trigger") or strategy.get("trigger"),
                 "no_buy": strategy.get("no_buy_condition") or strategy.get("no_buy"),
-                "morning_budget": strategy.get("position_budget") or strategy.get("position"),
+                "morning_position_tier": strategy.get("position_tier"),
                 "price": quote.get("price"),
                 "percent": quote.get("percent"),
                 "vwap": quote.get("vwap_est"),
@@ -349,7 +351,7 @@ def overview_rows(rows: list[dict[str, Any]]) -> str:
               <td>{esc(row.get('sector'))}</td>
               <td>{esc(row.get('direction'))} · {esc(row.get('rating'))}</td>
               <td class="mono">{esc(number(row.get('price'), 2))} <span class="{pct_tone(row.get('percent'))}">{esc(pct(row.get('percent')))}</span></td>
-              <td class="mono">{esc(money_pct(row.get('final_position_max')))}</td>
+              <td>{esc(POSITION_TIER_LABELS.get(row.get('final_position_tier'), row.get('final_position_tier')))}</td>
               <td class="clamp" title="{esc(row.get('trigger'))}">{esc(row.get('trigger'))}</td>
               <td class="clamp muted" title="{esc(reason)}">{esc(reason)}</td>
             </tr>"""
@@ -378,11 +380,11 @@ def execution_cards(rows: list[dict[str, Any]], classes: set[str]) -> str:
             ]
         )
         if cls == "A":
-            action = f"现在可参与 · 仓位上限 {money_pct(row.get('final_position_max'))}"
+            action = f"现在可参与 · {POSITION_TIER_LABELS.get(row.get('final_position_tier'), row.get('final_position_tier'))}"
             focus_label, focus_value = "买入前失效", row.get("pre_entry")
             secondary_label, secondary_value = "T+1退出", f"高开: {row.get('gap_up')} / 平开: {row.get('flat_open')} / 低开: {row.get('gap_down')}"
         elif cls == "B":
-            action = f"等确认后参与 · 触发前仓位 0%"
+            action = "等确认后参与 · 当前仅观察"
             focus_label, focus_value = "触发条件", row.get("trigger")
             secondary_label, secondary_value = "不买条件", row.get("no_buy")
         else:
@@ -399,8 +401,8 @@ def execution_cards(rows: list[dict[str, Any]], classes: set[str]) -> str:
                 </div>
                 <div class="card-side">
                   <span class="badge {class_css(cls)}">{esc(cls)}</span>
-                  <b>{esc(money_pct(row.get('final_position_max')))}</b>
-                  <small>仓位上限</small>
+                  <b>{esc(POSITION_TIER_LABELS.get(row.get('final_position_tier'), row.get('final_position_tier')))}</b>
+                  <small>仓位档位</small>
                 </div>
               </header>
               <div class="card-tags">
@@ -468,8 +470,8 @@ def risk_list(decision: dict[str, Any], snapshot: dict[str, Any] | None, counts:
     items = [
         f"全局动作 {action_label(decision.get('global_action'))}（{decision.get('global_action')}）",
         f"交付状态 {delivery_label(delivery.get('execution_action'))}",
-        f"今日可买总仓位 {money_pct(portfolio.get('actionable_exposure'))} / 上限 {money_pct(limits.get('max_new_exposure'))}",
-        f"单票上限 {money_pct(limits.get('max_single_stock'))} · 单主题上限 {money_pct(limits.get('max_theme_exposure'))}",
+        f"今日可参与 {portfolio.get('actionable_positions') or 0} 只 / 上限 {limits.get('max_new_positions') or 0} 只",
+        f"单主题最多 {limits.get('max_theme_positions') or 0} 只 · 同主题相关标的最多 {limits.get('max_correlated_names') or 0} 只",
         f"分类分布 A{counts['A']} / B{counts['B']} / C{counts['C']} / D{counts['D']}",
     ]
     for reason in market.get("reasons") or []:
@@ -488,7 +490,7 @@ def memo_bullets(decision: dict[str, Any], rows: list[dict[str, Any]], counts: d
     b_names = [f"{x['name']}" for x in rows if x.get("final_class") == "B"][:4]
     bullets = [
         f"投委会结论：{action_label(decision.get('global_action'))}；实时结构 {regime_label(market.get('regime_confirmed') or market.get('regime_live'))}。",
-        f"仓位决议：今日可买总仓位 {money_pct((decision.get('portfolio') or {}).get('actionable_exposure'))}（A类仓位合计）；A类 {counts['A']} 只，B类 {counts['B']} 只。",
+        f"仓位决议：今日可参与 {(decision.get('portfolio') or {}).get('actionable_positions') or 0} 只；A类 {counts['A']} 只，B类 {counts['B']} 只；仓位仅分定性档位。",
     ]
     if a_names:
         bullets.append(f"现在可买：{' / '.join(a_names)}。")
@@ -498,7 +500,7 @@ def memo_bullets(decision: dict[str, Any], rows: list[dict[str, Any]], counts: d
         bullets.append(f"等确认再买：{' / '.join(b_names)}；触发前不要下单。")
     else:
         bullets.append("等确认再买：无。")
-    bullets.append("纪律：类别与仓位以 decision 为准，不得上调；A 股当日买进不能卖，失效只记 T+1 风险。")
+    bullets.append("纪律：类别与定性仓位档位以 decision 为准，不得上调；A 股当日买进不能卖，失效只记 T+1 风险。")
     return "".join(f"<li>{esc(x)}</li>" for x in bullets)
 
 
@@ -513,7 +515,7 @@ def render(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> str:
     rows = merge_rows(decision, snapshot)
     counts = {k: sum(1 for x in rows if x.get("final_class") == k) for k in ("A", "B", "C", "D")}
     total = len(rows)
-    exposure = portfolio.get("actionable_exposure") or 0
+    actionable_positions = portfolio.get("actionable_positions") or 0
     regime = regime_label(market.get("regime_confirmed") or market.get("regime_live"))
     action = decision.get("global_action")
     subtitle = (
@@ -576,7 +578,7 @@ def render(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> str:
     </article>
     <article class="card cockpit-card">
       <div class="label">执行决议 / Portfolio Call</div>
-      <div class="big-number">{esc(money_pct(exposure))}<small> 今日可买总仓位</small></div>
+      <div class="big-number">{esc(actionable_positions)}<small> 今日可参与只数</small></div>
       <div class="kpi-grid">
         <div><small>A 可参与</small><b>{counts['A']} 只</b></div>
         <div><small>B 等确认</small><b>{counts['B']} 只</b></div>
@@ -587,7 +589,7 @@ def render(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> str:
     <article class="card cockpit-card">
       <div class="label">分类分布 / Class Mix</div>
       {render_class_mix(counts, total)}
-      <p class="market-note">交付：{esc(delivery_label(delivery.get('execution_action')))} · 单票上限 {esc(money_pct(limits.get('max_single_stock')))}</p>
+      <p class="market-note">交付：{esc(delivery_label(delivery.get('execution_action')))} · 仓位仅使用定性档位</p>
     </article>
   </section>
 
@@ -596,10 +598,10 @@ def render(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> str:
     <ol>{memo_bullets(decision, rows, counts)}</ol>
   </section>
 
-  <div class="section-head"><h2>一句话操作总表（{total}只）</h2><p>以 decision 合同 final_class / final_position_max 为准</p></div>
+  <div class="section-head"><h2>一句话操作总表（{total}只）</h2><p>以 decision 合同 final_class / final_position_tier 为准</p></div>
   <section class="panel"><div class="table-wrap"><table>
     <thead><tr>
-      <th>类别</th><th>代码</th><th>名称</th><th>板块</th><th>早盘</th><th>现价</th><th>仓位上限</th><th>操作/触发</th><th>原因</th>
+      <th>类别</th><th>代码</th><th>名称</th><th>板块</th><th>早盘</th><th>现价</th><th>仓位档位</th><th>操作/触发</th><th>原因</th>
     </tr></thead>
     <tbody>{overview_rows(rows)}</tbody>
   </table></div></section>
@@ -625,14 +627,14 @@ def render(decision: dict[str, Any], snapshot: dict[str, Any] | None) -> str:
     <article class="card risk-box">
       <h3>组合限额</h3>
       <div class="risk-kpis">
-        <div><small>今日新开仓上限</small><b>{esc(money_pct(limits.get('max_new_exposure')))}</b></div>
-        <div><small>单主题仓位上限</small><b>{esc(money_pct(limits.get('max_theme_exposure')))}</b></div>
-        <div><small>单只股票上限</small><b>{esc(money_pct(limits.get('max_single_stock')))}</b></div>
+        <div><small>今日最多参与</small><b>{esc(limits.get('max_new_positions'))} 只</b></div>
+        <div><small>单主题最多参与</small><b>{esc(limits.get('max_theme_positions'))} 只</b></div>
+        <div><small>仓位表达</small><b>仅观察 / 轻仓 / 标准仓</b></div>
         <div><small>同主题最多只数</small><b>{esc(limits.get('max_correlated_names'))}</b></div>
       </div>
       <ul>
         <li>A 股新开仓当日不可卖出；失效条件仅用于买入前撤单与 T+1 风险标记。</li>
-        <li>禁止上调 final_class 超过 max_allowed_class；禁止超过 final_position_max。</li>
+        <li>禁止上调 final_class 超过 max_allowed_class；仓位档位仅表达定性意图，不代表百分比或手数。</li>
         <li>本页为中文阅读层，不构成投资建议，不下单。</li>
       </ul>
     </article>
@@ -693,8 +695,8 @@ def main(argv=None) -> int:
     if not isinstance(decision, dict):
         print(f"[ERROR] missing or invalid decision: {decision_path}", file=sys.stderr)
         return 1
-    if decision.get("schema_version") != "intraday_operation_decision.v1":
-        print("[ERROR] decision schema must be intraday_operation_decision.v1", file=sys.stderr)
+    if decision.get("schema_version") != "intraday_operation_decision.v2":
+        print("[ERROR] decision schema must be intraday_operation_decision.v2", file=sys.stderr)
         return 1
     if decision.get("date") != args.date:
         print(f"[ERROR] decision date must be {args.date}", file=sys.stderr)

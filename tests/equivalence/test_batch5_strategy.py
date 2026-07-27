@@ -40,52 +40,18 @@ def load_old(name: str, script: Path, search_dir: Path):
         sys.path.remove(str(search_dir))
 
 
-def test_daily_compact_draft_and_html_match_legacy(tmp_path: Path) -> None:
-    old_llm = load_old(
-        "legacy_daily_llm_input_batch5",
-        DAILY_SCRIPTS / "build_strategy_llm_input.py",
-        DAILY_SCRIPTS,
-    )
-    old_finalize = load_old(
-        "legacy_daily_finalize_batch5",
-        DAILY_SCRIPTS / "finalize_daily_strategy.py",
-        DAILY_SCRIPTS,
-    )
-    old_report = load_old(
-        "legacy_daily_report_batch5",
-        DAILY_SCRIPTS / "render_daily_report_html.py",
-        DAILY_SCRIPTS,
-    )
+def test_daily_compact_uses_qualitative_position_tiers(tmp_path: Path) -> None:
     fixture = json.loads((FIXTURES / "2026-07-13.json").read_text(encoding="utf-8"))
-
-    old_compact = old_llm.build_input(
-        fixture["view"], fixture["theme_stocks"], fixture["pool"], fixture["news"], fixture["indices"]
-    )
     new_compact = llm_input.build_input(
         fixture["view"], fixture["theme_stocks"], fixture["pool"], fixture["news"], fixture["indices"]
     )
-    assert new_compact == old_compact
-
-    old_strategy = old_finalize.materialize(copy.deepcopy(fixture["draft"]), old_compact)
-    new_strategy = finalize.materialize(copy.deepcopy(fixture["draft"]), new_compact)
-    assert new_strategy == old_strategy
-
-    news_path = tmp_path / "news.json"
-    news_path.write_text(json.dumps(fixture["news"], ensure_ascii=False), encoding="utf-8")
-    mapper = {"observation_pool": [], "excluded_stocks": []}
-    assert daily_report.render_report(
-        "2026-07-13", new_strategy, fixture["view"], mapper, None, news_path
-    ) == old_report.render_report(
-        "2026-07-13", old_strategy, fixture["view"], mapper, None, news_path
-    )
+    assert new_compact["schema_version"] == "strategy_llm_input.tmp.v2"
+    assert all(row["profile_base"]["position_tier"] in {"WATCH_ONLY", "LIGHT", "STANDARD"} for row in new_compact["candidates"])
+    assert all("ref_ma10" not in row["profile_base"] for row in new_compact["candidates"])
+    assert "position_budget" not in json.dumps(new_compact)
 
 
-def test_trade_profile_decision_tree_matches_legacy() -> None:
-    old = load_old(
-        "legacy_trade_profile_batch5",
-        DAILY_SCRIPTS / "compute_trade_profile.py",
-        DAILY_SCRIPTS,
-    )
+def test_trade_profile_decision_tree_uses_qualitative_tier() -> None:
     raw = {
         "price": {"value": 10.2}, "ma20": {"value": 9.8}, "ma5": {"value": 10.0},
         "atr": {"value": 0.4}, "high20": {"value": 10.8},
@@ -96,7 +62,9 @@ def test_trade_profile_decision_tree_matches_legacy() -> None:
         mainline=True, sector_heat=80, kcb_pct=2.5, sector_pct=3.0,
     )
 
-    assert trade_profile.compute_trade_profile(**kwargs) == old.compute_trade_profile(**kwargs)
+    profile = trade_profile.compute_trade_profile(**kwargs)
+    assert profile["position_tier"] == "STANDARD"
+    assert "position_budget" not in profile
 
 
 def test_overnight_scoring_matches_legacy() -> None:

@@ -27,10 +27,10 @@ class StrategyShadowTests(unittest.TestCase):
         self.assertFalse(compare(strategy(), strategy(direction="看空"))["passed"])
         self.assertFalse(compare(strategy(), strategy(regime="weak"))["passed"])
 
-    def test_rating_budget_profile_anchor_and_rules_are_locked(self):
+    def test_rating_tier_profile_anchor_and_rules_are_locked(self):
         before = strategy(("sh600001",))
         before["stocks"][0].update({
-            "rating": "5★", "position_budget": 0.02, "entry_profile": "回调布局",
+            "rating": "5★", "position_tier": "STANDARD", "entry_profile": "回调布局",
             "anchor": "MA20", "rules_applied": ["R70"], "profile": {"playbook": "PULLBACK"},
         })
         after = json.loads(json.dumps(before, ensure_ascii=False))
@@ -52,7 +52,7 @@ class StrategyShadowTests(unittest.TestCase):
         before["stocks"][0]["profile"] = {
             "playbook": "PULLBACK", "preferred_anchor": "MA20", "chase_policy": "NO_CHASE",
             "entry_window": "ANY", "stop_policy": "ATR_1.5", "time_horizon": "T+1",
-            "position_budget": 0.02, "ref_ma20": 10.0,
+            "ref_ma20": 10.0,
         }
         after = json.loads(json.dumps(before, ensure_ascii=False))
         after["stocks"][0]["profile"]["ref_ma20"] = 10.01

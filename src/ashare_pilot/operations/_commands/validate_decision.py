@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate intraday_operation_decision.v1 artifacts."""
+"""Validate intraday_operation_decision.v2 artifacts."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.operations.mechanical_classification import CLASS_RANK
+from ashare_pilot.position_tier import POSITION_TIERS
 
 
 def resolve_reference(value: str, reference_base: Path | None) -> Path:
@@ -25,7 +26,7 @@ def validate(
     require_references: bool = False,
 ) -> list[str]:
     errors: list[str] = []
-    if doc.get("schema_version") != "intraday_operation_decision.v1":
+    if doc.get("schema_version") != "intraday_operation_decision.v2":
         errors.append("schema_version: invalid")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         errors.append("date: invalid")
@@ -52,7 +53,7 @@ def validate(
         errors.append("stocks: must be non-empty list")
         return errors
     seen: set[str] = set()
-    total = 0.0
+    total = 0
     for index, stock in enumerate(stocks):
         base = f"stocks[{index}]"
         code = stock.get("code") if isinstance(stock, dict) else None
@@ -69,28 +70,29 @@ def validate(
             errors.append(f"{base}: invalid class")
         elif CLASS_RANK[final] > CLASS_RANK[maximum]:
             errors.append(f"{base}.final_class: exceeds max allowed class")
-        position = stock.get("final_position_max")
-        if not isinstance(position, (int, float)) or isinstance(position, bool) or not 0 <= position <= 1:
-            errors.append(f"{base}.final_position_max: invalid")
+        position = stock.get("final_position_tier")
+        if position not in POSITION_TIERS:
+            errors.append(f"{base}.final_position_tier: invalid")
         else:
-            total += position
-            if final != "A" and position != 0:
-                errors.append(f"{base}.final_position_max: non-A class must be zero")
+            if position != "WATCH_ONLY":
+                total += 1
+            if final != "A" and position != "WATCH_ONLY":
+                errors.append(f"{base}.final_position_tier: non-A class must be WATCH_ONLY")
         controls = stock.get("t1_controls")
         if not isinstance(controls, dict) or controls.get("same_day_sell_allowed") is not False:
             errors.append(f"{base}.t1_controls: same-day sell must be false")
     portfolio = doc.get("portfolio")
-    expected = round(total, 6)
-    if not isinstance(portfolio, dict) or portfolio.get("actionable_exposure") != expected:
-        errors.append("portfolio.actionable_exposure: does not match stock total")
+    expected = total
+    if not isinstance(portfolio, dict) or portfolio.get("actionable_positions") != expected:
+        errors.append("portfolio.actionable_positions: does not match stock total")
     elif isinstance(portfolio.get("allocation"), dict):
-        allocated = portfolio["allocation"].get("allocated_exposure")
-        if not isinstance(allocated, (int, float)) or abs(allocated - expected) > 1e-6:
-            errors.append("portfolio.allocation.allocated_exposure: does not match decision total")
-    if action == "NO_NEW_BUY" and expected != 0:
-        errors.append("portfolio.actionable_exposure: NO_NEW_BUY must be zero")
-    if isinstance(delivery, dict) and delivery.get("execution_action") in {"WAIT_SECOND_CONFIRMATION", "OBSERVE_ONLY"} and expected != 0:
-        errors.append("portfolio.actionable_exposure: delivery gate must be zero")
+        allocated = portfolio["allocation"].get("allocated_positions")
+        if allocated != expected:
+            errors.append("portfolio.allocation.allocated_positions: does not match decision total")
+    if action == "NO_NEW_BUY" and expected:
+        errors.append("portfolio.actionable_positions: NO_NEW_BUY must be zero")
+    if isinstance(delivery, dict) and delivery.get("execution_action") in {"WAIT_SECOND_CONFIRMATION", "OBSERVE_ONLY"} and expected:
+        errors.append("portfolio.actionable_positions: delivery gate must be zero")
     return errors
 
 

@@ -215,18 +215,18 @@ T+1 verification.json / entry confirmation backtest
 4. 需要怎样的板块状态；
 5. 需要怎样的个股确认；
 6. 什么情况下当天取消；
-7. 最大仓位是多少；
+7. 仓位意图是仅观察、轻仓还是标准仓；
 8. 当天买入后，T+1 如何处理。
 
 ### 5.2 `strategy.json` 契约升级
 
-建议 schema 从 `daily_strategy.v1` 升级为 `daily_strategy.v2`。迁移期间读取端可兼容 v1，但新运行只生成 v2。
+当前 schema 为 `daily_strategy.v3`，只接受定性仓位档位，不兼容旧数值仓位合同。
 
 顶层新增：
 
 ```json
 {
-  "schema_version": "daily_strategy.v2",
+  "schema_version": "daily_strategy.v3",
   "date": "2026-07-13",
   "generated_at": "2026-07-13T09:28:10+08:00",
   "run_id": "daily-20260713-092000-...",
@@ -238,9 +238,8 @@ T+1 verification.json / entry confirmation backtest
     "requires_open_confirmation": true
   },
   "portfolio_limits": {
-    "max_new_exposure": 0.10,
-    "max_theme_exposure": 0.04,
-    "max_single_stock": 0.02,
+    "max_new_positions": 7,
+    "max_theme_positions": 3,
     "max_correlated_names": 2
   },
   "stocks": []
@@ -254,7 +253,7 @@ T+1 verification.json / entry confirmation backtest
   "code": "sz000977",
   "direction": "看多",
   "rating": "4★",
-  "position_budget": 0.01,
+  "position_tier": "LIGHT",
   "horizon": "T+1",
   "preopen_plan": {
     "decision": "CONDITIONAL",
@@ -311,12 +310,13 @@ T+1 verification.json / entry confirmation backtest
 
 `validate_strategy_json.py` 应新增：
 
-- v2 schema 校验；
+- v3 schema 校验；
 - `run_id`、日期和生成时间；
 - `earliest_entry_time >= 09:35:05`，除非显式白名单；
 - 所有新仓 `horizon=T+1`；
-- `position_budget <= portfolio_limits.max_single_stock`；
-- 同主题预算和总预算不超限；
+- `position_tier` 只能为 `WATCH_ONLY|LIGHT|STANDARD`；
+- 禁止百分比、金额、股数、手数和数值 exposure 上限；
+- 同主题与全组合可参与只数不超限；
 - 每只股票存在 `pre_entry_invalidations`；
 - 每只股票存在 `t1_risk_plan`；
 - 禁止把 T 日卖出动作写进新仓计划；
@@ -519,11 +519,12 @@ A/B/C/D
   "llm_final_class": null,
   "class_reasons": ["volume_not_confirmed"],
   "hard_blocks": [],
-  "position": {
-    "morning_budget": 0.01,
-    "market_adjusted_max": 0.005,
-    "signal_adjusted_max": 0.0025,
-    "final_max": 0.0025
+  "position_tier": {
+    "morning": "STANDARD",
+    "market_adjusted": "LIGHT",
+    "signal_adjusted": "LIGHT",
+    "portfolio_adjusted": "LIGHT",
+    "final": "LIGHT"
   }
 }
 ```
@@ -536,13 +537,14 @@ A > B > C > D
 
 LLM 只能保持或向右降级，不能向左升级。
 
-仓位满足：
+档位只能保持或降低：
 
 ```text
-final_max
-<= signal_adjusted_max
-<= market_adjusted_max
-<= morning_budget
+final
+<= portfolio_adjusted
+<= signal_adjusted
+<= market_adjusted
+<= morning
 ```
 
 ### 6.8 09:35 与 09:40 状态迁移
@@ -613,21 +615,20 @@ operation/{date}/operation_decision_0940.json
 
 ```json
 {
-  "schema_version": "intraday_operation_decision.v1",
+  "schema_version": "intraday_operation_decision.v2",
   "date": "2026-07-13",
   "snapshot_slot": "09:40",
   "source_snapshot": "operation_snapshot_0940.json",
   "global_action": "SELECTIVE",
   "portfolio": {
-    "max_new_exposure": 0.03,
-    "actionable_exposure": 0.015
+    "actionable_positions": 1
   },
   "stocks": [
     {
       "code": "sz000977",
       "mechanical_class": "A",
       "final_class": "B",
-      "final_position_max": 0.005,
+      "final_position_tier": "LIGHT",
       "trigger": "下一根完整5分钟K放量站稳VWAP",
       "pre_entry_invalidation": "跌破开盘区间低点则取消",
       "t1_risk_level": "high"

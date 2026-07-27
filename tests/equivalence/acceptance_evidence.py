@@ -81,7 +81,7 @@ assign(
 )
 assign(
     "ST01 ST02 ST03 ST04 ST05 ST06 ST07 ST08 ST09 ST10",
-    "tests/equivalence/test_batch5_strategy.py::test_daily_compact_draft_and_html_match_legacy",
+    "tests/equivalence/test_batch5_strategy.py::test_daily_compact_uses_qualitative_position_tiers",
     "tests/unit/test_batch5_daily_contract.py::test_incomplete_selected_stock_fails_before_materialize",
 )
 assign(

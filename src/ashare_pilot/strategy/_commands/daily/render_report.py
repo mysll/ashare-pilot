@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ashare_pilot.position_tier import POSITION_TIER_LABELS
+
 from ashare_pilot.market_data.runtime import workspace_path
 
 
@@ -203,11 +205,8 @@ def render_direction_mix(stocks: list[dict[str, Any]]) -> str:
 
 
 def actionable_stocks(strategy: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return actual recommendations, excluding zero-budget watch-only reviews."""
-    stocks = [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
-    if any("position_budget" in stock for stock in stocks):
-        return [stock for stock in stocks if float(stock.get("position_budget") or 0) > 0]
-    return stocks
+    """Return every selected row; WATCH_ONLY remains visible as a qualitative tier."""
+    return [x for x in strategy.get("stocks", []) if isinstance(x, dict)]
 
 
 def super_prediction_codes(strategy: dict[str, Any]) -> set[str]:
@@ -252,10 +251,11 @@ def render_strategy_rows(strategy: dict[str, Any], view: dict[str, Any] | None) 
               <td class="mono">{esc(stock.get('code'))}</td><td class="strong">{esc(display_stock_name(stock,super_codes))}</td><td>{esc(stock.get('sector'))}</td>
               <td class="rating">{esc(stock.get('rating'))}</td><td>{score_bar(score_value(cand,'composite'))}</td>
               <td>{number(score_value(cand,'theme_heat'))}</td><td>{esc(stock.get('entry_profile'))}</td>
+              <td>{esc(POSITION_TIER_LABELS.get(stock.get('position_tier'), stock.get('position_tier')))}</td>
               <td class="two-lines" title="{esc(stock.get('entry_trigger'))}"><span class="cell-clamp">{esc(stock.get('entry_trigger'))}</span></td>
               <td class="two-lines no-buy" title="{esc(stock.get('no_buy_condition'))}"><span class="cell-clamp">{esc(stock.get('no_buy_condition'))}</span></td></tr>"""
         )
-    return "".join(rows) or '<tr><td colspan="10" class="empty">暂无策略股票</td></tr>'
+    return "".join(rows) or '<tr><td colspan="11" class="empty">暂无策略股票</td></tr>'
 
 
 def focus_cards(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
@@ -279,6 +279,7 @@ def focus_cards(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
               <div class="focus-tags"><span>{esc(stock.get('sector'))}</span><span class="badge {direction_class(stock.get('direction'))}">{esc(stock.get('direction'))}</span></div>
               <div class="focus-score"><small>综合分</small>{score_bar(score_value(cand,'composite'))}</div>
               <dl><div><dt>策略</dt><dd>{esc(stock.get('entry_profile'))}</dd></div>
+              <div><dt>仓位档位</dt><dd>{esc(POSITION_TIER_LABELS.get(stock.get('position_tier'), stock.get('position_tier')))}</dd></div>
               <div><dt>入场条件</dt><dd>{esc(stock.get('entry_trigger'))}</dd></div>
               <div><dt>不买条件</dt><dd class="no-buy">{esc(stock.get('no_buy_condition'))}</dd></div></dl>
               <footer><b>核心逻辑</b><span>{esc(logic)}</span></footer></article>"""
@@ -307,6 +308,7 @@ def stock_details(strategy: dict[str, Any], view: dict[str, Any] | None) -> str:
                 <section><h4>感知信号</h4><p>{esc(signals)}</p><p><b>异常：</b>{esc(cand.get('anomaly'))}</p><p><b>新闻：</b>{esc(cand.get('news_link'))}</p></section>
                 <section><h4>策略输入</h4><p>现价 {number(inputs.get('price'),2)} · MA5 {number(inputs.get('ma5'),2)} · MA20 {number(inputs.get('ma20'),2)}</p><p>ATR% {number(inputs.get('atr_pct'),2)} · High20 {number(inputs.get('high20'),2)} · Low20 {number(inputs.get('low20'),2)}</p></section>
                 <section><h4>交易画像</h4><p>{esc(stock.get('profile_trace'))}</p><p>{esc(profile_label(profile.get('playbook')))} · {esc(profile.get('entry_window'))} · {esc(profile.get('stop_policy'))}</p></section>
+                <section><h4>仓位意图</h4><p>{esc(POSITION_TIER_LABELS.get(stock.get('position_tier'), stock.get('position_tier')))}</p><p>定性档位，不代表账户百分比或具体手数。</p></section>
               </div></details>"""
         )
     return "".join(blocks) or '<div class="empty">暂无推理详情</div>'
@@ -452,7 +454,7 @@ def render_report(
   <article class="card cockpit-card"><div class="label">策略方向分布 / Direction</div>{render_direction_mix(stocks)}</article>
 </section>
 <div class="section-head"><h2>主线主题雷达</h2><p>交易状态、热度与证据源</p></div><section class="panel"><table><thead><tr><th>排名</th><th>主题</th><th>交易状态</th><th>热度</th><th>置信度</th><th>方向</th><th>交易意义</th><th>证据源</th></tr></thead><tbody>{render_theme_rows(themes_list)}</tbody></table></section>
-<div class="section-head"><h2>策略总表（{len(stocks)}只）</h2><p>默认仅保留核心决策字段</p></div><section class="panel"><table><thead><tr><th>方向</th><th>代码</th><th>名称</th><th>板块</th><th>评级</th><th>综合分</th><th>主题热度</th><th>策略</th><th>入场条件</th><th>不买条件</th></tr></thead><tbody>{render_strategy_rows(strategy,view)}</tbody></table></section>
+<div class="section-head"><h2>策略总表（{len(stocks)}只）</h2><p>仓位仅表达定性意图，不代表账户百分比或具体手数</p></div><section class="panel"><table><thead><tr><th>方向</th><th>代码</th><th>名称</th><th>板块</th><th>评级</th><th>综合分</th><th>主题热度</th><th>策略</th><th>仓位档位</th><th>入场条件</th><th>不买条件</th></tr></thead><tbody>{render_strategy_rows(strategy,view)}</tbody></table></section>
 <div class="section-head"><h2>重点策略池</h2><p>按评级与综合分选取前六</p></div><section class="focus-grid">{focus_cards(strategy,view)}</section>
 <div class="section-head"><h2>单股推理链路</h2><p>默认折叠，按需追溯</p></div>{stock_details(strategy,view)}
 <div class="section-head"><h2>观察池</h2><p>按等待原因分组，默认折叠</p></div><section class="pool-stack">{observation_groups(strategy.get('observation_pool'))}</section>

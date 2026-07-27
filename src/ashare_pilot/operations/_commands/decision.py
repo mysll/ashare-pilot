@@ -26,7 +26,7 @@ def file_sha256(path: Path) -> str:
 
 def trigger_for(stock: dict[str, Any], class_name: str) -> str:
     if class_name == "A":
-        return "当前机械确认已满足，可在仓位上限内人工执行"
+        return "当前机械确认已满足，可按定性仓位档位人工判断"
     if class_name == "B":
         signals = stock.get("signals", {})
         if signals.get("below_vwap"):
@@ -41,12 +41,13 @@ def trigger_for(stock: dict[str, Any], class_name: str) -> str:
 
 def build(snapshot: dict[str, Any], source_path: Path) -> dict[str, Any]:
     stocks = []
-    actionable_exposure = 0.0
+    actionable_positions = 0
     for stock in snapshot.get("stocks", []):
         guard = stock["decision_guardrails"]
         final_class = guard["mechanical_class"]
-        final_position = guard["position"]["final_max"] if final_class == "A" else 0.0
-        actionable_exposure += final_position
+        final_tier = guard["position_tier"]["final"] if final_class == "A" else "WATCH_ONLY"
+        if final_tier != "WATCH_ONLY":
+            actionable_positions += 1
         stocks.append({
             "code": stock.get("code"),
             "name": stock.get("name"),
@@ -55,12 +56,12 @@ def build(snapshot: dict[str, Any], source_path: Path) -> dict[str, Any]:
             "final_class": final_class,
             "class_reasons": guard.get("class_reasons", []),
             "hard_blocks": guard.get("hard_blocks", []),
-            "final_position_max": final_position,
+            "final_position_tier": final_tier,
             "trigger": trigger_for(stock, final_class),
             "t1_controls": guard.get("t1_controls"),
         })
     return {
-        "schema_version": "intraday_operation_decision.v1",
+        "schema_version": "intraday_operation_decision.v2",
         "date": snapshot.get("date"),
         "generated_at": snapshot.get("generated_at"),
         "snapshot_slot": snapshot.get("snapshot_slot"),
@@ -72,7 +73,7 @@ def build(snapshot: dict[str, Any], source_path: Path) -> dict[str, Any]:
         "market_confirmation": snapshot.get("market_confirmation"),
         "delivery_confirmation": snapshot.get("delivery_confirmation"),
         "portfolio": {
-            "actionable_exposure": round(actionable_exposure, 6),
+            "actionable_positions": actionable_positions,
             "allocation": snapshot.get("portfolio_allocation"),
         },
         "stocks": stocks,

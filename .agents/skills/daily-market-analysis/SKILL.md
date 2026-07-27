@@ -278,7 +278,7 @@ uv run --frozen ashare-pilot strategy daily finalize \
 
 If draft validation fails, send only the reported draft errors back to portfolio-manager, rewrite `strategy.draft.json`, increment `--validation-retries`, and rerun finalize with the newly measured cumulative LLM duration. Do not hand-edit `strategy.json`. Runs without an explicit measured LLM duration are diagnostic only and must not enter Gate D P95 samples.
 
-**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` (`daily_strategy.v2`) and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
+**Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` (`daily_strategy.v3`) and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
 
 ---
 
@@ -300,7 +300,7 @@ If draft validation fails, send only the reported draft errors back to portfolio
 | `predict/{date}/.strategy_llm_input.json` | Non-contract compact all-candidate Step 3 decision input | Step 3 workflow |
 | `predict/{date}/strategy.draft.json` | Non-contract selected-only LLM decisions linked by content hash | Step 3 workflow |
 | `predict/{date}/step3_timing.json` | Report-only prepare/LLM/finalize timing and artifact fingerprints | Observability |
-| `predict/{date}/strategy.json` | Conditional pre-open decisions for review/backtests and operation confirmation (`daily_strategy.v2`) | Reasoning (Step 3) |
+| `predict/{date}/strategy.json` | Conditional pre-open decisions with qualitative `WATCH_ONLY/LIGHT/STANDARD` position tiers (`daily_strategy.v3`) | Reasoning (Step 3) |
 | `predict/{date}/daily_report.html` | Daily readable summary rendered from JSON: themes, strategy table, stock details, observation/excluded pools, referenced news | Reasoning (Step 3 readable output) |
 
 ## Quick Reference
