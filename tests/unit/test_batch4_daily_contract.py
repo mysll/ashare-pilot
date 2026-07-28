@@ -17,6 +17,7 @@ from ashare_pilot.mapping._commands.daily.theme_stock_base import (
     stock_template,
 )
 from ashare_pilot.mapping._commands.daily.theme_stock_universe import (
+    collect_theme_specs_from_json,
     enrich_structured_source_flags,
 )
 from ashare_pilot.mapping._commands.daily.timing import update_report
@@ -65,6 +66,26 @@ def theme_stocks():
 
 
 class OwnershipTests(unittest.TestCase):
+    def test_invalid_theme_status_does_not_add_unrelated_direction_error(self):
+        doc = {
+            "schema_version": "daily_themes.v1",
+            "date": "2026-07-14",
+            "themes": [{
+                "name": "银行",
+                "rank": 1,
+                "heat": 70,
+                "confidence": 90,
+                "status": "excluded",
+                "direction": "bullish",
+            }],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "themes.json"
+            path.write_text(json.dumps(doc), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, r"themes\[0\]\.status") as raised:
+                collect_theme_specs_from_json(path, "2026-07-14")
+        self.assertNotIn("themes[].direction", str(raised.exception))
+
     def test_candidate_membership_and_theme_ownership_ignore_annotations(self):
         doc = build_deterministic_mapper_base("2026-07-14", {"sz000001": pool_entry()}, theme_stocks())
         self.assertEqual([item["code"] for item in doc["candidate_pool"]], ["sz000001"])

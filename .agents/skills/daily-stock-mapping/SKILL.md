@@ -32,6 +32,7 @@ Trading scope is config-driven — see `config/trading-scope.json`. Do not hard-
 | Symptom | Fix |
 |---------|-----|
 | Skipped `themes.json` validation | Validate `themes.json` before building the stock universe. |
+| `themes[].status` uses `excluded`, `candidate`, or another synonym | Replace it with exactly one of `tradeable`, `watch`, or `discarded`, then revalidate. |
 | Skipped deterministic `theme_stocks.json` publication | Run `uv run --frozen ashare-pilot mapping daily prepare`; do not hand-write membership or source flags. |
 | Skipped `mapper.annotations.json` or `mapper.json` | Generate annotations, then run annotation validation, JSON build, and mapper validation before Step 3. |
 | Theme name not in Theme Library | Discard. Theme Library is the only source. |
@@ -224,6 +225,14 @@ Sort by `Final Heat DESC`.
 
 - **Tradeable pool:** `Final Heat >= 55`. Max 20 themes. (Includes Catalyst Exception themes promoted to 57, tagged `CATALYST`.)
 - **Watch Themes:** `40 <= Final Heat < 55` AND direction is bullish (emotion coefficient ×1.0, or market_action >= 50). Mark `status = "watch"` in `themes.json`. **Not tradeable, no position, excluded from Stock Pool Build.** Visible to Step 3 for rotation awareness. Panic/crash-driven themes do NOT enter Watch (wrong direction, no observation value).
+- **Discarded:** Every emitted theme that is neither Tradeable nor Watch. Mark `status = "discarded"` in `themes.json`.
+
+**Hard enum contract for `themes[].status`:**
+
+Use exactly one of these lowercase machine enums: `tradeable`, `watch`,
+`discarded`. Do not use semantic or display synonyms such as `excluded`,
+`candidate`, `rejected`, or Chinese labels. “Excluded from the tradeable/stock
+pool” describes behavior; it is never a valid `status` value.
 
 ### Output Contract: themes.json
 
@@ -505,8 +514,15 @@ Risk markers only — **not auto-reject**. Step 2 classifies RiskType; RiskSever
 After the LLM writes and validates `themes.json`, run the prepare orchestration:
 
 ```bash
+uv run --frozen ashare-pilot mapping daily validate-themes --date {YYYY-MM-DD}
 uv run --frozen ashare-pilot mapping daily prepare --date {YYYY-MM-DD}
 ```
+
+Do not run `prepare` until `validate-themes` passes. If validation fails, the
+same theme-extraction LLM stage must correct only the reported contract fields
+and rerun `validate-themes` once. If the second validation fails, stop and
+report the remaining errors; never let `prepare` discover a known-invalid
+`themes.json`.
 
 Prepare validates themes, batches selected-theme market views, generates source flags from actual Theme Library/news/market/LHB inputs, expands the universe, fetches indicators sequentially, publishes `theme_stocks.json`, and writes `.mapper_annotation_input.json`. Missing sources remain false. Intermediate files contain no translated source prose or `source_explanation`.
 

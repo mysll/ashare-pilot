@@ -14,7 +14,7 @@ from .theme_stock_base import (
     universe_doc,
 )
 from ashare_pilot.mapping.daily_contract import CODE_RE, clean_text, default_predict_dir, ensure_doc_date, load_trading_scope, parse_float, read_json, write_json
-from .validate_themes import DIRECTION_HINT, validate as validate_themes_doc
+from .validate_themes import validate as validate_themes_doc
 
 
 def collect_theme_specs_from_json(path: Path, date: str) -> list[dict[str, object]]:
@@ -27,7 +27,6 @@ def collect_theme_specs_from_json(path: Path, date: str) -> list[dict[str, objec
         raise ValueError(
             f"themes.json failed validation before universe build: {path}\n"
             + "\n".join(f"  - {item}" for item in errors)
-            + f"\n  - themes[].direction {DIRECTION_HINT}"
         )
     if data.get("schema_version") != "daily_themes.v1":
         raise ValueError(f"themes.json schema_version must be daily_themes.v1: {path}")

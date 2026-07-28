@@ -204,10 +204,17 @@ Before theme extraction, build the compact high-recall input. After `themes.json
 ```bash
 uv run --frozen ashare-pilot mapping daily build-theme-evidence --date {YYYY-MM-DD}
 # LLM writes themes.json from the compact input
+uv run --frozen ashare-pilot mapping daily validate-themes --date {YYYY-MM-DD}
+# If validation fails, the same LLM stage fixes only the reported fields and
+# reruns validate-themes once. Stop if the retry still fails.
 uv run --frozen ashare-pilot mapping daily prepare --date {YYYY-MM-DD}
 # LLM writes candidate-complete sparse mapper.annotations.json
 uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD}
 ```
+
+`prepare` is forbidden until `validate-themes` passes. In particular,
+`themes[].status` accepts only `tradeable`, `watch`, or `discarded`; pool
+exclusion must never be serialized as `status = "excluded"`.
 
 **Prompt (exact format, MUST NOT deviate):**
 
