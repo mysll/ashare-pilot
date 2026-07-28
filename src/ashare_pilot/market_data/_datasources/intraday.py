@@ -71,6 +71,7 @@ class EastMoneyIntradayDataSource(BaseDataSource):
     def __init__(self, config: RateLimitConfig = None):
         super().__init__(config or self.DEFAULT_CONFIG)
         self.last_all_stocks_quality: dict = {}
+        self.last_turnover_quality: dict = {}
 
     def _get_push2_headers(self) -> dict:
         cookie = load_cookie("EASTMONEY_COOKIE")
@@ -585,10 +586,20 @@ class EastMoneyIntradayDataSource(BaseDataSource):
 
         try:
             data = self._request_with_retry(url)
-        except Exception:
+        except Exception as exc:
+            self.last_turnover_quality = {
+                "status": "unavailable",
+                "count": 0,
+                "error": f"{type(exc).__name__}:{exc}",
+            }
             return []
 
         if not data or data.get("rc") != 0:
+            self.last_turnover_quality = {
+                "status": "unavailable",
+                "count": 0,
+                "error": "empty_response" if not data else f"api_rc_{data.get('rc')}",
+            }
             return []
 
         diff = data.get("data", {}).get("diff", [])
@@ -597,6 +608,10 @@ class EastMoneyIntradayDataSource(BaseDataSource):
             rec = self._push2_to_stock_rec(item)
             results.append(self._format_stock_item(rec))
 
+        self.last_turnover_quality = {
+            "status": "complete",
+            "count": len(results),
+        }
         return results
 
     def fetch_concept_ranking(self, top: int = 50) -> list:

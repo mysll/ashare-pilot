@@ -1,46 +1,20 @@
 #!/usr/bin/env python3
-"""Compute overnight premium scores for Compute Pool stocks.
-
-V1.1 Percentile-Based Scoring (replaces V1.0 hard thresholds):
-    Each stock is scored by its percentile rank within the Compute Pool
-    across 5 continuous dimensions. No hard thresholds — distribution is
-    forced uniform across 0-100.
-
-Dimensions:
-    Theme Continuity     30%  — source_pool ordinal → percentile
-    Capital Continuity   25%  — main_net_inflow → percentile
-    Tail Strength        20%  — price_position × turnover_quality → percentile
-    Position Advantage   15%  — gaussian(|change_pct - 4%|) → percentile
-    Risk Penalty        -10%  — combined penalty → ascending percentile
-
-Output: ScoreObject with {value, rank, confidence, trace, tier}
-
-Usage:
-    python score_overnight.py enriched.json --json -o opportunity.json
-    python score_overnight.py enriched.json --json --opportunity-pool-size 30
-"""
+"""Build V1.3 scored, executable, and observation selection pools."""
 
 import argparse
 import json
 import math
 import statistics
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
+from ashare_pilot.market_data.settings import (
+    load_stock_money_flow_min_inflow_yuan,
+)
 
-WEIGHTS_V1_1 = {
-    "theme_continuity": 0.20,
-    "capital_continuity": 0.20,
-    "tail_strength": 0.15,
-    "position_advantage": 0.10,
-    "risk_penalty": 0.10,
-    "intensity": 0.10,
-    "conviction": 0.10,
-    "consistency": 0.05,
-}
-
-WEIGHTS_V1_2 = {
-    "theme_continuity": 0.18,
+WEIGHTS_V1_3 = {
+    "source_capital_proxy": 0.18,
     "capital_continuity": 0.18,
     "tail_strength": 0.14,
     "position_advantage": 0.09,
@@ -93,7 +67,7 @@ def gaussian_distance(x, mu, sigma):
     return math.exp(-((x - mu) ** 2) / (2 * sigma * sigma))
 
 
-def extract_theme_raw(stock):
+def extract_source_capital_proxy_raw(stock):
     """Ordinal source + capital blend. Falls back to capital intensity
     when all stocks share the same source_pool (zero-variance guard)."""
     mapping = {"limit_up": 1.0, "turnover": 0.7, "gain_range": 0.4}
@@ -455,6 +429,16 @@ def apply_i11_median_replacement(raws_by_index: dict, pool: list, skip_money_flo
             reason = detect_dim_anomaly(dim, raws_by_index[i][dim], pool[i])
             if not reason:
                 continue
+            if dim in money_dims and not stock_money_flow_available(pool[i]):
+                flags[i].append({
+                    "dim": dim,
+                    "raw": round(raws_by_index[i][dim], 6),
+                    "replacement": None,
+                    "reason": "money_flow_unavailable_not_imputed",
+                    "valid_peer_count": len(clean),
+                    "replacement_skipped": "scoreability_required",
+                })
+                continue
             if med is not None:
                 flags[i].append({
                     "dim": dim,
@@ -485,7 +469,7 @@ def scaled_contribution(percentile: float, weight: float, scale: float) -> float
     return percentile * weight * scale
 
 
-# Absolute quality floor for opportunity-pool entry.
+# Legacy absolute-quality helper retained for focused scoring diagnostics.
 # Fetched main_net_inflow (亿) must be net positive; the configurable minimum
 # is enforced by adaptive pagination before this generic floor is evaluated.
 FLOOR_MIN_INFLOW = 0.0
@@ -528,7 +512,7 @@ def passes_absolute_floor(
 
     Percentile scoring is RELATIVE — on a weak day the 'best of the worst'
     still ranks high and would emit a buy signal. This gate ensures a stock
-    has genuine standalone merit before entering the opportunity pool:
+    has genuine standalone merit before entering the historical candidate set:
         - main force capital is net positive (real money committed)
         - trend quality is not in its worst state
 
@@ -590,10 +574,11 @@ def compute_confidences(stock, raw_values, all_raws_by_dim):
     }
 
 
-def compute_scores(pool, regime=None):
+def compute_scores(pool, regime=None, *, replace_missing=False):
     """Compute percentile-based overnight scores for the entire pool.
 
-    Order: extract raws → I11 median replace → percentiles → I10 contrib scale → sum.
+    Order: extract raws → optional legacy diagnostic replacement → percentiles
+    → I10 contribution scale → sum. Selection Pools always disables replacement.
     """
     regime = regime or {}
     raw_scale = regime.get("i10_capital_scale", 1.0)
@@ -603,7 +588,7 @@ def compute_scores(pool, regime=None):
     raws = {}
     for i, s in enumerate(pool):
         raws[i] = {
-            "theme": extract_theme_raw(s),
+            "source_capital_proxy": extract_source_capital_proxy_raw(s),
             "capital": extract_capital_raw(s),
             "tail": extract_tail_raw(s),
             "position": extract_position_raw(s),
@@ -614,18 +599,28 @@ def compute_scores(pool, regime=None):
             "trend": extract_trend_quality_raw(s),
         }
 
-    skip_mf_i11 = not money_flow_available(pool)
-    raws = apply_i11_median_replacement(raws, pool, skip_money_flow_dims=skip_mf_i11)
+    if replace_missing:
+        skip_mf_i11 = not money_flow_available(pool)
+        raws = apply_i11_median_replacement(
+            raws, pool, skip_money_flow_dims=skip_mf_i11
+        )
+    else:
+        for stock in pool:
+            stock.pop("anomaly_flags", None)
+            stock.pop("i11_flagged", None)
+            stock.pop("i11_applied", None)
 
     all_raws = {}
-    for dim in ["theme", "capital", "tail", "position", "risk", "intensity", "conviction", "consistency", "trend"]:
+    for dim in ["source_capital_proxy", "capital", "tail", "position", "risk", "intensity", "conviction", "consistency", "trend"]:
         all_raws[dim] = [raws[i][dim] for i in raws]
 
     scored = []
     for i, stock in enumerate(pool):
         r = raws[i]
 
-        theme_pct = percentile_rank(all_raws["theme"], r["theme"])
+        source_capital_proxy_pct = percentile_rank(
+            all_raws["source_capital_proxy"], r["source_capital_proxy"]
+        )
         capital_pct = percentile_rank(all_raws["capital"], r["capital"])
         tail_pct = percentile_rank(all_raws["tail"], r["tail"])
         position_pct = percentile_rank(all_raws["position"], r["position"])
@@ -636,8 +631,10 @@ def compute_scores(pool, regime=None):
         consistency_pct = percentile_rank(all_raws["consistency"], r["consistency"])
         trend_pct = percentile_rank(all_raws["trend"], r["trend"])
 
-        W = WEIGHTS_V1_2
-        theme_contrib = theme_pct * W["theme_continuity"]
+        W = WEIGHTS_V1_3
+        source_capital_proxy_contrib = (
+            source_capital_proxy_pct * W["source_capital_proxy"]
+        )
         capital_contrib = scaled_contribution(capital_pct, W["capital_continuity"], capital_scale)
         tail_contrib = tail_pct * W["tail_strength"]
         position_contrib = position_pct * W["position_advantage"]
@@ -648,7 +645,7 @@ def compute_scores(pool, regime=None):
         risk_contrib = risk_pct * W["risk_penalty"]
 
         overnight_score = round(
-            theme_contrib
+            source_capital_proxy_contrib
             + capital_contrib
             + tail_contrib
             + position_contrib
@@ -663,7 +660,7 @@ def compute_scores(pool, regime=None):
         overnight_score = max(overnight_score, 0.0)
 
         trace = {
-            "theme_continuity": {"raw": round(r["theme"], 3), "pct": theme_pct, "weight": W["theme_continuity"], "contrib": round(theme_contrib, 1)},
+            "source_capital_proxy": {"raw": round(r["source_capital_proxy"], 3), "pct": source_capital_proxy_pct, "weight": W["source_capital_proxy"], "contrib": round(source_capital_proxy_contrib, 1)},
             "capital_continuity": {"raw": round(r["capital"], 3), "pct": capital_pct, "weight": W["capital_continuity"], "scale": capital_scale, "contrib": round(capital_contrib, 1)},
             "tail_strength": {"raw": round(r["tail"], 3), "pct": tail_pct, "weight": W["tail_strength"], "contrib": round(tail_contrib, 1)},
             "position_advantage": {"raw": round(r["position"], 3), "pct": position_pct, "weight": W["position_advantage"], "contrib": round(position_contrib, 1)},
@@ -681,7 +678,12 @@ def compute_scores(pool, regime=None):
         stock["confidence"] = confidence
         scored.append(stock)
 
-    scored.sort(key=lambda x: x.get("overnight_score", 0), reverse=True)
+    scored.sort(
+        key=lambda stock: (
+            -float(stock.get("overnight_score", 0)),
+            str(stock.get("code", "")),
+        )
+    )
 
     pool_size = len(scored)
     for rank_idx, stock in enumerate(scored):
@@ -722,12 +724,23 @@ def main(argv=None):
     if sys.platform == "win32":
         sys.stdout.reconfigure(encoding="utf-8")
 
-    parser = argparse.ArgumentParser(description="Compute overnight premium scores (V1.1 Percentile)")
+    parser = argparse.ArgumentParser(
+        description="Build deterministic intraday selection pools (V1.3)"
+    )
     parser.add_argument("input", help="Enriched Compute Pool JSON")
     parser.add_argument(
-        "--opportunity-pool-size", type=int, default=30,
-        help="Final pool size (default: 30)",
+        "--executable-pool-size",
+        type=int,
+        default=30,
+        help="Executable Pool size (default: 30)",
     )
+    parser.add_argument(
+        "--observation-pool-size",
+        type=int,
+        default=30,
+        help="Observation Pool size (default: 30)",
+    )
+    parser.add_argument("--date", help="Trading date (defaults from input path)")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     parser.add_argument("-o", "--output", metavar="FILE", help="Save output to file")
     parser.add_argument("--breadth", help="market_breadth.json for I10/I14 regime")
@@ -738,9 +751,25 @@ def main(argv=None):
         data = json.load(f)
 
     pool = data.get("compute_pool", [])
-    input_data_quality = data.get("data_quality", {}) if isinstance(data, dict) else {}
     if isinstance(data, list):
         pool = data
+
+    valid_vwap_count = sum(
+        1
+        for stock in pool
+        if (
+            is_finite_number(
+                stock.get("enriched", {}).get("real_time", {}).get("vwap")
+            )
+            and parse_float(stock["enriched"]["real_time"]["vwap"]) > 0
+        )
+    )
+    if valid_vwap_count == 0:
+        print(
+            "[ERROR] VWAP is unavailable for the entire Compute Pool",
+            file=sys.stderr,
+        )
+        return 1
 
     if args.breadth and args.indices:
         regime = parse_regime_from_files(args.breadth, args.indices)
@@ -750,142 +779,51 @@ def main(argv=None):
     if not regime.get("available"):
         print(f"[WARN] regime unavailable: {regime.get('warnings')}", file=sys.stderr)
 
-    print(f"Scoring {len(pool)} stocks (V1.2 TrendQuality)...", file=sys.stderr)
-
-    pool, quality_filtered, quality_stats = apply_quality_filter(pool, regime=regime)
-    vwap_missing_count = quality_stats["vwap_missing_count"]
-    vwap_skip_note = ""
-    if vwap_missing_count > 0:
-        vwap_skip_note = f" (VWAP无数据跳过过滤: {vwap_missing_count}只)"
-    if quality_stats["i14_applied_count"]:
-        vwap_skip_note += f" (I14豁免: {quality_stats['i14_applied_count']}只)"
-    print(f"Quality filter: {len(pool)} passed, {len(quality_filtered)} filtered{vwap_skip_note}", file=sys.stderr)
-
-    scored = compute_scores(pool, regime=regime)
-
-    pool_size = len(scored)
-
-    # Absolute quality floor: percentile rank is relative, so gate on
-    # standalone merit before a stock can enter the opportunity pool.
-    # If money-flow data is unavailable pool-wide, skip the inflow condition
-    # so a data outage does not silently empty the pool.
-    money_quality = (
-        input_data_quality.get("money_flow", {})
-        if isinstance(input_data_quality, dict)
-        and isinstance(input_data_quality.get("money_flow"), dict)
-        else {}
+    from ashare_pilot.strategy.intraday_selection import (
+        build_selection_pools,
+        selection_invariant_errors,
     )
-    threshold_filter_active = money_quality.get("fetch_status") == "threshold_reached"
-    mf_available = money_flow_available(scored)
-    floor_rejected = []
-    for s in scored:
-        below_minimum = (
-            threshold_filter_active and stock_money_flow_below_minimum(s)
-        )
-        ok, reason = passes_absolute_floor(
-            s,
-            check_inflow=(
-                mf_available
-                and stock_money_flow_available(s)
-                and not below_minimum
-            ),
-            require_minimum_inflow=below_minimum,
-        )
-        s["floor_pass"] = ok
-        if not ok:
-            s["floor_reason"] = reason
-            floor_rejected.append(s)
 
-    opportunity_pool = [
-        s for s in scored
-        if s["tier"] in ("A", "B", "C") and s.get("floor_pass", False)
-    ][:args.opportunity_pool_size]
-
-    # Empty-pool fallback: never silently return nothing. If the floor + tier
-    # gate cleared everyone, surface the top-ranked tier-A/B/C candidates with
-    # an explicit warning so the Reasoning layer can decide to stand aside.
-    quality_stats["money_flow"] = money_quality
-    money_status = money_quality.get("status")
-    if threshold_filter_active:
-        threshold_yuan = money_quality.get("min_main_inflow_yuan")
-        threshold_wan = (
-            round(float(threshold_yuan) / 10_000)
-            if isinstance(threshold_yuan, (int, float))
-            else "未知"
-        )
-        pool_warning = (
-            f"主力资金流按配置最低净流入 {threshold_wan} 万元过滤："
-            f"覆盖 {money_quality.get('matched_stock_count', 0)}/"
-            f"{money_quality.get('requested_stock_count', len(scored))} 只；"
-            "达到阈值边界后主动停止分页，未覆盖股票不进入可执行机会池"
-        )
-    elif money_status == "partial":
-        coverage = money_quality.get("coverage_pct")
-        pool_warning = (
-            "主力资金流数据不完整："
-            f"覆盖 {money_quality.get('matched_stock_count', 0)}/"
-            f"{money_quality.get('requested_stock_count', len(scored))} 只"
-            f"（{coverage if coverage is not None else '未知'}%），"
-            f"已保留前 {money_quality.get('pages_fetched', 0)} 页成功数据；"
-            "未覆盖股票不执行资金流地板，不按净流入为 0 处理"
-        )
-    elif not mf_available:
-        pool_warning = "主力资金流数据整体缺失，已跳过资金地板检查——评分可信度下降，Reasoning层需谨慎"
-    else:
-        pool_warning = ""
-    if not opportunity_pool:
-        tier_candidates = [
-            s for s in scored
-            if s["tier"] in ("A", "B", "C")
-            and not stock_money_flow_below_minimum(s)
-        ]
-        if tier_candidates:
-            degrade_note = (
-                "绝对质量地板过滤后无合格标的；以下为降级候选(未通过地板)，"
-                "仅供参考，Reasoning层应倾向观望"
-            )
-            pool_warning = f"{pool_warning}；{degrade_note}" if pool_warning else degrade_note
-            opportunity_pool = [dict(s, degraded=True) for s in tier_candidates][:args.opportunity_pool_size]
-        else:
-            no_pool_note = "无任何A/B/C档标的，建议全部观望"
-            pool_warning = f"{pool_warning}；{no_pool_note}" if pool_warning else no_pool_note
-
-    leader_watch = [s for s in opportunity_pool if s["tier"] == "A"][:5]
-    premium_candidates = [s for s in opportunity_pool if s["tier"] == "B"]
-    early_breakout = [s for s in opportunity_pool if s["tier"] == "C"][:10]
-
-    # Summary stats
-    scores = [s["overnight_score"] for s in scored]
-    mean_score = round(sum(scores) / len(scores), 1) if scores else 0
-    unique_scores = len(set(round(s, 1) for s in scores))
-
-    output = {
-        "weights_version": "V1.2_TrendQuality",
-        "scoring_policy_version": "convergence_v1",
-        "pool_size": pool_size,
-        "scored_count": len(scored),
-        "quality_filtered_count": len(quality_filtered),
-        "vwap_missing_count": vwap_missing_count,
-        "i14_applied_count": quality_stats["i14_applied_count"],
-        "i14_skipped_no_quick_score": quality_stats["i14_skipped_no_quick_score"],
-        "data_quality_summary": quality_stats,
-        "regime_snapshot": regime,
-        "money_flow_available": mf_available,
-        "quality_filtered": quality_filtered,
-        "opportunity_pool_size": len(opportunity_pool),
-        "score_stats": {
-            "mean": mean_score,
-            "min": round(min(scores), 1) if scores else 0,
-            "max": round(max(scores), 1) if scores else 0,
-            "unique_scores": unique_scores,
+    print(f"Building selection pools for {len(pool)} stocks (V1.3)...", file=sys.stderr)
+    output = build_selection_pools(
+        pool,
+        executable_limit=args.executable_pool_size,
+        observation_limit=args.observation_pool_size,
+        configured_min_inflow_yuan=load_stock_money_flow_min_inflow_yuan(),
+        regime=regime,
+    )
+    input_path = Path(args.input)
+    inferred_date = next(
+        (
+            part
+            for part in reversed(input_path.parts)
+            if len(part) == 10 and part[4:5] == "-" and part[7:8] == "-"
+        ),
+        "",
+    )
+    output["date"] = args.date or (
+        data.get("date", "") if isinstance(data, dict) else ""
+    ) or inferred_date
+    output["generated_at"] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds"
+    )
+    output["recall_quality"] = (
+        data.get("recall_quality", {}) if isinstance(data, dict) else {}
+    )
+    input_quality = data.get("data_quality", {}) if isinstance(data, dict) else {}
+    output["data_quality"] = {
+        **(input_quality if isinstance(input_quality, dict) else {}),
+        "vwap": {
+            "status": "complete" if valid_vwap_count == len(pool) else "partial",
+            "valid_stock_count": valid_vwap_count,
+            "missing_stock_count": len(pool) - valid_vwap_count,
         },
-        "leader_watch": leader_watch,
-        "premium_candidates": premium_candidates,
-        "early_breakout": early_breakout,
-        "floor_rejected_count": len(floor_rejected),
-        "pool_warning": pool_warning,
-        "opportunity_pool": opportunity_pool,
     }
+    errors = selection_invariant_errors(output)
+    if errors:
+        for error in errors:
+            print(f"[ERROR] {error}", file=sys.stderr)
+        return 1
 
     output_str = json.dumps(output, ensure_ascii=False, indent=2)
 
@@ -895,7 +833,11 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     else:
         print(output_str)
+    if output["scored_pool_summary"]["scoreable_count"] == 0:
+        print("[ERROR] Scored Pool is empty", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

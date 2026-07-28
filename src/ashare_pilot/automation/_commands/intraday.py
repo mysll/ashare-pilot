@@ -4,7 +4,7 @@
 Runs at ~14:30:
     1. Market Scan → MarketState + ScanPool
     2. Stock Discovery → Enriched ComputePool + ThemeRanking
-    3. Overnight Scoring → OpportunityPool
+    3. Overnight Scoring → SelectionPools
 
 Layout:
     Intermediate JSON data → .cache/intraday/{date}/   (this script writes these)
@@ -17,6 +17,7 @@ Usage:
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -27,6 +28,136 @@ from ashare_pilot.market_data._datasources import EastMoneyIntradayDataSource
 from ashare_pilot.market_data.runtime import workspace_path
 
 _cache_ds = EastMoneyIntradayDataSource()
+
+
+def _finite_number(value) -> bool:
+    if (
+        isinstance(value, bool)
+        or value is None
+        or (isinstance(value, str) and value in {"", "-"})
+    ):
+        return False
+    try:
+        return math.isfinite(
+            float(str(value).replace("%", "").replace("+", "").replace(",", ""))
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def validate_required_indices(document) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(document, list):
+        return ["indices output must be an array"]
+    by_code = {
+        row.get("code"): row
+        for row in document
+        if isinstance(row, dict) and isinstance(row.get("code"), str)
+    }
+    for code in ("sh000001", "sz399001"):
+        row = by_code.get(code)
+        if row is None:
+            errors.append(f"required index missing: {code}")
+            continue
+        if not _finite_number(row.get("price")):
+            errors.append(f"required index price invalid: {code}")
+        if not _finite_number(row.get("percent")):
+            errors.append(f"required index percent invalid: {code}")
+    return errors
+
+
+def build_indices_quality(document) -> dict:
+    rows = document if isinstance(document, list) else []
+    by_code = {
+        row.get("code"): row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("code"), str)
+    }
+    required = {"sh000001", "sz399001"}
+    configured = [
+        "sh000001",
+        "sz399001",
+        "sz399006",
+        "sh000688",
+        "sh000852",
+    ]
+    values = {}
+    for code in configured:
+        row = by_code.get(code)
+        valid = bool(
+            row
+            and _finite_number(row.get("price"))
+            and _finite_number(row.get("percent"))
+        )
+        values[code] = {
+            "status": "complete" if valid else "unavailable",
+            "required": code in required,
+            **({} if valid else {"error": "missing_or_invalid_quote"}),
+        }
+    return {
+        "status": (
+            "complete"
+            if all(values[code]["status"] == "complete" for code in required)
+            else "unavailable"
+        ),
+        "indices": values,
+        "required_complete_count": sum(
+            values[code]["status"] == "complete" for code in required
+        ),
+        "auxiliary_complete_count": sum(
+            values[code]["status"] == "complete"
+            for code in set(configured) - required
+        ),
+    }
+
+
+def validate_indices_file(path: Path) -> list[str]:
+    try:
+        return validate_required_indices(
+            json.loads(path.read_text(encoding="utf-8-sig"))
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"indices output unreadable: {type(exc).__name__}"]
+
+
+def write_unavailable_contract(path: Path, schema_version: str, error: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(
+            {
+                "schema_version": schema_version,
+                "status": "unavailable",
+                "error": error,
+                "themes": {},
+                "rankings": {},
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def validate_theme_ranking_file(path: Path) -> list[str]:
+    try:
+        document = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"theme ranking unreadable: {type(exc).__name__}"]
+    if not isinstance(document, dict):
+        return ["theme ranking must be an object"]
+    if document.get("schema_version") != "intraday_theme_ranking.v2":
+        return ["theme ranking schema_version must be intraday_theme_ranking.v2"]
+    if not isinstance(document.get("theme_ranking"), list):
+        return ["theme_ranking must be an array"]
+    return []
+
+
+def _stop(errors: list[str] | str) -> int:
+    messages = [errors] if isinstance(errors, str) else errors
+    for error in messages:
+        print(f"  [HARD STOP] {error}", file=sys.stderr)
+    return 1
 
 
 def cli_command(*arguments: str) -> list[str]:
@@ -80,8 +211,12 @@ def main(argv=None):
         help="Compute Pool size (default: 120)",
     )
     parser.add_argument(
-        "--opportunity-size", type=int, default=30,
-        help="Opportunity Pool size (default: 30)",
+        "--executable-size", type=int, default=30,
+        help="Executable Pool size (default: 30)",
+    )
+    parser.add_argument(
+        "--observation-size", type=int, default=30,
+        help="Observation Pool size (default: 30)",
     )
     args = parser.parse_args(argv)
 
@@ -111,10 +246,10 @@ def main(argv=None):
         f"  Cached {len(all_stocks)} stocks "
         f"(status={cache_status}) in {time.time() - t0:.1f}s"
     )
-    if cache_status == "partial":
-        print(
-            "  [WARN] Sina all-stock snapshot is partial: "
-            f"pages={cache_quality.get('pages_fetched')}, "
+    if cache_status != "complete":
+        return _stop(
+            "all-stock snapshot is not complete: "
+            f"status={cache_status}, pages={cache_quality.get('pages_fetched')}, "
             f"failed_page={cache_quality.get('failed_page')}, "
             f"next_page={cache_quality.get('next_page')}, "
             f"error={cache_quality.get('error')}"
@@ -125,22 +260,67 @@ def main(argv=None):
     print("\n--- Phase 1: Market Scan ---")
 
     results = {}
-    tasks = [
-        (
-            cli_command("market-data", "breadth", "--json", "-o", str(out_dir / "market_breadth.json"), "--cache-dir", cache_dir_arg),
-            "breadth",
-        ),
-        (
-            cli_command("market-data", "quote", "sh000001,sz399001,sz399006,sh000688,sh000852", "--json", "-o", str(out_dir / "indices.json")),
-            "indices",
-        ),
-        (
-            cli_command("themes", "dashboard", "build", "--json", "--top", "100", "-o", str(out_dir / "concept_dashboard.json"), "--cache-dir", cache_dir_arg),
-            "concept",
-        ),
-    ]
-    for cmd, name in tasks:
-        results[name] = run_cmd(cmd, name)
+    breadth_cmd = cli_command(
+        "market-data", "breadth", "--json",
+        "-o", str(out_dir / "market_breadth.json"),
+        "--cache-dir", cache_dir_arg,
+    )
+    results["breadth"] = run_cmd(breadth_cmd, "breadth")
+    if not results["breadth"]["success"]:
+        return _stop("market breadth command failed")
+
+    indices_cmd = cli_command(
+        "market-data", "quote",
+        "sh000001,sz399001,sz399006,sh000688,sh000852",
+        "--json", "-o", str(out_dir / "indices.json"),
+    )
+    results["indices"] = run_cmd(indices_cmd, "indices")
+    if not results["indices"]["success"]:
+        return _stop("required indices command failed")
+    index_errors = validate_indices_file(out_dir / "indices.json")
+    if index_errors:
+        return _stop(index_errors)
+    indices_document = json.loads(
+        (out_dir / "indices.json").read_text(encoding="utf-8-sig")
+    )
+    (out_dir / "indices_quality.json").write_text(
+        json.dumps(
+            build_indices_quality(indices_document),
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    concept_path = out_dir / "concept_dashboard.json"
+    concept_cmd = cli_command(
+        "themes", "dashboard", "build", "--json", "--top", "100",
+        "-o", str(concept_path), "--cache-dir", cache_dir_arg,
+    )
+    results["concept"] = run_cmd(concept_cmd, "concept")
+    if not results["concept"]["success"]:
+        write_unavailable_contract(
+            concept_path,
+            "intraday_concept_dashboard.v1",
+            "concept_dashboard_command_failed",
+        )
+    else:
+        try:
+            concept_document = json.loads(
+                concept_path.read_text(encoding="utf-8-sig")
+            )
+            if (
+                not isinstance(concept_document, dict)
+                or concept_document.get("status") not in {"complete", "unavailable"}
+            ):
+                raise ValueError("invalid concept dashboard quality contract")
+        except (OSError, json.JSONDecodeError, ValueError) as exc:
+            write_unavailable_contract(
+                concept_path,
+                "intraday_concept_dashboard.v1",
+                f"invalid_concept_dashboard:{type(exc).__name__}",
+            )
 
     # ── Phase 2: Build Scan Pool ──
     print("\n--- Phase 2: Scan Pool Build ---")
@@ -151,6 +331,8 @@ def main(argv=None):
         "--cache-dir", cache_dir_arg,
     ]
     results["scan"] = run_cmd(scan_cmd, "scan")
+    if not results["scan"]["success"]:
+        return _stop("Scan Pool command failed or did not reach Compute Pool target")
 
     # ── Phase 3: Enrich Compute Pool ──
     print("\n--- Phase 3: Enrich Compute Pool ---")
@@ -160,6 +342,8 @@ def main(argv=None):
         "--json", "-o", str(out_dir / "compute_pool_enriched.json"),
     ]
     results["enrich"] = run_cmd(enrich_cmd, "enrich")
+    if not results["enrich"]["success"]:
+        return _stop("Compute Pool quote/money-flow enrichment failed")
 
     # ── Phase 3.5: Technical Indicators ──
     print("\n--- Phase 3.5: Technical Indicators ---")
@@ -169,6 +353,8 @@ def main(argv=None):
         "--json", "-o", str(out_dir / "compute_pool_enriched.json"),
     ]
     results["technicals"] = run_cmd(tech_cmd, "technicals")
+    if not results["technicals"]["success"]:
+        return _stop("technical enrichment is unavailable")
 
     # ── Phase 3.6: Theme Ranking ──
     print("\n--- Phase 3.6: Theme Ranking ---")
@@ -179,18 +365,27 @@ def main(argv=None):
         "-o", str(out_dir / "theme_ranking.json"),
     ]
     results["theme"] = run_cmd(theme_cmd, "theme")
+    if not results["theme"]["success"]:
+        return _stop("Theme Ranking command failed")
+    theme_errors = validate_theme_ranking_file(out_dir / "theme_ranking.json")
+    if theme_errors:
+        return _stop(theme_errors)
 
     # ── Phase 4: Overnight Scoring ──
     print("\n--- Phase 4: Overnight Scoring ---")
     score_cmd = [
         *cli_command("strategy", "overnight", "score"),
         str(out_dir / "compute_pool_enriched.json"),
-        "--opportunity-pool-size", str(args.opportunity_size),
-        "--json", "-o", str(out_dir / "opportunity_pool.json"),
+        "--executable-pool-size", str(args.executable_size),
+        "--observation-pool-size", str(args.observation_size),
+        "--date", args.date,
+        "--json", "-o", str(out_dir / "selection_pools.json"),
         "--breadth", str(out_dir / "market_breadth.json"),
         "--indices", str(out_dir / "indices.json"),
     ]
     results["score"] = run_cmd(score_cmd, "score")
+    if not results["score"]["success"]:
+        return _stop("overnight scoring failed")
 
     total = time.time() - total_start
 
@@ -202,28 +397,27 @@ def main(argv=None):
         print(f"  {fpath.name} ({size:>8,} bytes)")
 
     # Quick validation
-    pool_file = out_dir / "opportunity_pool.json"
+    pool_file = out_dir / "selection_pools.json"
     if pool_file.exists():
         try:
             with open(pool_file, "r", encoding="utf-8") as f:
-                opp_data = json.load(f)
-            pool = opp_data.get("opportunity_pool", [])
-            print(f"\nOpportunity Pool: {len(pool)} stocks (v{opp_data.get('weights_version', '?')})")
-            if pool:
-                print("Top 5:")
-                for s in pool[:5]:
-                    print(
-                        f"  [{s.get('tier', '?')}] {s.get('code', '?')} {s.get('name', '?')} "
-                        f"score={s.get('overnight_score', '?')}"
-                    )
+                pool_data = json.load(f)
+            executable = pool_data.get("executable_pool", [])
+            observation = pool_data.get("observation_pool", [])
+            print(
+                f"\nSelection Pools: executable={len(executable)}, "
+                f"observation={len(observation)} "
+                f"({pool_data.get('scoring_version', '?')})"
+            )
         except Exception as e:
-            print(f"  (Failed to read opportunity pool: {e})")
+            print(f"  (Failed to read selection pools: {e})")
 
     # Phase timings
     print(f"\nPhase timings:")
     for name, r in results.items():
         status = "OK" if r["success"] else "FAIL"
         print(f"  {name:<10} {r['elapsed']:>5.1f}s  [{status}]")
+    return 0
 
 
 if __name__ == "__main__":

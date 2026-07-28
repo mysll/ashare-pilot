@@ -139,7 +139,7 @@ def fetch_indicators_for_codes(
             "vwap": vwap_map.get(code, 0.0),
             "money_flow_available": bool(mf),
             "money_flow_minimum_filter_applied": (
-                money_quality.get("fetch_status") == "threshold_reached"
+                money_quality.get("fetch_status") in {"threshold_reached", "partial"}
                 and not mf
             ),
             "min_main_inflow_yuan": min_main_inflow_yuan,
@@ -185,6 +185,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     print(f"Loading Compute Pool from {args.input}...", file=sys.stderr)
+    with open(args.input, "r", encoding="utf-8") as f:
+        source_document = json.load(f)
     pool = load_compute_pool(args.input)
 
     if not args.no_board_filter:
@@ -232,7 +234,11 @@ def main(argv=None):
                     "minimum_main_inflow_yuan": enrich.get(
                         "min_main_inflow_yuan"
                     ),
-                    "meets_minimum_main_inflow": True,
+                    "meets_minimum_main_inflow": (
+                        isinstance(enrich.get("main_net_inflow_yuan"), (int, float))
+                        and enrich["main_net_inflow_yuan"]
+                        >= enrich.get("min_main_inflow_yuan", 0)
+                    ),
                     "main_ratio": enrich.get("main_ratio"),
                     "super_large_net": enrich.get("super_large_net"),
                     "large_net": enrich.get("large_net"),
@@ -263,6 +269,11 @@ def main(argv=None):
     output = {
         "pool_size": len(pool),
         "enriched_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "recall_quality": (
+            source_document.get("recall_quality", {})
+            if isinstance(source_document, dict)
+            else {}
+        ),
         "data_quality": {
             "money_flow": money_flow_quality,
         },
@@ -279,6 +290,18 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     else:
         print(output_str)
+    valid_money_count = sum(
+        1
+        for stock in pool
+        if stock.get("enriched", {}).get("money_flow", {}).get("available") is True
+    )
+    if money_flow_quality.get("status") == "unavailable" or valid_money_count == 0:
+        print(
+            "[ERROR] Stock money flow is unavailable for the entire Compute Pool",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

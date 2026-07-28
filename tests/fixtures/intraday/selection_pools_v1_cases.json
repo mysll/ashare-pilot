@@ -1,0 +1,265 @@
+{
+  "schema_version": "intraday_selection_pool_fixture.v1",
+  "source_dates": ["2026-07-17", "2026-07-20", "2026-07-27"],
+  "normalization_notes": [
+    "Public market fields were minimized from saved compute_pool_enriched.json files.",
+    "money_flow.available and main_net_inflow_yuan are explicit v2 contract fields derived from the saved normalized flow value.",
+    "The cautious_hold case is a deterministic boundary variant of the saved 2026-07-17 I14 watch case."
+  ],
+  "cases": [
+    {
+      "id": "sealed_limit_up",
+      "source": {"date": "2026-07-20", "code": "sh603779"},
+      "stock": {
+        "code": "sh603779",
+        "name": "威龙股份",
+        "source_pool": "limit_up",
+        "quick_score": 68.1,
+        "change_pct": "+10.01%",
+        "turnover": "+14.51%",
+        "volume_ratio": "0.00",
+        "enriched": {
+          "real_time": {
+            "price": "8.68",
+            "high": "8.68",
+            "low": "7.73",
+            "yestclose": "7.89",
+            "vwap": 8.458
+          },
+          "money_flow": {
+            "available": true,
+            "main_net_inflow": "0.60",
+            "main_net_inflow_yuan": 60000000,
+            "super_large_net": "0.40",
+            "large_net": "0.20",
+            "medium_net": "-0.10",
+            "small_net": "-0.50"
+          }
+        },
+        "technicals": {
+          "ma5": 7.9,
+          "ma10": 7.8,
+          "ma20": 7.8,
+          "boll_zone": "upper_half",
+          "ma_alignment": "bullish",
+          "above_ma5": true
+        }
+      },
+      "expected": {
+        "score_status": "scored",
+        "pool": "observation",
+        "primary_reason": "sealed_limit_up"
+      }
+    },
+    {
+      "id": "partial_money_flow_uncovered",
+      "source": {"date": "2026-07-27", "code": "sz301234"},
+      "stock": {
+        "code": "sz301234",
+        "name": "五洲医疗",
+        "source_pool": "limit_up",
+        "quick_score": 70.0,
+        "change_pct": "+20.00%",
+        "turnover": "+12.00%",
+        "volume_ratio": "1.20",
+        "enriched": {
+          "real_time": {
+            "price": "68.00",
+            "high": "68.00",
+            "low": "60.00",
+            "yestclose": "56.67",
+            "vwap": 64.0
+          },
+          "money_flow": {
+            "available": false,
+            "minimum_filter_applied": true,
+            "missing_reason": "partial_not_covered"
+          }
+        },
+        "technicals": {
+          "ma5": 60.0,
+          "ma10": 58.0,
+          "ma20": 55.0,
+          "boll_zone": "upper_half",
+          "ma_alignment": "bullish",
+          "above_ma5": true
+        }
+      },
+      "expected": {
+        "score_status": "unscored",
+        "pool": "observation",
+        "primary_reason": "money_flow_unavailable"
+      }
+    },
+    {
+      "id": "technicals_no_data",
+      "source": {"date": "2026-07-20", "code": "sz001399"},
+      "stock": {
+        "code": "sz001399",
+        "name": "惠科股份",
+        "source_pool": "gain_range",
+        "quick_score": 68.5,
+        "change_pct": "+6.04%",
+        "turnover": "+18.81%",
+        "volume_ratio": "0.00",
+        "enriched": {
+          "real_time": {
+            "price": "24.94",
+            "high": "25.86",
+            "low": "24.22",
+            "yestclose": "23.51",
+            "vwap": 25.144
+          },
+          "money_flow": {
+            "available": true,
+            "main_net_inflow": "3.68",
+            "main_net_inflow_yuan": 368000000,
+            "super_large_net": "3.80",
+            "large_net": "-0.11",
+            "medium_net": "-1.78",
+            "small_net": "-1.90"
+          }
+        },
+        "technicals": {
+          "boll_zone": "no_data",
+          "ma_alignment": "no_data",
+          "above_ma5": false
+        }
+      },
+      "expected": {
+        "score_status": "unscored",
+        "pool": "observation",
+        "primary_reason": "technicals_no_data"
+      }
+    },
+    {
+      "id": "vwap_missing",
+      "source": {"date": "2026-07-20", "code": "sz000037"},
+      "stock": {
+        "code": "sz000037",
+        "name": "深南电A",
+        "source_pool": "limit_up",
+        "quick_score": 75.0,
+        "change_pct": "+9.78%",
+        "turnover": "+20.23%",
+        "volume_ratio": "1.10",
+        "enriched": {
+          "real_time": {
+            "price": "10.10",
+            "high": "10.12",
+            "low": "9.00",
+            "yestclose": "9.20",
+            "vwap": null
+          },
+          "money_flow": {
+            "available": true,
+            "main_net_inflow": "0.80",
+            "main_net_inflow_yuan": 80000000,
+            "super_large_net": "0.50",
+            "large_net": "0.30",
+            "medium_net": "-0.20",
+            "small_net": "-0.60"
+          }
+        },
+        "technicals": {
+          "ma5": 8.48,
+          "ma10": 8.42,
+          "ma20": 8.82,
+          "boll_zone": "upper_half",
+          "ma_alignment": "mixed",
+          "above_ma5": true
+        }
+      },
+      "expected": {
+        "score_status": "scored",
+        "pool": "observation",
+        "primary_reason": "vwap_missing"
+      }
+    },
+    {
+      "id": "i14_watch",
+      "source": {"date": "2026-07-17", "code": "sz002396"},
+      "regime": {"i14_active": true},
+      "stock": {
+        "code": "sz002396",
+        "name": "星网锐捷",
+        "source_pool": "turnover",
+        "quick_score": 81.2,
+        "change_pct": "+4.70%",
+        "turnover": "+24.77%",
+        "volume_ratio": "1.35",
+        "enriched": {
+          "real_time": {
+            "price": "29.85",
+            "high": "31.36",
+            "low": "27.13",
+            "yestclose": "28.51",
+            "vwap": 29.949
+          },
+          "money_flow": {
+            "available": true,
+            "main_net_inflow": "6.85",
+            "main_net_inflow_yuan": 685000000,
+            "super_large_net": "10.47",
+            "large_net": "-3.62",
+            "medium_net": "-3.78",
+            "small_net": "-3.07"
+          }
+        },
+        "technicals": {
+          "ma5": 28.22,
+          "ma10": 27.48,
+          "ma20": 23.4,
+          "boll_zone": "upper_half",
+          "ma_alignment": "bullish",
+          "above_ma5": true
+        }
+      },
+      "expected": {
+        "score_status": "scored",
+        "pool": "observation",
+        "i14_exemption": "watch",
+        "primary_reason": "i14_watch"
+      }
+    },
+    {
+      "id": "i14_cautious_hold",
+      "source": {"date": "2026-07-17", "code": "sz002396", "variant": true},
+      "regime": {"i14_active": true},
+      "stock_patch": {
+        "base_case": "i14_watch",
+        "enriched.real_time.vwap": 31.2
+      },
+      "expected": {
+        "score_status": "scored",
+        "pool": "executable",
+        "i14_exemption": "cautious_hold",
+        "direction_ceiling": "谨慎持有"
+      }
+    }
+  ],
+  "aggregate_cases": [
+    {
+      "id": "empty_executable_pool",
+      "case_ids": [
+        "sealed_limit_up",
+        "partial_money_flow_uncovered",
+        "technicals_no_data",
+        "vwap_missing",
+        "i14_watch"
+      ],
+      "expected": {
+        "command_exit": 0,
+        "executable_count": 0,
+        "no_executable_candidates": true
+      }
+    }
+  ],
+  "v1_to_v2_expectations": [
+    "sealed limit-up candidates no longer consume executable slots",
+    "partial money-flow misses and technical no_data records have no proxy score or rank",
+    "VWAP missing remains scoreable but is never executable",
+    "I14 watch is observation-only while cautious_hold may remain executable with a direction ceiling",
+    "an empty executable pool is a successful business result"
+  ]
+}

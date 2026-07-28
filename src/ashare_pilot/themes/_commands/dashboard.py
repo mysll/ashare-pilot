@@ -160,13 +160,28 @@ def compute_momentum(concepts: list, concept_to_stock: dict, lianban_set: set, a
 
 def build_dashboard(top: int = 100, cache_dir: str = None) -> dict:
     exclusions = load_member_fetch_exclusions()
-    concepts = _ds.fetch_concept_ranking(top=top + len(exclusions))
+    try:
+        concepts = _ds.fetch_concept_ranking(top=top + len(exclusions))
+    except Exception as exc:
+        return {
+            "schema_version": "intraday_concept_dashboard.v1",
+            "status": "unavailable",
+            "error": f"{type(exc).__name__}:{exc}",
+            "themes": {},
+            "rankings": {},
+        }
     concepts = [
         concept for concept in concepts
         if concept.get("name") not in exclusions
     ][:top]
     if not concepts:
-        return {"error": "No concept data", "themes": {}, "rankings": {}}
+        return {
+            "schema_version": "intraday_concept_dashboard.v1",
+            "status": "unavailable",
+            "error": "no_concept_data",
+            "themes": {},
+            "rankings": {},
+        }
 
     all_stocks = None
     if cache_dir:
@@ -264,6 +279,8 @@ def build_dashboard(top: int = 100, cache_dir: str = None) -> dict:
     }
 
     return {
+        "schema_version": "intraday_concept_dashboard.v1",
+        "status": "complete",
         "meta": {
             "ranking_count": len(concepts),
             "weights": dict(WEIGHTS),
@@ -320,6 +337,7 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     else:
         print(output_str)
+    return 0
 
 
 if __name__ == "__main__":

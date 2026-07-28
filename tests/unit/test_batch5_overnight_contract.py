@@ -150,7 +150,7 @@ def test_classify_tier_alias_ignores_absolute_score():
     assert mod.classify_tier(score=99.0, rank=80, pool_size=100) == "D"
 
 
-def test_i11_missing_conviction_source_replaced_by_valid_peer_median():
+def test_selection_scoring_does_not_apply_i11_peer_replacement():
     mod = load_score_mod()
     victim = make_stock(code="sz000000", drop_super_large=True)
     pool = [victim] + [
@@ -158,14 +158,8 @@ def test_i11_missing_conviction_source_replaced_by_valid_peer_median():
     ]
     scored = mod.compute_scores(pool)
     victim = next(s for s in scored if s["code"] == "sz000000")
-    assert victim.get("anomaly_flags")
-    dims = {f["dim"] for f in victim["anomaly_flags"]}
-    assert "conviction" in dims
-    flag = next(f for f in victim["anomaly_flags"] if f["dim"] == "conviction")
-    assert flag["reason"] == "missing_super_large_net"
-    assert flag["valid_peer_count"] == 5
-    assert flag["replacement"] is not None
-    assert victim.get("i11_applied") is True
+    assert victim.get("anomaly_flags") is None
+    assert victim.get("i11_applied") is None
 
 
 def test_i11_legitimate_zero_conviction_is_not_replaced():
@@ -176,7 +170,7 @@ def test_i11_legitimate_zero_conviction_is_not_replaced():
     assert not any(f["dim"] == "conviction" for f in victim.get("anomaly_flags", []))
 
 
-def test_i11_tail_range_contradiction_flagged():
+def test_selection_scoring_does_not_apply_i11_tail_replacement():
     mod = load_score_mod()
     stock = make_stock(
         code="sz000001",
@@ -190,7 +184,8 @@ def test_i11_tail_range_contradiction_flagged():
     )
     scored = mod.compute_scores([stock] + healthy_pool(6))
     victim = next(s for s in scored if s["code"] == "sz000001")
-    assert any(f["dim"] == "tail" for f in victim.get("anomaly_flags", []))
+    assert victim.get("anomaly_flags") is None
+    assert victim.get("i11_applied") is None
 
 
 def test_i10_scale_table():
@@ -375,80 +370,6 @@ def convergence_base():
     }
 
 
-def test_annotation_validator_requires_tradeability_for_convergence():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    doc = convergence_annotation()
-    del doc["stocks"][0]["tradeability"]
-    errors = mod.validate(doc, "2026-07-13", {"sz000001"}, base=convergence_base())
-    assert any("tradeability: invalid or missing enum" in error for error in errors)
-
-
-def test_annotation_validator_enforces_i13_and_i14_contract():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    valid = convergence_annotation(position_cap="0%（I13 全仓空仓）")
-    assert mod.validate(valid, "2026-07-13", {"sz000001"}, base=convergence_base()) == []
-
-    full_position = convergence_annotation(position_cap="全仓")
-    errors = mod.validate(full_position, "2026-07-13", {"sz000001"}, base=convergence_base())
-    assert any("requires explicit zero position" in error for error in errors)
-
-    upgraded = convergence_annotation(tradeability="Suitable", direction="持有", position_cap="0%")
-    errors = mod.validate(upgraded, "2026-07-13", {"sz000001"}, base=convergence_base())
-    assert any("I13 requires 观望" in error for error in errors)
-    assert any("caps tradeability at Watch" in error for error in errors)
-
-
-def test_mapper_builder_enforces_base_aware_annotation_rules():
-    with tempfile.TemporaryDirectory() as td:
-        root = Path(td)
-        base_path = root / "base.json"
-        annotations_path = root / "annotations.json"
-        output_path = root / "mapper.json"
-        base = convergence_base() | {"date": "2026-07-13", "schema_version": "intraday_mapper_base.v1"}
-        invalid = convergence_annotation(tradeability="Suitable", direction="持有", position_cap="全仓")
-        base_path.write_text(json.dumps(base, ensure_ascii=False), encoding="utf-8")
-        annotations_path.write_text(json.dumps(invalid, ensure_ascii=False), encoding="utf-8")
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-m", "ashare_pilot", "--workspace", str(PROJECT_ROOT),
-                "mapping", "intraday", "build-mapper",
-                "--date", "2026-07-13",
-                "--base", str(base_path),
-                "--annotations", str(annotations_path),
-                "--output", str(output_path),
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        assert result.returncode == 1
-        assert not output_path.exists()
-        assert "I13 requires 观望" in result.stderr
-
-
-def test_overnight_projection_preserves_convergence_fields():
-    mod = load_script_mod("build_overnight_strategy_json")
-    stock = make_stock()
-    stock.update({
-        "name": "测试股票",
-        "tier": "B",
-        "rank_tier": "B",
-        "rank": 2,
-        "overnight_score": 61.2,
-        "absolute_score": 61.2,
-        "i14_exemption": "cautious_hold",
-        "anomaly_flags": [{"dim": "tail", "reason": "test"}],
-        "reasoning": {"tradeability": "Watch", "direction": "谨慎持有"},
-    })
-    projected = mod.strategy_stock(stock)
-    assert projected["rank_tier"] == "B"
-    assert projected["absolute_score"] == 61.2
-    assert projected["tradeability"] == "Watch"
-    assert projected["i14_exemption"] == "cautious_hold"
-    assert projected["anomaly_flags"] == [{"dim": "tail", "reason": "test"}]
-
-
 def execution_base_stock(
     *, code="sz000767", name="晋控电力", source_pool="limit_up", price=3.76,
     high=3.76, low=3.34, yestclose=3.42
@@ -524,28 +445,6 @@ def test_board_exclusion_uses_scope_override_and_longest_prefix():
     assert state["board_reason"] == "scope-star"
 
 
-def test_annotation_validator_rejects_actionable_sealed_limit_up():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    base_stock = execution_base_stock()
-    doc = execution_annotation(tradeability="Suitable", direction="谨慎持有", basis="day_low")
-    base = {"pool_summary": {}, "stocks": [base_stock]}
-    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base=base)
-    assert any("sealed limit-up requires direction=观望" in error for error in errors)
-    assert any("execution_state.eligible=true" in error for error in errors)
-
-
-def test_annotation_validator_rejects_actionable_excluded_board():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    base_stock = execution_base_stock(
-        code="sh688001", source_pool="turnover", price=10.0, high=10.2, low=9.5
-    )
-    doc = execution_annotation(tradeability="Suitable", direction="谨慎持有", basis="day_low")
-    doc["stocks"][0]["code"] = "sh688001"
-    base = {"pool_summary": {}, "stocks": [base_stock]}
-    errors = mod.validate(doc, "2026-07-13", {"sh688001"}, base=base)
-    assert any("board-policy exclusion requires direction=观望" in error for error in errors)
-
-
 def test_execution_state_cannot_be_tampered_to_bypass_filter():
     mod = load_script_mod("intraday_mapper_json_lib")
     stock = execution_base_stock()
@@ -566,26 +465,6 @@ def test_execution_state_cannot_be_tampered_to_bypass_filter():
     assert any("sealed limit-up requires direction=观望" in error for error in errors)
 
 
-def test_annotation_validator_rejects_free_text_stop_but_preserves_watch_position_semantics():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    base_stock = execution_base_stock(source_pool="turnover", price=6.0, high=6.1, low=5.5)
-    doc = execution_annotation(tradeability="Watch", direction="谨慎持有", basis="day_low")
-    doc["stocks"][0]["t_plus_1_plan"]["stop_loss"] = "今日最低价5.67"
-    base = {"pool_summary": {}, "stocks": [base_stock]}
-    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base=base)
-    assert not any("tradeability=Suitable" in error for error in errors)
-    assert any("stop_loss text/price is compute-owned" in error for error in errors)
-
-
-def test_annotation_validator_requires_stop_basis_even_when_base_join_is_missing():
-    mod = load_script_mod("validate_intraday_mapper_annotations")
-    doc = execution_annotation()
-    del doc["stocks"][0]["t_plus_1_plan"]["stop_loss_basis"]
-    errors = mod.validate(doc, "2026-07-13", {"sz000767"}, base={"stocks": []})
-    assert any("stop_loss_basis: invalid or missing enum" in error for error in errors)
-    assert any("base join missing" in error for error in errors)
-
-
 def test_stop_loss_is_resolved_from_same_stock_and_must_be_below_price():
     mod = load_script_mod("intraday_mapper_json_lib")
     stock = execution_base_stock(source_pool="turnover", price=3.76, high=3.8, low=3.34)
@@ -598,39 +477,3 @@ def test_stop_loss_is_resolved_from_same_stock_and_must_be_below_price():
         "t_plus_1_plan": {"stop_loss_basis": "day_low"},
     }
     assert any("below current price" in error for error in mod.reasoning_invariant_errors(bad, reasoning))
-
-
-def test_overnight_builder_fails_closed_on_invalid_actionable_stock():
-    mod = load_script_mod("build_overnight_strategy_json")
-    stock = execution_base_stock()
-    stock["reasoning"] = {
-        "tradeability": "Suitable",
-        "direction": "谨慎持有",
-        "t_plus_1_plan": {"stop_loss_basis": "day_low"},
-    }
-    try:
-        mod.build({"stocks": [stock]})
-    except ValueError as exc:
-        assert "sealed limit-up" in str(exc)
-    else:
-        raise AssertionError("invalid sealed position must fail publication")
-
-
-def test_overnight_builder_re_resolves_tampered_stop_fields():
-    mod = load_script_mod("build_overnight_strategy_json")
-    stock = execution_base_stock(
-        source_pool="turnover", price=6.0, high=6.1, low=5.5, yestclose=5.8
-    )
-    stock["reasoning"] = {
-        "tradeability": "Watch",
-        "direction": "谨慎持有",
-        "t_plus_1_plan": {
-            "stop_loss_basis": "day_low",
-            "stop_loss_price": 5.67,
-            "stop_loss": "今日最低价5.67",
-        },
-    }
-    built = mod.build({"stocks": [stock]})
-    plan = built["positions"][0]["t_plus_1_plan"]
-    assert plan["stop_loss_price"] == 5.5
-    assert plan["stop_loss"] == "今日最低价 5.5"

@@ -6,6 +6,13 @@
   },
   "fixtures": [
     {
+      "path": "intraday/selection_pools_v1_cases.json",
+      "source_date": "2026-07-27",
+      "legacy_commands": ["score_overnight.py", "build_intraday_mapper_base.py"],
+      "scenario": "Frozen dual-pool branches for sealed limit-up, partial money-flow coverage, technical and VWAP gaps, I14 routing, and an empty executable pool.",
+      "provenance": "Minimized public market fields from saved 2026-07-17, 2026-07-20, and 2026-07-27 compute artifacts, with explicitly marked deterministic boundary variants."
+    },
+    {
       "path": "indicators/history.json",
       "source_date": "2026-07-21",
       "legacy_commands": ["fetch_indicators.py", "fetch_pool_indicators.py"],

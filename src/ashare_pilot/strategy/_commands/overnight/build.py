@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build overnight_strategy.json from the validated intraday mapper contract."""
+"""Project intraday_mapper.v2 into overnight_strategy.v2."""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.mapping.intraday_contract import (
+    HOLD_DIRECTIONS,
+    MAPPER_SCHEMA_VERSION,
+    OVERNIGHT_STRATEGY_SCHEMA_VERSION,
     intraday_dir,
     read_json,
     reasoning_invariant_errors,
@@ -18,8 +21,12 @@ from ashare_pilot.mapping.intraday_contract import (
 )
 
 
-def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
-    reasoning = stock.get("reasoning") if isinstance(stock.get("reasoning"), dict) else {}
+def executable_projection(stock: dict[str, Any]) -> dict[str, Any]:
+    reasoning = (
+        stock.get("reasoning")
+        if isinstance(stock.get("reasoning"), dict)
+        else {}
+    )
     source_plan = reasoning.get("t_plus_1_plan")
     plan = dict(source_plan) if isinstance(source_plan, dict) else {}
     plan.update(resolved_stop_loss(stock, plan.get("stop_loss_basis")))
@@ -29,94 +36,106 @@ def strategy_stock(stock: dict[str, Any]) -> dict[str, Any]:
         "market_board": stock.get("market_board"),
         "primary_theme": stock.get("primary_theme"),
         "themes": stock.get("themes") or [],
-        "sector": stock.get("primary_theme"),
-        "source_tier": stock.get("tier"),
-        "source_rank": stock.get("rank"),
+        "theme_support_shadow": stock.get("theme_support_shadow"),
         "overnight_score": stock.get("overnight_score"),
-        "absolute_score": stock.get("absolute_score"),
+        "rank": stock.get("rank"),
         "rank_tier": stock.get("rank_tier"),
         "tradeability": reasoning.get("tradeability"),
         "i14_exemption": stock.get("i14_exemption"),
-        "anomaly_flags": stock.get("anomaly_flags") or [],
-        "execution_state": stock.get("execution_state"),
         "direction": reasoning.get("direction"),
         "trading_strategy": reasoning.get("trading_strategy"),
         "risk_severity": reasoning.get("risk_severity"),
         "expected_premium": reasoning.get("expected_premium"),
         "key_reason": reasoning.get("key_reason"),
         "position_plan": reasoning.get("position_plan"),
-        "t_plus_1_exit_plan": reasoning.get("t_plus_1_exit_plan"),
         "t_plus_1_plan": plan,
         "rules_applied": reasoning.get("rules_applied") or [],
         "reasoning_trace": reasoning.get("reasoning_trace"),
-        "execution_references": {
-            "price": stock.get("price"),
-            "high": (
-                stock.get("enriched", {}).get("real_time", {}).get("high")
-                if isinstance(stock.get("enriched"), dict)
-                else None
-            ),
-            "low": (
-                stock.get("enriched", {}).get("real_time", {}).get("low")
-                if isinstance(stock.get("enriched"), dict)
-                else None
-            ),
-            "vwap": (
-                stock.get("enriched", {}).get("real_time", {}).get("vwap")
-                if isinstance(stock.get("enriched"), dict)
-                else None
-            ),
-            "ma5": stock.get("technicals", {}).get("ma5") if isinstance(stock.get("technicals"), dict) else None,
-            "ma10": stock.get("technicals", {}).get("ma10") if isinstance(stock.get("technicals"), dict) else None,
-            "ma20": stock.get("technicals", {}).get("ma20") if isinstance(stock.get("technicals"), dict) else None,
-        },
+        "execution_state": stock.get("execution_state"),
+        "execution_eligibility": stock.get("execution_eligibility"),
+    }
+
+
+def observation_projection(stock: dict[str, Any]) -> dict[str, Any]:
+    note = (
+        stock.get("observation_reasoning")
+        if isinstance(stock.get("observation_reasoning"), dict)
+        else {}
+    )
+    return {
+        "code": stock.get("code"),
+        "name": stock.get("name"),
+        "market_board": stock.get("market_board"),
+        "primary_theme": stock.get("primary_theme"),
+        "themes": stock.get("themes") or [],
+        "theme_support_shadow": stock.get("theme_support_shadow"),
+        "score_status": stock.get("score_status"),
+        "overnight_score": stock.get("overnight_score"),
+        "rank": stock.get("rank"),
+        "rank_tier": stock.get("rank_tier"),
+        "observation_reasons": stock.get("observation_reasons") or [],
+        "primary_observation_reason": stock.get(
+            "primary_observation_reason"
+        ),
+        "observation_summary": note.get("observation_summary"),
+        "watch_condition": note.get("watch_condition"),
+        "risk_note": note.get("risk_note"),
     }
 
 
 def build(mapper: dict[str, Any]) -> dict[str, Any]:
-    invariant_errors = []
-    for stock in mapper.get("stocks", []):
-        if not isinstance(stock, dict) or not isinstance(stock.get("reasoning"), dict):
-            continue
-        normalized_reasoning = dict(stock["reasoning"])
-        source_plan = normalized_reasoning.get("t_plus_1_plan")
-        normalized_plan = dict(source_plan) if isinstance(source_plan, dict) else {}
-        normalized_plan.update(resolved_stop_loss(stock, normalized_plan.get("stop_loss_basis")))
-        normalized_reasoning["t_plus_1_plan"] = normalized_plan
-        for error in reasoning_invariant_errors(stock, normalized_reasoning):
-            invariant_errors.append(f"{stock.get('code')}: {error}")
-    if invariant_errors:
-        raise ValueError("; ".join(invariant_errors))
-    stocks = [
-        strategy_stock(stock)
-        for stock in mapper.get("stocks", [])
-        if isinstance(stock, dict) and isinstance(stock.get("reasoning"), dict)
+    if mapper.get("schema_version") != MAPPER_SCHEMA_VERSION:
+        raise ValueError(f"input must be {MAPPER_SCHEMA_VERSION}")
+    recommendations = []
+    eligible_watchlist = []
+    for stock in mapper.get("executable_stocks", []):
+        if not isinstance(stock, dict) or not isinstance(
+            stock.get("reasoning"), dict
+        ):
+            raise ValueError(f"{stock.get('code')}: executable reasoning missing")
+        projected = executable_projection(stock)
+        if projected.get("direction") in HOLD_DIRECTIONS:
+            errors = reasoning_invariant_errors(stock, stock["reasoning"])
+            if errors:
+                raise ValueError(f"{stock.get('code')}: {'; '.join(errors)}")
+            recommendations.append(projected)
+        else:
+            projected["t_plus_1_plan"] = resolved_stop_loss(
+                stock, "not_applicable"
+            )
+            eligible_watchlist.append(projected)
+    observations = [
+        observation_projection(stock)
+        for stock in mapper.get("observation_stocks", [])
+        if isinstance(stock, dict)
     ]
+    strategy = (
+        dict(mapper.get("strategy"))
+        if isinstance(mapper.get("strategy"), dict)
+        else {}
+    )
+    if not mapper.get("executable_stocks"):
+        strategy["position_cap"] = "0%"
     pool_summary = (
         mapper.get("pool_summary")
         if isinstance(mapper.get("pool_summary"), dict)
         else {}
     )
     return {
-        "schema_version": "intraday_overnight_strategy.v1",
+        "schema_version": OVERNIGHT_STRATEGY_SCHEMA_VERSION,
         "date": mapper.get("date"),
         "generated_at": utc_now_iso(),
-        "scoring_policy_version": (
-            mapper.get("pool_summary", {}).get("scoring_policy_version")
-            if isinstance(mapper.get("pool_summary"), dict)
-            else None
-        ),
         "source": {
             "schema_version": mapper.get("schema_version"),
-            "generated_at": mapper.get("generated_at"),
             "file": f"intraday/{mapper.get('date')}/intraday_mapper.json",
         },
-        "market": mapper.get("market_assessment"),
-        "portfolio": mapper.get("strategy"),
-        "data_quality": pool_summary.get("data_quality_summary"),
-        "data_warning": pool_summary.get("pool_warning"),
-        "positions": [stock for stock in stocks if stock.get("direction") != "观望"],
-        "watchlist": [stock for stock in stocks if stock.get("direction") == "观望"],
+        "market_assessment": mapper.get("market_assessment") or {},
+        "strategy": strategy,
+        "data_quality": pool_summary.get("data_quality") or {},
+        "recall_quality": pool_summary.get("recall_quality") or {},
+        "recommendations": recommendations,
+        "eligible_watchlist": eligible_watchlist,
+        "observations": observations,
     }
 
 
@@ -127,21 +146,21 @@ def main(argv=None) -> int:
     parser.add_argument("--output")
     args = parser.parse_args(argv)
     root = intraday_dir(args.date)
-    input_path = Path(args.input) if args.input else root / "intraday_mapper.json"
-    output_path = Path(args.output) if args.output else root / "overnight_strategy.json"
-    mapper = read_json(input_path)
-    if not isinstance(mapper, dict) or mapper.get("schema_version") != "intraday_mapper.v1":
-        print("[ERROR] input must be intraday_mapper.v1", file=sys.stderr)
-        return 1
-    if mapper.get("date") != args.date:
-        print(f"[ERROR] input date must be {args.date}", file=sys.stderr)
-        return 1
+    input_path = (
+        Path(args.input) if args.input else root / "intraday_mapper.json"
+    )
+    output_path = (
+        Path(args.output) if args.output else root / "overnight_strategy.json"
+    )
     try:
-        doc = build(mapper)
-    except ValueError as exc:
-        print(f"[ERROR] execution invariants failed: {exc}", file=sys.stderr)
+        mapper = read_json(input_path)
+        if mapper.get("date") != args.date:
+            raise ValueError(f"input date must be {args.date}")
+        document = build(mapper)
+    except (OSError, ValueError) as exc:
+        print(f"[ERROR] strategy build failed: {exc}", file=sys.stderr)
         return 1
-    write_json(output_path, doc)
+    write_json(output_path, document)
     print(f"OK: wrote {output_path}")
     return 0
 

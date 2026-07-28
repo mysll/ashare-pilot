@@ -15,7 +15,7 @@ This is the **theme/pool perception** check. Output is structured perception wit
 
 ```
 Compute once: uv run --frozen ashare-pilot automation intraday run
-    → scan_pool, compute_pool_enriched, theme_ranking, opportunity_pool (under .cache)
+    → scan_pool, compute_pool_enriched, theme_ranking, selection_pools (under .cache)
     ↓
 Skill 1 → market perception (breadth / indices / concepts)
     ↓
@@ -33,6 +33,7 @@ Prefer files already produced by `uv run --frozen ashare-pilot automation intrad
 - `.cache/intraday/{date}/scan_pool.json`
 - `.cache/intraday/{date}/compute_pool_enriched.json`
 - `.cache/intraday/{date}/theme_ranking.json`
+- `.cache/intraday/{date}/selection_pools.json` (read-only pool integrity check)
 
 Do **not** re-run enrichment/ranking if these files exist for the date. Only if compute has **not** been run for this date:
 
@@ -66,6 +67,8 @@ Theme Heat = Breadth(20%) + Leader(30%) + Capital(25%) + Momentum(15%) + Continu
 2. **Bottom-up themes** — `theme_ranking.json` themes are derived from pool membership, not news.
 3. **Cross-check (optional)** — if a theme is top-5 in both Skill 2 Heat and Skill 1 `concept_dashboard` Composite, note higher confidence.
 4. **No Direction** — do not assign Direction, RiskSeverity, Expected Premium, or buy/sell language.
+5. **Dual-pool integrity** — executable and observation codes are disjoint;
+   unscored observations have no score/rank; rank tier is not Tradeability.
 
 ## Constraints
 

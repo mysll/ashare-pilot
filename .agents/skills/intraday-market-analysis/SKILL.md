@@ -1,6 +1,6 @@
 ---
 name: intraday-market-analysis
-description: Run the 14:30 overnight-alpha workflow and produce a validated JSON mapper contract with A/B/C opportunities.
+description: Run the 14:30 overnight-alpha workflow and publish validated executable/observation dual-pool contracts.
 ---
 
 # Intraday Market Analysis (JSON-first V2)
@@ -24,7 +24,7 @@ fields always come from the compute layer.
 Run before dispatching any agent:
 
 ```bash
-uv run --frozen ashare-pilot automation intraday run --date {YYYY-MM-DD} --compute-pool-size 120 --opportunity-size 30
+uv run --frozen ashare-pilot automation intraday run --date {YYYY-MM-DD} --compute-pool-size 120 --executable-size 30 --observation-size 30
 ```
 
 Use a timeout of at least 180 seconds. Do not run this again in substeps.
@@ -39,7 +39,7 @@ Required outputs:
 ├── scan_pool.json
 ├── compute_pool_enriched.json
 ├── theme_ranking.json
-└── opportunity_pool.json
+└── selection_pools.json
 ```
 
 The workflow runs at about 14:30. Market breadth, index quotes, concepts,
@@ -108,16 +108,18 @@ Inputs:
 - .cache/intraday/{YYYY-MM-DD}/indices.json
 - .cache/intraday/{YYYY-MM-DD}/concept_dashboard.json
 - .cache/intraday/{YYYY-MM-DD}/theme_ranking.json
-- .cache/intraday/{YYYY-MM-DD}/opportunity_pool.json
+- .cache/intraday/{YYYY-MM-DD}/selection_pools.json
 - intraday/{YYYY-MM-DD}/intraday_mapper.base.json
 
 Output:
 - intraday/{YYYY-MM-DD}/intraday_mapper.annotations.json
 ```
 
-The annotations contain only semantic interpretation: market assessment,
-Direction, RiskSeverity, Expected Premium, Key Reason, position/T+1 plan,
-applied rules, and ReasoningTrace.
+The annotations contain two exact-coverage arrays. `executable_annotations`
+may contain Direction, Tradeability, position and T+1 plans.
+`observation_annotations` may contain only observation summary, watch
+condition, and risk note. Observation stocks can never be upgraded by
+Reasoning or learned rules.
 
 ## 5. Validate and publish
 
@@ -152,6 +154,10 @@ Downstream consumers and review skills read `intraday_mapper.json` and
 - A-share scope only: `sh`/`sz`; exclude `sh688*` and `bj*` from buy candidates
   according to `config/trading-scope.json`.
 - A sealed limit-up stock is observation-only, never a B-tier tail-buy.
+- `selection_pools.json` is the only candidate contract. A/B/C/D is one
+  Scored Pool relative rank and never decides executable membership.
+- An empty executable pool is a valid result; publish zero position and the
+  observation view rather than treating it as a compute failure.
 - Apply `memory/INTRADAY_RULES.md` and `memory/SHARED_RULES.md` in Reasoning when they exist. In a zero-history project, absence means no learned rules and is not an error.
 - All scores come from `uv run --frozen ashare-pilot strategy overnight score`; the LLM never recalculates them.
 - Themes are detected bottom-up from stocks, not from news.

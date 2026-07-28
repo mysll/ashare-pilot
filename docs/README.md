@@ -15,6 +15,10 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 | [Agent 无关 Python 核心工程 ADR](adr/0002-agent-neutral-core-library.md) | A-Share Pilot 的包边界、CLI、旁路迁移、严格等价、配置数据和切换策略。 |
 | [盘中主题证据链 ADR](adr/0003-intraday-theme-evidence-contract.md) | 概念成员分页、core/qualified/edge、双领涨、双热度、主题时点与 mapper 确定性主题合同。 |
 | [盘中主题证据链实施清单](intraday-theme-evidence-implementation.md) | ADR-0003 的逐阶段代码任务、测试范围、全量重建和验收步骤。 |
+| [Intraday 双池选股 ADR](adr/0004-intraday-selection-pools-contract.md) | Scoreability、Executability、双池、Theme shadow 与 v2 Schema 的权威合同。 |
+| [Intraday 双池选股最终开发计划](intraday-stock-selection-final-development-plan.md) | ADR-0004 的分阶段实施、测试矩阵、六日冻结回放和最终验收结果。 |
+| [Intraday 六日冻结回放](intraday-selection-frozen-replay.v1.json) | 2026-07-20 至 2026-07-27 六个交易日的双池数量、旧不可交易候选迁移与 v2 重建审计。 |
+| [当前 Intraday 选股、评分与过滤流程](current-intraday-stock-selection.md) | 当前 v2 三路召回、Scoreability、V1.3 Scored Pool、Executability、双池、Mapper/Strategy 三视图流程。 |
 | [主题成分抓取排除清单](theme-member-fetch-exclusions.md) | 主题成员抓取排除项、审计依据、盘中 Dashboard 边界、延期项和后续复审流程。 |
 | [东方财富概念板块接口样本](api.md) | 网页双接口请求/响应样本、生产字段边界、分页 checkpoint 和双源一致性验证。 |
 | [Python 核心工程实施计划](core-refactor-plan.md) | 已完成的七批旁路建设、验收门槛和第二阶段统一 CLI 切换。 |

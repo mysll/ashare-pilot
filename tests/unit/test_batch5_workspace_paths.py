@@ -34,13 +34,14 @@ def test_overnight_build_cli_uses_explicit_workspace_outside_repo(
     intraday = workspace.root / "intraday" / date
     intraday.mkdir(parents=True)
     mapper = {
-        "schema_version": "intraday_mapper.v1",
+        "schema_version": "intraday_mapper.v2",
         "date": date,
         "generated_at": f"{date}T06:30:00+00:00",
         "pool_summary": {"scoring_policy_version": "convergence_v1"},
         "market_assessment": {"regime": "neutral"},
         "strategy": {"position_cap": "0%"},
-        "stocks": [],
+        "executable_stocks": [],
+        "observation_stocks": [],
     }
     (intraday / "intraday_mapper.json").write_text(
         json.dumps(mapper, ensure_ascii=False), encoding="utf-8"
@@ -61,6 +62,6 @@ def test_overnight_build_cli_uses_explicit_workspace_outside_repo(
 
     assert exit_code == 0
     output = json.loads((intraday / "overnight_strategy.json").read_text(encoding="utf-8"))
-    assert output["schema_version"] == "intraday_overnight_strategy.v1"
-    assert output["positions"] == []
+    assert output["schema_version"] == "intraday_overnight_strategy.v2"
+    assert output["recommendations"] == []
     assert "OK: wrote" in capsys.readouterr().out

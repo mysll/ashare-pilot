@@ -10,10 +10,19 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.market_data.runtime import workspace_path
+from ashare_pilot.market_data.trading_scope import (
+    load_trading_scope,
+    scope_decision,
+)
 
 
 HOLD_DIRECTIONS = {"持有偏多", "持有", "谨慎持有"}
 STOP_LOSS_BASES = {"day_low", "ma5", "ma10", "ma20", "not_applicable"}
+SELECTION_POOLS_SCHEMA_VERSION = "intraday_selection_pools.v1"
+MAPPER_BASE_SCHEMA_VERSION = "intraday_mapper_base.v2"
+MAPPER_ANNOTATIONS_SCHEMA_VERSION = "intraday_mapper_annotations.v2"
+MAPPER_SCHEMA_VERSION = "intraday_mapper.v2"
+OVERNIGHT_STRATEGY_SCHEMA_VERSION = "intraday_overnight_strategy.v2"
 
 
 def read_json(path: Path) -> Any:
@@ -54,53 +63,6 @@ def numeric(value: Any) -> float | None:
         return float(str(value).replace("%", "").replace("+", "").replace(",", ""))
     except (TypeError, ValueError):
         return None
-
-
-def default_scope_path() -> Path:
-    return workspace_path("config", "trading-scope.json")
-
-
-def load_trading_scope(path: Path | None = None) -> dict[str, Any]:
-    scope_path = path or default_scope_path()
-    scope = read_json(scope_path)
-    if not isinstance(scope, dict) or not isinstance(scope.get("boards"), dict):
-        raise ValueError(f"invalid trading scope: {scope_path}")
-    if not isinstance(scope.get("overrides", []), list):
-        raise ValueError(f"invalid trading scope overrides: {scope_path}")
-    return scope
-
-
-def scope_decision(code: str, scope: dict[str, Any]) -> dict[str, Any]:
-    normalized = str(code or "").strip().lower()
-    for override in scope.get("overrides", []):
-        if not isinstance(override, dict):
-            continue
-        codes = override.get("codes")
-        if isinstance(codes, str):
-            codes = [codes]
-        elif not isinstance(codes, list):
-            single = override.get("code")
-            codes = [single] if isinstance(single, str) else []
-        if normalized not in {str(value).lower() for value in codes}:
-            continue
-        excluded = not bool(override.get("allowed")) if "allowed" in override else bool(override.get("exclude"))
-        return {
-            "excluded": excluded,
-            "matched_rule": f"overrides.{normalized}",
-            "reason": override.get("reason") or ("excluded by override" if excluded else "allowed by override"),
-        }
-    boards = scope.get("boards", {})
-    matches = [str(prefix) for prefix in boards if normalized.startswith(str(prefix).lower())]
-    if not matches:
-        return {"excluded": True, "matched_rule": "boards.<none>", "reason": "no matching trading-scope board"}
-    prefix = max(matches, key=len)
-    rule = boards.get(prefix) if isinstance(boards.get(prefix), dict) else {}
-    excluded = bool(rule.get("exclude"))
-    return {
-        "excluded": excluded,
-        "matched_rule": f"boards.{prefix}",
-        "reason": rule.get("reason") or ("excluded by trading scope" if excluded else "allowed by trading scope"),
-    }
 
 
 def limit_ratio(code: str, name: str) -> Decimal:
@@ -228,32 +190,6 @@ def reasoning_invariant_errors(stock: dict[str, Any], reasoning: dict[str, Any])
     return errors
 
 
-def opportunity_stocks(pool: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return every scored opportunity once, preserving compute-layer values."""
-    result: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for key, tier in (
-        ("leader_watch", "A"),
-        ("premium_candidates", "B"),
-        ("early_breakout", "C"),
-        ("opportunity_pool", None),
-    ):
-        values = pool.get(key)
-        if not isinstance(values, list):
-            continue
-        for value in values:
-            code = stock_code(value)
-            if not code or code in seen:
-                continue
-            item = dict(value)
-            if tier and not item.get("tier"):
-                item["tier"] = tier
-            item["execution_state"] = execution_state(item)
-            result.append(item)
-            seen.add(code)
-    return result
-
-
 def market_board(code: str) -> str:
     normalized = str(code or "").lower()
     if normalized.startswith("sh688"):
@@ -292,7 +228,9 @@ def primary_theme(themes: list[dict[str, Any]]) -> str | None:
 
 
 def attach_theme_evidence(
-    stocks: list[dict[str, Any]], stock_themes: dict[str, Any]
+    stocks: list[dict[str, Any]],
+    stock_themes: dict[str, Any],
+    theme_ranking: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     result = []
     for stock in stocks:
@@ -306,20 +244,103 @@ def attach_theme_evidence(
         item["primary_theme"] = selected
         item["themes"] = relations
         item["sector"] = selected
+        item["theme_support_shadow"] = build_theme_support_shadow(
+            relations,
+            selected,
+            theme_ranking or {},
+        )
         result.append(item)
     return result
 
 
+def build_theme_support_shadow(
+    stock_relations: list[dict[str, Any]],
+    primary_theme_name: str | None,
+    theme_ranking: dict[str, Any],
+) -> dict[str, Any]:
+    unavailable = {
+        "available": False,
+        "primary_theme": primary_theme_name,
+        "member_role": None,
+        "membership_weight": None,
+        "core_heat": None,
+        "diffusion_heat": None,
+        "theme_rank": None,
+    }
+    if not stock_relations or not primary_theme_name:
+        return {**unavailable, "missing_reason": "stock_has_no_theme_relation"}
+    relation = next(
+        (
+            item
+            for item in stock_relations
+            if isinstance(item, dict) and item.get("name") == primary_theme_name
+        ),
+        None,
+    )
+    if not isinstance(relation, dict):
+        return {**unavailable, "missing_reason": "theme_membership_incomplete"}
+    role = relation.get("member_role")
+    weight = numeric(relation.get("weight"))
+    if role not in {"core", "qualified", "edge"} or weight is None:
+        return {**unavailable, "missing_reason": "theme_membership_incomplete"}
+    rankings = (
+        theme_ranking.get("theme_ranking", [])
+        if isinstance(theme_ranking, dict)
+        else []
+    )
+    ranked = next(
+        (
+            (index, row)
+            for index, row in enumerate(rankings[:15], 1)
+            if isinstance(row, dict) and row.get("theme") == primary_theme_name
+        ),
+        None,
+    )
+    if ranked is None:
+        return {
+            **unavailable,
+            "member_role": role,
+            "membership_weight": weight,
+            "missing_reason": "primary_theme_not_in_top15",
+        }
+    rank, row = ranked
+    core_heat = numeric(row.get("core_heat"))
+    diffusion_heat = numeric(row.get("diffusion_heat"))
+    if core_heat is None or diffusion_heat is None:
+        return {
+            **unavailable,
+            "member_role": role,
+            "membership_weight": weight,
+            "theme_rank": rank,
+            "missing_reason": "dynamic_heat_fields_missing",
+        }
+    return {
+        "available": True,
+        "primary_theme": primary_theme_name,
+        "member_role": role,
+        "membership_weight": weight,
+        "core_heat": core_heat,
+        "diffusion_heat": diffusion_heat,
+        "theme_rank": rank,
+        "missing_reason": None,
+    }
+
+
 def merge_annotations(base: dict[str, Any], annotations: dict[str, Any]) -> dict[str, Any]:
-    stock_notes = {
+    executable_notes = {
         item["code"]: item
-        for item in annotations.get("stocks", [])
+        for item in annotations.get("executable_annotations", [])
         if isinstance(item, dict) and isinstance(item.get("code"), str)
     }
-    stocks = []
-    for stock in base.get("stocks", []):
+    observation_notes = {
+        item["code"]: item
+        for item in annotations.get("observation_annotations", [])
+        if isinstance(item, dict) and isinstance(item.get("code"), str)
+    }
+    executable_stocks = []
+    for stock in base.get("executable_stocks", []):
         item = dict(stock)
-        note = stock_notes.get(stock.get("code"))
+        note = executable_notes.get(stock.get("code"))
         if note:
             reasoning = {key: value for key, value in note.items() if key != "code"}
             plan = reasoning.get("t_plus_1_plan")
@@ -328,17 +349,33 @@ def merge_annotations(base: dict[str, Any], annotations: dict[str, Any]) -> dict
                 plan.update(resolved_stop_loss(stock, plan.get("stop_loss_basis")))
                 reasoning["t_plus_1_plan"] = plan
             item["reasoning"] = reasoning
-        stocks.append(item)
+        executable_stocks.append(item)
+    observation_stocks = []
+    for stock in base.get("observation_stocks", []):
+        item = dict(stock)
+        note = observation_notes.get(stock.get("code"))
+        if note:
+            item["observation_reasoning"] = {
+                key: value for key, value in note.items() if key != "code"
+            }
+        observation_stocks.append(item)
 
     result = dict(base)
-    result["schema_version"] = "intraday_mapper.v1"
+    result["schema_version"] = MAPPER_SCHEMA_VERSION
     result["generated_at"] = utc_now_iso()
     result["generation_mode"] = "compute_base_plus_llm_annotations"
     result["market_assessment"] = annotations.get("market_assessment")
     result["strategy"] = annotations.get("strategy")
-    result["stocks"] = stocks
+    result["executable_stocks"] = executable_stocks
+    result["observation_stocks"] = observation_stocks
     result["annotation_coverage"] = {
-        "annotated": len(stock_notes),
-        "scored": len(stocks),
+        "executable": {
+            "expected": len(executable_stocks),
+            "annotated": len(executable_notes),
+        },
+        "observation": {
+            "expected": len(observation_stocks),
+            "annotated": len(observation_notes),
+        },
     }
     return result

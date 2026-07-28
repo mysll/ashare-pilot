@@ -93,19 +93,49 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
     (tmp_path / "pyproject.toml").write_text("[project]\nname='fixture'\nversion='0'\n", encoding="utf-8")
     (tmp_path / "config").mkdir()
     commands: list[list[str]] = []
+    def complete_snapshot(cache_dir, **_kwargs):
+        intraday._cache_ds.last_all_stocks_quality = {
+            "status": "complete",
+            "stock_count": 1,
+        }
+        return [{"code": "600000"}]
+
     monkeypatch.setattr(
         intraday._cache_ds,
         "fetch_all_astocks",
-        lambda cache_dir, **_kwargs: [],
+        complete_snapshot,
     )
 
     def fake_run(command: list[str], label: str = "") -> dict:
         commands.append(command)
+        if "-o" in command:
+            output = Path(command[command.index("-o") + 1])
+            output.parent.mkdir(parents=True, exist_ok=True)
+            if label == "indices":
+                payload = [
+                    {"code": "sh000001", "price": "3200", "percent": "+0.1%"},
+                    {"code": "sz399001", "price": "10400", "percent": "-0.1%"},
+                ]
+            elif label == "concept":
+                payload = {
+                    "schema_version": "intraday_concept_dashboard.v1",
+                    "status": "complete",
+                    "themes": {},
+                    "rankings": {},
+                }
+            elif label == "theme":
+                payload = {
+                    "schema_version": "intraday_theme_ranking.v2",
+                    "theme_ranking": [],
+                }
+            else:
+                payload = {}
+            output.write_text(json.dumps(payload), encoding="utf-8")
         return {"success": True, "stdout": "", "stderr": "", "elapsed": 0.0}
 
     monkeypatch.setattr(intraday, "run_cmd", fake_run)
     with use_workspace(Workspace(tmp_path)):
-        assert intraday.main(["--date", "2026-07-22"]) is None
+        assert intraday.main(["--date", "2026-07-22"]) == 0
     assert len(commands) == 8
     assert all(command[:3] == [sys.executable, "-m", "ashare_pilot"] for command in commands)
     assert all(".opencode" not in " ".join(command) for command in commands)

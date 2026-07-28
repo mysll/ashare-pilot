@@ -183,13 +183,34 @@ def main(argv=None):
         code = stock.get("code", "")
         tech = results.get(code)
         if tech:
-            stock["technicals"] = tech
+            stock["technicals"] = {"status": "available", **tech}
         else:
             stock["technicals"] = {
+                "status": "no_data",
                 "boll_zone": "no_data",
                 "ma_alignment": "no_data",
                 "above_ma5": False,
             }
+
+    technical_status = (
+        "complete"
+        if success == len(codes) and codes
+        else "partial"
+        if success > 0
+        else "unavailable"
+    )
+    if not isinstance(data, dict):
+        data = {"compute_pool": pool}
+    data_quality = data.get("data_quality")
+    if not isinstance(data_quality, dict):
+        data_quality = {}
+        data["data_quality"] = data_quality
+    data_quality["technicals"] = {
+        "status": technical_status,
+        "requested_stock_count": len(codes),
+        "valid_stock_count": success,
+        "no_data_stock_count": len(codes) - success,
+    }
 
     output_str = json.dumps(data, ensure_ascii=False, indent=2)
 
@@ -199,6 +220,13 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     else:
         print(output_str)
+    if success == 0:
+        print(
+            "[ERROR] Technical indicators are unavailable for the entire Compute Pool",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

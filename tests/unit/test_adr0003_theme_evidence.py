@@ -753,14 +753,24 @@ def test_primary_theme_order_and_annotation_boundary():
     assert stock["market_board"] == "创业板"
 
     annotations = {
-        "schema_version": "intraday_mapper_annotations.v1",
+        "schema_version": "intraday_mapper_annotations.v2",
         "date": "2026-07-23",
         "market_assessment": {"reasoning_trace": "样本"},
-        "stocks": [{"code": "sz300001", "sector": "创业板"}],
+        "executable_annotations": [{
+            "code": "sz300001",
+            "primary_theme": "核心乙",
+        }],
+        "observation_annotations": [],
         "strategy": {},
     }
-    errors = validate(annotations, "2026-07-23", {"sz300001"}, base={"stocks": []})
-    assert any("deterministic theme field not allowed" in error for error in errors)
+    errors = validate(
+        annotations,
+        "2026-07-23",
+        {"sz300001"},
+        set(),
+        base={"executable_stocks": []},
+    )
+    assert any("deterministic field not allowed" in error for error in errors)
 
 
 def test_frozen_20260723_theme_roles_and_mapper_separation(

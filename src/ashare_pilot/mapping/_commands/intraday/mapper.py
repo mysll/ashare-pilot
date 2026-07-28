@@ -26,11 +26,30 @@ def main(argv=None) -> int:
         print("[ERROR] base or annotations file is missing", file=sys.stderr)
         return 1
     base, annotations = read_json(base_path), read_json(annotations_path)
-    if not isinstance(base, dict) or base.get("date") != args.date:
+    if (
+        not isinstance(base, dict)
+        or base.get("schema_version") != "intraday_mapper_base.v2"
+        or base.get("date") != args.date
+    ):
         print("[ERROR] invalid base schema/date", file=sys.stderr)
         return 1
-    allowed = {item.get("code") for item in base.get("stocks", []) if isinstance(item, dict)}
-    errors = validate(annotations, args.date, allowed, base=base)
+    executable_codes = {
+        item.get("code")
+        for item in base.get("executable_stocks", [])
+        if isinstance(item, dict)
+    }
+    observation_codes = {
+        item.get("code")
+        for item in base.get("observation_stocks", [])
+        if isinstance(item, dict)
+    }
+    errors = validate(
+        annotations,
+        args.date,
+        executable_codes,
+        observation_codes,
+        base=base,
+    )
     if errors:
         print("[ERROR] annotations validation failed; regenerate annotations", file=sys.stderr)
         for error in errors:

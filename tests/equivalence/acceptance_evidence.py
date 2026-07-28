@@ -77,7 +77,7 @@ assign(
 assign(
     "MP16 MP17 MP18 MP19 MP20 MP21",
     "tests/equivalence/test_batch4_mapping.py::test_intraday_merge_and_validation_match_legacy",
-    "tests/unit/test_batch5_overnight_contract.py::test_annotation_validator_enforces_i13_and_i14_contract",
+    "tests/unit/test_intraday_mapper_v2.py::test_execution_state_tampering_is_recomputed_and_rejected",
 )
 assign(
     "ST01 ST02 ST03 ST04 ST05 ST06 ST07 ST08 ST09 ST10",
@@ -87,7 +87,7 @@ assign(
 assign(
     "ST11 ST12 ST13 ST14",
     "tests/equivalence/test_batch5_strategy.py::test_overnight_contract_and_html_match_legacy",
-    "tests/unit/test_batch5_overnight_contract.py::test_overnight_builder_fails_closed_on_invalid_actionable_stock",
+    "tests/unit/test_overnight_strategy_v2.py::test_actionable_executable_and_observation_project_to_exact_views",
 )
 assign(
     "OP01 OP02 OP03 OP04 OP05 OP06",

@@ -72,6 +72,10 @@ def register_cli(subparsers: argparse._SubParsersAction) -> None:
     overnight = _context(contexts, "overnight", "Overnight strategy pipeline.")
     overnight_commands = {
         "score": ("Score the enriched intraday pool.", "score"),
+        "validate-selection": (
+            "Validate the deterministic selection pools.",
+            "validate_selection",
+        ),
         "build": ("Build overnight_strategy.json.", "build"),
         "validate": ("Validate overnight_strategy.json.", "validate"),
         "render-report": ("Render the overnight HTML report.", "render_report"),

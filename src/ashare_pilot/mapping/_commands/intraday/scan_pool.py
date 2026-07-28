@@ -17,35 +17,19 @@ import json
 import sys
 
 from ashare_pilot.market_data._datasources import EastMoneyIntradayDataSource
-from ashare_pilot.market_data.runtime import workspace_path
+from ashare_pilot.market_data.trading_scope import (
+    load_trading_scope,
+    partition_by_scope,
+    scope_decision,
+)
 
 _ds = EastMoneyIntradayDataSource()
 
-def load_board_exclusions():
-    try:
-        with workspace_path("config", "trading-scope.json").open(encoding="utf-8") as f:
-            config = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return set()
-
-    excluded = set()
-    for prefix, rule in config.get("boards", {}).items():
-        if rule.get("exclude", False):
-            excluded.add(prefix.lower())
-    return excluded
-
-
-def is_excluded(code, excluded_prefixes):
-    if not code:
-        return False
-    code_lower = code.lower()
-    for prefix in excluded_prefixes:
-        if code_lower.startswith(prefix):
-            return True
-    return False
-
-
-def build_scan_pool(all_stocks: list = None) -> list:
+def build_scan_pool(
+    all_stocks: list | None = None,
+    *,
+    include_quality: bool = False,
+) -> list | tuple[list, dict]:
     seen = set()
     pool = []
 
@@ -63,8 +47,12 @@ def build_scan_pool(all_stocks: list = None) -> list:
 
     turnover = _ds.fetch_turnover_ranking(top=200)
     add_stocks(turnover, "turnover")
+    turnover_quality = getattr(_ds, "last_turnover_quality", None)
+    if not isinstance(turnover_quality, dict) or not turnover_quality.get("status"):
+        turnover_quality = {"status": "complete", "count": len(turnover)}
 
     all_gainers = _ds.fetch_scan_stocks(top=500, all_stocks=all_stocks)
+    gain_range_count = 0
     for s in all_gainers:
         change_str = s.get("change_pct", "0%")
         try:
@@ -72,24 +60,43 @@ def build_scan_pool(all_stocks: list = None) -> list:
         except (ValueError, TypeError):
             chg = 0.0
         if 2.0 <= chg <= 9.0:
+            gain_range_count += 1
             if s.get("code") not in seen:
                 s["source_pool"] = "gain_range"
                 add_stocks([s], "gain_range")
 
-    return pool
+    recall_quality = {
+        "limit_up": {"status": "complete", "count": len(limit_up)},
+        "turnover": {
+            "status": turnover_quality["status"],
+            "count": len(turnover),
+            **(
+                {"error": turnover_quality.get("error") or "unknown_error"}
+                if turnover_quality["status"] == "unavailable"
+                else {}
+            ),
+        },
+        "gain_range": {"status": "complete", "count": gain_range_count},
+    }
+    return (pool, recall_quality) if include_quality else pool
 
 
-def apply_board_filter(pool, excluded_prefixes):
-    if not excluded_prefixes:
-        return pool, []
-    kept = []
-    removed = []
-    for s in pool:
-        if is_excluded(s.get("code", ""), excluded_prefixes):
-            removed.append(s)
-        else:
-            kept.append(s)
-    return kept, removed
+def apply_board_filter(pool, scope):
+    """Apply the canonical trading scope used by execution_state().
+
+    A set of prefixes remains accepted for callers outside production; this
+    compatibility is intentionally isolated from the Scan command itself.
+    """
+    if isinstance(scope, set):
+        scope = {
+            "boards": {
+                "sh": {"exclude": False},
+                "sz": {"exclude": False},
+                **{prefix: {"exclude": True} for prefix in scope},
+            },
+            "overrides": [],
+        }
+    return partition_by_scope(pool, scope)
 
 
 def compute_quick_score(pool: list) -> list:
@@ -173,20 +180,22 @@ def main(argv=None):
         all_stocks = _ds.fetch_all_astocks(cache_dir=args.cache_dir)
 
     print("Building Scan Pool from multiple sources...", file=sys.stderr)
-    scan_pool = build_scan_pool(all_stocks=all_stocks)
+    scan_pool, recall_quality = build_scan_pool(
+        all_stocks=all_stocks,
+        include_quality=True,
+    )
     print(f"Scan Pool: {len(scan_pool)} stocks", file=sys.stderr)
 
     if not args.no_board_filter:
-        excluded_prefixes = load_board_exclusions()
-        if excluded_prefixes:
-            scan_pool, removed = apply_board_filter(scan_pool, excluded_prefixes)
-            prefix_str = ", ".join(sorted(excluded_prefixes))
-            print(f"Board filter ({prefix_str}): removed {len(removed)}, kept {len(scan_pool)}", file=sys.stderr)
-        else:
-            removed = []
+        scope = load_trading_scope()
+        scan_pool, removed = apply_board_filter(scan_pool, scope)
+        print(
+            f"Trading scope: removed {len(removed)}, kept {len(scan_pool)}",
+            file=sys.stderr,
+        )
     else:
         removed = []
-        excluded_prefixes = set()
+        scope = None
         print("Board filter disabled (--no-board-filter)", file=sys.stderr)
 
     print("Computing QuickScore...", file=sys.stderr)
@@ -198,13 +207,18 @@ def main(argv=None):
     output = {
         "scan_pool_size": len(scan_pool),
         "compute_pool_size": len(compute_pool),
+        "recall_quality": recall_quality,
         "compute_pool": compute_pool,
     }
     if not args.no_board_filter and removed:
         output["board_filtered"] = {
-            "prefixes": sorted(excluded_prefixes) if excluded_prefixes else [],
             "removed_count": len(removed),
             "removed_codes": [s.get("code") for s in removed],
+            "decisions": {
+                s.get("code"): scope_decision(s.get("code", ""), scope)
+                for s in removed
+                if s.get("code")
+            },
         }
 
     output_str = json.dumps(output, ensure_ascii=False, indent=2)
@@ -215,6 +229,15 @@ def main(argv=None):
         print(f"Saved to {args.output}")
     else:
         print(output_str)
+
+    if len(compute_pool) < args.compute_pool_size:
+        print(
+            f"[ERROR] Scan Pool has {len(compute_pool)} eligible stocks; "
+            f"requires at least {args.compute_pool_size}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
