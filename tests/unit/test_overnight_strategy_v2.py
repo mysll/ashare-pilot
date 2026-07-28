@@ -136,11 +136,30 @@ def test_observation_execution_field_is_rejected():
     assert "observations[0].direction: forbidden" in errors
 
 
-def test_theme_shadow_is_rendered_but_rank_tier_is_not_called_buy_grade():
+def test_theme_shadow_is_rendered_but_rank_tier_is_hidden_from_html():
     mapper = actionable_mapper()
     strategy = build(mapper)
 
     rendered = render(strategy, mapper)
 
     assert "Theme Shadow" in rendered
-    assert "rank tier 仅表示相对排名，不是买入等级" in rendered
+    assert "Rank Tier" not in rendered
+    assert "rank tier" not in rendered
+    assert "rank_tier" not in rendered
+
+
+def test_v2_report_preserves_established_decision_terminal_layout():
+    mapper = actionable_mapper()
+    rendered = render(build(mapper), mapper)
+
+    for heading in (
+        "隔夜策略决策看板",
+        "市场判断 / Market Regime",
+        "执行策略总览",
+        "重点个股执行计划",
+        "组合风控",
+        "观察池",
+        "明日关键关注",
+    ):
+        assert heading in rendered
+    assert "交易板" not in rendered
