@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Project intraday_mapper.v2 into overnight_strategy.v2."""
+"""Project intraday_mapper.v3 into overnight_strategy.v3."""
 
 from __future__ import annotations
 
@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.mapping.intraday_contract import (
-    HOLD_DIRECTIONS,
     MAPPER_SCHEMA_VERSION,
     OVERNIGHT_STRATEGY_SCHEMA_VERSION,
     intraday_dir,
@@ -41,13 +40,14 @@ def executable_projection(stock: dict[str, Any]) -> dict[str, Any]:
         "rank": stock.get("rank"),
         "rank_tier": stock.get("rank_tier"),
         "tradeability": reasoning.get("tradeability"),
+        "execution_role": reasoning.get("execution_role"),
         "i14_exemption": stock.get("i14_exemption"),
         "direction": reasoning.get("direction"),
         "trading_strategy": reasoning.get("trading_strategy"),
         "risk_severity": reasoning.get("risk_severity"),
         "expected_premium": reasoning.get("expected_premium"),
         "key_reason": reasoning.get("key_reason"),
-        "position_plan": reasoning.get("position_plan"),
+        "execution_condition": reasoning.get("execution_condition"),
         "t_plus_1_plan": plan,
         "rules_applied": reasoning.get("rules_applied") or [],
         "reasoning_trace": reasoning.get("reasoning_trace"),
@@ -94,16 +94,16 @@ def build(mapper: dict[str, Any]) -> dict[str, Any]:
         ):
             raise ValueError(f"{stock.get('code')}: executable reasoning missing")
         projected = executable_projection(stock)
-        if projected.get("direction") in HOLD_DIRECTIONS:
-            errors = reasoning_invariant_errors(stock, stock["reasoning"])
-            if errors:
-                raise ValueError(f"{stock.get('code')}: {'; '.join(errors)}")
+        errors = reasoning_invariant_errors(stock, stock["reasoning"])
+        if errors:
+            raise ValueError(f"{stock.get('code')}: {'; '.join(errors)}")
+        role = projected.get("execution_role")
+        if role == "primary":
             recommendations.append(projected)
-        else:
-            projected["t_plus_1_plan"] = resolved_stop_loss(
-                stock, "not_applicable"
-            )
+        elif role in {"alternative", "watch"}:
             eligible_watchlist.append(projected)
+        else:
+            raise ValueError(f"{stock.get('code')}: invalid execution_role")
     observations = [
         observation_projection(stock)
         for stock in mapper.get("observation_stocks", [])
@@ -114,8 +114,6 @@ def build(mapper: dict[str, Any]) -> dict[str, Any]:
         if isinstance(mapper.get("strategy"), dict)
         else {}
     )
-    if not mapper.get("executable_stocks"):
-        strategy["position_cap"] = "0%"
     pool_summary = (
         mapper.get("pool_summary")
         if isinstance(mapper.get("pool_summary"), dict)

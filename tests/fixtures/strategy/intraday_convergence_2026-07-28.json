@@ -1,0 +1,31 @@
+{
+  "schema_version": "intraday_convergence_regression.v1",
+  "date": "2026-07-28",
+  "base_schema_version": "intraday_mapper_base.v2",
+  "executable_count": 30,
+  "observation_count": 30,
+  "legacy_v2_actionable_codes": [
+    "sh601288",
+    "sh601398",
+    "sh600519",
+    "sh600900",
+    "sz000681",
+    "sh603118",
+    "sz002440",
+    "sh600396",
+    "sz002860",
+    "sz300654"
+  ],
+  "v3_primary_codes": [
+    "sh601288",
+    "sh600519",
+    "sh600900"
+  ],
+  "v3_alternative_codes": [
+    "sh601398",
+    "sh600396"
+  ],
+  "v3_watch_count": 25,
+  "risk_posture": "very_light",
+  "regression_purpose": "Freeze the case where V2 projected every actionable Watch into recommendations; V3 requires explicit portfolio-converged roles."
+}

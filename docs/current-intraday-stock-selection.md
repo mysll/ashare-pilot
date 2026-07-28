@@ -1,6 +1,6 @@
 # 当前 Intraday 双池选股、评分与发布流程
 
-- 版本：2.1
+- 版本：3.0
 - 更新日期：2026-07-28
 - 状态：Current
 - 权威决策：[ADR-0004](adr/0004-intraday-selection-pools-contract.md)
@@ -20,7 +20,7 @@ observation_pool
 
 `selection_pools.json` 是 Compute 层唯一候选合同。A/B/C/D 是 Scored Pool
 内唯一一套相对排名，不决定池归属，也不等于 Tradeability。没有合适执行候选是正常
-业务结果，最终发布零仓位与观察视图。
+业务结果，最终发布 `risk_posture=zero` 与观察视图。
 
 当前系统严格区分三类约束：
 
@@ -63,11 +63,11 @@ observation_pool
                                       ↓
                   两个精确覆盖 annotation 数组
                                       ↓
-                       intraday_mapper.v2
+                       intraday_mapper.v3
                                       ↓
         recommendations / eligible_watchlist / observations
                                       ↓
-             overnight_strategy.v2 + validated HTML
+             overnight_strategy.v3 + validated HTML
 ```
 
 ## 3. 召回与 QuickScore
@@ -229,42 +229,44 @@ Mapper base 从同一 `theme_ranking.json` 附加：
 - core heat、diffusion heat、theme rank；
 - 或明确 `available=false` 与缺失原因。
 
-Shadow 不进入评分、floor、rank、池归属或仓位，也不得被复制到 annotations。
+Shadow 不进入评分、floor、rank、池归属或执行角色，也不得被复制到 annotations。
 
 ## 9. Reasoning 与发布
 
-`intraday_mapper.annotations.v2` 分为：
+`intraday_mapper.annotations.v3` 分为：
 
-- `executable_annotations`：可写 Direction、Tradeability、仓位、T+1 计划；
+- `executable_annotations`：显式写 Direction、Tradeability、
+  `execution_role`、`execution_condition` 与 T+1 计划；
 - `observation_annotations`：只写观察摘要、复核条件、风险说明。
 
-两个数组必须精确覆盖 base 对应池且互斥。Learned rules 只能把 executable
-降级为观望，不能把 observation 升级为 executable。
+两个数组必须精确覆盖 base 对应池且互斥。精确覆盖只表示每只股票均已完成判断，
+不表示全部推荐。外置规则由 LLM 以自然语言应用；Python 不解析规则语义，也不能把
+observation 升级为 executable。
 
-稳定文件名直接升级到 v2，不提供旧 Schema 兼容层：
+稳定文件名直接写 V3，不提供 V1/V2 生产兼容层：
 
 | 文件 | Schema |
 |---|---|
 | `intraday_mapper.base.json` | `intraday_mapper_base.v2` |
-| `intraday_mapper.annotations.json` | `intraday_mapper_annotations.v2` |
-| `intraday_mapper.json` | `intraday_mapper.v2` |
-| `overnight_strategy.json` | `intraday_overnight_strategy.v2` |
+| `intraday_mapper.annotations.json` | `intraday_mapper_annotations.v3` |
+| `intraday_mapper.json` | `intraday_mapper.v3` |
+| `overnight_strategy.json` | `intraday_overnight_strategy.v3` |
 
 最终投影：
 
 ```text
-executable + actionable Direction → recommendations
-executable + non-actionable       → eligible_watchlist
-observation pool                  → observations
+executable + primary + actionable Direction       → recommendations
+executable + alternative/watch + Direction=观望   → eligible_watchlist
+observation pool                                  → observations
 ```
 
-观察视图不包含 Direction、Tradeability、仓位、止损或 T+1 执行计划。HTML 只有在
+Observation 视图不包含 Direction、Tradeability、执行角色、止损或 T+1 执行计划。HTML 只有在
 JSON validator 通过后生成，并分区展示三类视图、数据质量和 Theme Shadow。
 
-学习规则可以把 recommendation 降为 eligible watchlist、降低仓位、收紧止损/
-止盈/T+1 条件并增加风险说明；不得提升 observation、修改分数/rank/floor/
-`execution_state`/池归属，或覆盖行情、资金、技术和主题事实。实际生效的规则必须
-进入 `rules_applied`，空规则项目不得虚构默认规则。
+LLM 完成逐股判断后必须横向比较，赋予 `primary|alternative|watch`。候选规则不得
+影响 Direction、execution role 或 T+1 计划；实际应用的正式规则进入
+`rules_applied`。策略只输出定性的 `risk_posture`，不得输出个股或总仓位百分比、
+金额或手数。
 
 ## 10. 发布不变量
 
@@ -273,9 +275,13 @@ JSON validator 通过后生成，并分区展示三类视图、数据质量和 T
 - 不可执行股票不得用于填满执行池；
 - `rank` 只在完整 Scored Pool 中生成，池过滤后不重新排名；
 - annotations 必须精确覆盖 base 的两个池；
+- recommendations 精确等于所有 primary，eligible watchlist 精确等于所有
+  alternative/watch；
+- `risk_posture=zero`、没有 primary、recommendations 为空三者等价；
 - observation 注释和最终视图不得包含任何可行动交易字段；
 - selection pools、mapper、annotations、strategy 任一验证失败均禁止发布；
-- 数据完整但执行池为空属于成功业务结果，输出零 recommendations。
+- 数据完整但执行池为空属于成功业务结果，输出零 recommendations 和
+  `risk_posture=zero`。
 
 ## 11. 当前命令
 

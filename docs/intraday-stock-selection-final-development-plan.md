@@ -1,5 +1,11 @@
 # Intraday 双池选股最终开发计划
 
+> 历史说明：本文记录双池 V2 的已完成实施。Reasoning 之后的发布合同已由
+> [Intraday 策略组合收敛开发计划](intraday-strategy-convergence-development-plan.md)
+> 升级到 V3；当前生成链路使用显式 `primary|alternative|watch`、定性
+> `risk_posture`，不再输出账户无关的仓位字段。本文中的 V2 示例仅作为历史实施
+> 证据，不是当前生产写入合同。
+
 - 版本：1.0
 - 日期：2026-07-27
 - 状态：Implemented
@@ -905,8 +911,8 @@ Shadow 不得被复制到 annotations，也不得进入任何评分函数。
 set PYTHONIOENCODING=utf-8
 uv run --frozen python -m pytest -q \
   tests/unit/test_intraday_selection_pools.py \
-  tests/unit/test_intraday_mapper_v2.py \
-  tests/unit/test_overnight_strategy_v2.py \
+  tests/unit/test_intraday_mapper_v3.py \
+  tests/unit/test_overnight_strategy_v3.py \
   tests/unit/test_intraday_required_data.py \
   tests/unit/test_intraday_recall_quality.py
 ```

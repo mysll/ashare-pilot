@@ -86,11 +86,12 @@ def _annotations(date: str, base: dict[str, Any]) -> dict[str, Any]:
                 "code": stock["code"],
                 "tradeability": "Watch",
                 "direction": "观望",
+                "execution_role": "watch",
                 "trading_strategy": "趋势跟随",
                 "risk_severity": "medium",
                 "expected_premium": "冻结回放不生成交易预测",
                 "key_reason": "仅验证 v2 合同投影",
-                "position_plan": "0%",
+                "execution_condition": "冻结回放仅观察，不执行",
                 "t_plus_1_plan": {
                     "auction_condition": "不适用",
                     "open_strategy": "仅观察",
@@ -111,12 +112,22 @@ def _annotations(date: str, base: dict[str, Any]) -> dict[str, Any]:
         for stock in base["observation_stocks"]
     ]
     return {
-        "schema_version": "intraday_mapper_annotations.v2",
+        "schema_version": "intraday_mapper_annotations.v3",
         "date": date,
-        "market_assessment": {"reasoning_trace": "离线合同回放"},
+        "market_assessment": {
+            "regime_hint": "offline_replay",
+            "tomorrow_expectation": "冻结回放不生成预测",
+            "risk_severity": "medium",
+            "reasoning_trace": "离线合同回放",
+        },
         "executable_annotations": executable,
         "observation_annotations": observations,
-        "strategy": {"position_cap": "0%"},
+        "strategy": {
+            "risk_posture": "zero",
+            "execution_principle": "冻结回放不执行",
+            "risk_control": ["仅验证合同投影"],
+            "execution_window": "14:50-14:57",
+        },
     }
 
 

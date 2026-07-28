@@ -90,6 +90,13 @@
       "provenance": "Minimized historical verification artifact."
     },
     {
+      "path": "strategy/intraday_convergence_2026-07-28.json",
+      "source_date": "2026-07-28",
+      "legacy_commands": ["build_overnight_strategy_json.py"],
+      "scenario": "Frozen V2 bulk-Watch recommendation count and V3 primary/alternative/watch convergence outcome.",
+      "provenance": "Minimized code and role counts from the validated 2026-07-28 mapper base and reasoning artifacts."
+    },
+    {
       "path": "strategy/step3_real/2026-07-09.json",
       "source_date": "2026-07-09",
       "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],

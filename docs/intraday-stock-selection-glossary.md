@@ -1,8 +1,8 @@
 # Intraday 选股领域术语表
 
-- 版本：1.0
-- 日期：2026-07-27
-- 关联：[ADR-0004](adr/0004-intraday-selection-pools-contract.md)、[最终开发计划](intraday-stock-selection-final-development-plan.md)
+- 版本：1.1
+- 日期：2026-07-28
+- 关联：[ADR-0004](adr/0004-intraday-selection-pools-contract.md)、[最终开发计划](intraday-stock-selection-final-development-plan.md)、[策略组合收敛开发计划](intraday-strategy-convergence-development-plan.md)
 
 ## 核心领域对象
 
@@ -70,6 +70,35 @@
 | `quote_data_missing` | 计算执行状态所需的价格、高价或昨收缺失。 |
 | `i14_exemption=watch` | VWAP Eligibility Policy 保留观察，但不允许执行。 |
 | `i14_exemption=cautious_hold` | VWAP Eligibility Policy 允许进入执行池，但 Direction 最高为谨慎持有。 |
+
+## 策略组合收敛（目标 V3）
+
+| 术语 | 定义 | 不表示 |
+|------|------|--------|
+| Actionable Direction | 可行动方向的精确集合：`持有偏多`、`持有`、`谨慎持有`，与代码 `HOLD_DIRECTIONS` 一致。 | 股票必然是最终主选。 |
+| Non-actionable Direction | 非行动方向的精确集合：`观望`。 | 股票属于 Observation Pool；Executable 也可以被 Reasoning 决定观望。 |
+| `execution_role=primary` | LLM 完成全池组合比较后的最终主选；必须搭配 Actionable Direction。 | 仓位百分比、金额、手数或固定推荐数量。 |
+| `execution_role=alternative` | 主选失去执行条件时才重新评估的替代标的；当前 Direction 必须为 `观望`。 | 可以与主选同时执行。 |
+| `execution_role=watch` | Executable Pool 中本轮不执行的普通观察标的；Direction 必须为 `观望`。 | Observation Pool 股票。 |
+| `risk_severity` | 市场或个股风险程度：low / medium / high / critical。 | 最终是否存在主选。 |
+| `risk_posture` | LLM 完成组合收敛后的整体执行姿态：zero / very_light / light / normal。 | 仓位百分比、金额、手数或推荐数量。 |
+
+每个目标 V3 `executable_annotations[]` 必须显式提供非空
+`execution_role`，不得缺失、为 `null` 或从其他字段默认推导。Observation Pool
+不得出现该字段。
+
+`risk_posture` 的定性含义：
+
+| 值 | 含义 |
+|---|---|
+| `zero` | 没有 primary，最终 recommendations 为空。 |
+| `very_light` | 极度谨慎，只保留严格筛选后的主选。 |
+| `light` | 谨慎参与。 |
+| `normal` | 按常规条件执行。 |
+
+`risk_posture=zero`、没有 primary、recommendations 为空三者必须同时成立。空
+Executable Pool，以及 Executable Pool 非空但全部为 alternative/watch 时，都
+必须使用 `risk_posture=zero`。
 
 ## 文件合同
 

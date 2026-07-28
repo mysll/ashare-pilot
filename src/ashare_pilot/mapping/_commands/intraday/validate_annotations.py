@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate separated executable and observation annotations (v2)."""
+"""Validate separated executable and observation annotations (v3)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,9 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.mapping.intraday_contract import (
+    EXECUTION_ROLES,
     MAPPER_ANNOTATIONS_SCHEMA_VERSION,
+    RISK_POSTURES,
     STOP_LOSS_BASES,
     intraday_dir,
     read_json,
@@ -43,11 +45,12 @@ COMPUTE_OWNED_STOCK_FIELDS = {
 OBSERVATION_EXECUTION_FIELDS = {
     "tradeability",
     "direction",
+    "execution_role",
+    "execution_condition",
     "trading_strategy",
     "risk_severity",
     "expected_premium",
     "key_reason",
-    "position_plan",
     "t_plus_1_plan",
     "rules_applied",
     "reasoning_trace",
@@ -56,10 +59,40 @@ OBSERVATION_EXECUTION_FIELDS = {
     "stop_loss_basis",
     "stop_loss_price",
 }
+FORBIDDEN_ACCOUNT_SIZING_FIELDS = {
+    "position",
+    "position_plan",
+    "position_cap",
+    "position_pct",
+    "position_percent",
+    "position_amount",
+    "cash_amount",
+    "order_amount",
+    "position_shares",
+    "share_count",
+    "position_lots",
+    "lot_count",
+    "quantity",
+    "qty",
+}
 
 
 def _nonempty_string(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def _forbidden_paths(value: Any, path: str = "") -> list[str]:
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, nested in value.items():
+            nested_path = f"{path}.{key}" if path else str(key)
+            if key in FORBIDDEN_ACCOUNT_SIZING_FIELDS:
+                paths.append(nested_path)
+            paths.extend(_forbidden_paths(nested, nested_path))
+    elif isinstance(value, list):
+        for index, nested in enumerate(value):
+            paths.extend(_forbidden_paths(nested, f"{path}[{index}]"))
+    return paths
 
 
 def _codes(
@@ -112,14 +145,36 @@ def validate(
     if doc.get("date") != date:
         errors.append(f"date: must be {date}")
     assessment = doc.get("market_assessment")
-    if not isinstance(assessment, dict) or not _nonempty_string(
-        assessment.get("reasoning_trace")
-    ):
+    if not isinstance(assessment, dict):
+        assessment = {}
+        errors.append("market_assessment: must be object")
+    for field in ("regime_hint", "tomorrow_expectation", "reasoning_trace"):
+        if not _nonempty_string(assessment.get(field)):
+            errors.append(
+                f"market_assessment.{field}: must be non-empty string"
+            )
+    if assessment.get("risk_severity") not in RISKS:
         errors.append(
-            "market_assessment.reasoning_trace: must be non-empty string"
+            "market_assessment.risk_severity: invalid enum"
         )
-    if not isinstance(doc.get("strategy"), dict):
+    strategy = doc.get("strategy")
+    if not isinstance(strategy, dict):
+        strategy = {}
         errors.append("strategy: must be object")
+    posture = strategy.get("risk_posture")
+    if posture not in RISK_POSTURES:
+        errors.append("strategy.risk_posture: invalid enum")
+    if not _nonempty_string(strategy.get("execution_principle")):
+        errors.append("strategy.execution_principle: must be non-empty string")
+    controls = strategy.get("risk_control")
+    if not isinstance(controls, list) or any(
+        not _nonempty_string(value) for value in controls
+    ):
+        errors.append("strategy.risk_control: must be string array")
+    if strategy.get("execution_window") != "14:50-14:57":
+        errors.append("strategy.execution_window: must be 14:50-14:57")
+    for path in _forbidden_paths(doc):
+        errors.append(f"{path}: account sizing field not allowed")
 
     executable_rows, actual_executable = _codes(
         doc.get("executable_annotations"),
@@ -154,6 +209,10 @@ def validate(
             errors.append(f"{path}.direction: invalid enum")
         if item.get("tradeability") not in TRADEABILITIES:
             errors.append(f"{path}.tradeability: invalid enum")
+        if "execution_role" not in item:
+            errors.append(f"{path}.execution_role: required")
+        elif item.get("execution_role") not in EXECUTION_ROLES:
+            errors.append(f"{path}.execution_role: invalid enum")
         if item.get("trading_strategy") not in STRATEGIES:
             errors.append(f"{path}.trading_strategy: invalid enum")
         if item.get("risk_severity") not in RISKS:
@@ -161,13 +220,16 @@ def validate(
         for field in (
             "expected_premium",
             "key_reason",
-            "position_plan",
+            "execution_condition",
             "reasoning_trace",
         ):
             if not _nonempty_string(item.get(field)):
                 errors.append(f"{path}.{field}: must be non-empty string")
-        if not isinstance(item.get("rules_applied"), list):
-            errors.append(f"{path}.rules_applied: must be list")
+        rules = item.get("rules_applied")
+        if not isinstance(rules, list) or any(
+            not isinstance(value, str) for value in rules
+        ):
+            errors.append(f"{path}.rules_applied: must be string array")
         plan = item.get("t_plus_1_plan")
         if not isinstance(plan, dict):
             errors.append(f"{path}.t_plus_1_plan: must be object")
@@ -207,6 +269,13 @@ def validate(
         for field in ("observation_summary", "watch_condition", "risk_note"):
             if not _nonempty_string(item.get(field)):
                 errors.append(f"{path}.{field}: must be non-empty string")
+    primary_exists = any(
+        item.get("execution_role") == "primary" for item in executable_rows
+    )
+    if primary_exists and posture == "zero":
+        errors.append("strategy.risk_posture: must not be zero when primary exists")
+    if not primary_exists and posture in RISK_POSTURES - {"zero"}:
+        errors.append("strategy.risk_posture: must be zero when no primary exists")
     return errors
 
 

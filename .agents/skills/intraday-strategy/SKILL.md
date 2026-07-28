@@ -1,6 +1,6 @@
 ---
 name: intraday-strategy
-description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes mapper base v2, writes separated semantic annotations, and publishes validated mapper/strategy v2 contracts. This is the sole Reasoning layer.
+description: Use when dispatched as Step 3 of intraday overnight pipeline. Consumes mapper base v2, performs LLM-only portfolio convergence, and publishes validated mapper/strategy v3 contracts. This is the sole Reasoning layer.
 ---
 
 # Intraday Strategy — Reasoning Layer
@@ -9,7 +9,8 @@ description: Use when dispatched as Step 3 of intraday overnight pipeline. Consu
 
 Find positive T+1 premium among stocks that already passed deterministic
 execution eligibility. This is the sole layer allowed to author Direction,
-Tradeability, RiskSeverity, Expected Premium, position plans, and reasoning.
+Tradeability, RiskSeverity, Expected Premium, execution roles, execution
+conditions, and reasoning.
 
 Python owns and the LLM must never reproduce or override:
 
@@ -19,64 +20,55 @@ Python owns and the LLM must never reproduce or override:
 - `primary_theme`, themes, market board, Theme Support Shadow;
 - deterministic stop-loss price and text.
 
-Theme Support Shadow is read-only evidence from `theme_ranking.json`. It never
-changes score, rank, eligibility, pool membership, or position.
+Theme Support Shadow is read-only evidence. It never changes score, rank,
+eligibility, pool membership, or execution role.
 
 ## Inputs
 
-Normal orchestration already produces:
+Read these complete inputs:
 
 ```text
 .cache/intraday/{date}/selection_pools.json
 .cache/intraday/{date}/theme_ranking.json
 intraday/{date}/intraday_mapper.base.json
-memory/INTRADAY_RULES.md       # optional in zero-history projects
-memory/SHARED_RULES.md         # optional in zero-history projects
+memory/INTRADAY_RULES.md
+memory/SHARED_RULES.md
 ```
 
-Do not re-score when `selection_pools.json` exists. If compute was not run:
-
-```bash
-uv run --frozen ashare-pilot strategy overnight score \
-  .cache/intraday/{date}/compute_pool_enriched.json \
-  --breadth .cache/intraday/{date}/market_breadth.json \
-  --indices .cache/intraday/{date}/indices.json \
-  --executable-pool-size 30 \
-  --observation-pool-size 30 \
-  --date {date} \
-  --json -o .cache/intraday/{date}/selection_pools.json
-```
-
-Validate compute before Reasoning:
+Missing memory files in a zero-history project mean no learned rules. Do not
+re-score when `selection_pools.json` exists. Validate compute and build the
+base before Reasoning:
 
 ```bash
 uv run --frozen ashare-pilot strategy overnight validate-selection --date {date}
 uv run --frozen ashare-pilot mapping intraday build-mapper-base --date {date}
 ```
 
-## V1.3 score semantics
+## Score semantics
 
-Nine dimensions remain percentile-based:
+The nine dimensions and their weights remain compute-owned. There is one
+`rank/rank_tier/tier` over the Scored Pool. Tier is relative rank only. Never
+map it mechanically to Tradeability or execution role, and never use it to
+decide executable membership.
 
-| Dimension | Weight |
-|---|---:|
-| `source_capital_proxy` | 18% |
-| capital continuity | 18% |
-| tail strength | 14% |
-| position advantage | 9% |
-| risk penalty | -10% |
-| intensity | 9% |
-| conviction | 9% |
-| consistency | 5% |
-| trend quality | 8% |
+## Required four-stage reasoning
 
-`source_capital_proxy` is the recall-source ordinal blended with the stock's
-main-inflow sigmoid. It is not theme heat. Theme Ranking remains a shadow.
+Perform Reasoning in this order:
 
-There is one `rank/rank_tier/tier` over the Scored Pool:
-A=top 10%, B=top 40%, C=top 70%, D=rest. `tier == rank_tier`.
-Tier is relative rank only. Never map it mechanically to Tradeability, and
-never use it to decide whether a stock belongs to the executable pool.
+1. Read the complete mapper base and both rule files. Compute fields and pool
+   membership are read-only.
+2. Judge each executable stock independently: Tradeability, preliminary
+   Direction, Expected Premium, RiskSeverity, T+1 risk, stop-loss basis, and
+   actually applied formal rules.
+3. Compare the complete executable set and converge the portfolio. Decide
+   which stocks are simultaneous `primary` selections, which are
+   `alternative` choices that must not execute alongside their primary, and
+   which remain `watch`. Then finalize Direction and `execution_condition`.
+4. Complete the publish checklist before writing annotations.
+
+Executable exact coverage means every stock was judged. It does not mean every
+stock is a recommendation. Never derive `primary` from executable membership,
+Watch, score, rank, or tier. There is no hard-coded recommendation count.
 
 ## Annotation contract
 
@@ -84,7 +76,7 @@ Write only `intraday/{date}/intraday_mapper.annotations.json`:
 
 ```json
 {
-  "schema_version": "intraday_mapper_annotations.v2",
+  "schema_version": "intraday_mapper_annotations.v3",
   "date": "YYYY-MM-DD",
   "market_assessment": {
     "regime_hint": "string",
@@ -97,11 +89,12 @@ Write only `intraday/{date}/intraday_mapper.annotations.json`:
       "code": "sh600000",
       "tradeability": "Suitable|Watch|Extended|Avoid",
       "direction": "持有偏多|持有|谨慎持有|观望",
+      "execution_role": "primary|alternative|watch",
       "trading_strategy": "趋势跟随|回调布局|强势接力|防御布局",
       "risk_severity": "low|medium|high|critical",
       "expected_premium": "string",
       "key_reason": "string",
-      "position_plan": "string",
+      "execution_condition": "string",
       "t_plus_1_plan": {
         "auction_condition": "string",
         "open_strategy": "string",
@@ -121,48 +114,57 @@ Write only `intraday/{date}/intraday_mapper.annotations.json`:
     }
   ],
   "strategy": {
-    "position_cap": "string",
+    "risk_posture": "zero|very_light|light|normal",
+    "execution_principle": "string",
     "risk_control": ["string"],
     "execution_window": "14:50-14:57"
   }
 }
 ```
 
-Coverage is exact:
+Coverage is exact and the two arrays do not overlap. Observation annotations
+contain no Direction, Tradeability, execution role, execution condition,
+stop-loss, T+1 plan, rules, or other execution field.
 
-- executable annotation codes equal base `executable_stocks`;
-- observation annotation codes equal base `observation_stocks`;
-- the arrays do not overlap;
-- observation annotations contain no Direction, Tradeability, position,
-  stop-loss, T+1 plan, rules, or other execution field.
+## Direction, role, and stop-loss constraints
 
-Learned rules may downgrade an executable stock to non-actionable. They can
-never upgrade an observation stock or change deterministic facts.
-
-## Direction and stop-loss constraints
-
-- Actionable directions require an executable base stock.
+- `primary` requires an actionable Direction:
+  `持有偏多|持有|谨慎持有`.
+- `alternative` and `watch` require Direction `观望`.
+- `Watch + primary` is legal only with Direction `谨慎持有`.
+- `Extended` and `Avoid` require `watch + 观望`.
 - `i14_exemption=cautious_hold` caps Direction at `谨慎持有`.
-- Non-actionable executable stocks use `stop_loss_basis=not_applicable`.
-- The LLM authors only `stop_loss_basis`; Python resolves price and text.
-- Extreme weak-market learned rules may set all executable directions to
-  `观望` and position cap to zero without claiming that scores changed.
-- Empty executable pool is valid: write an empty executable array, cover every
-  observation, and set position cap to zero.
+- A primary uses a deterministic basis other than `not_applicable`.
+- Alternative/watch use `stop_loss_basis=not_applicable`.
+- The LLM authors only the basis; Python resolves stop price and text.
+- `risk_posture=zero` if and only if there is no primary.
+- Empty executable pool is valid and requires `risk_posture=zero`.
+- Never output stock or portfolio percentages, cash amounts, share counts, or
+  lots. Account sizing belongs to a future account execution layer.
 
 ## Memory integration
 
-Before annotations, read the full contents of these files when present:
-
-- `memory/INTRADAY_RULES.md`;
-- `memory/SHARED_RULES.md`.
-
-Empty or absent rule tables mean no learned rules and are not an error. Apply
-rules semantically, record only actually applied rule IDs, and preserve the
-governance priority. A learned rule can only tighten the executable outcome.
+Apply formal rules semantically, resolve conflicts in the LLM, and record only
+actually applied formal rule IDs. Candidate rules must not affect Direction,
+execution role, execution condition, or the T+1 plan. `rules_applied` is an
+audit string array; Python must not parse or apply its meaning.
 
 Do not add, upgrade, retire, or change rule thresholds during strategy
 generation.
+
+## Publish checklist
+
+- Executable annotations exactly cover the pool but are not all recommendations.
+- Every primary belongs to the final simultaneous execution set.
+- Every alternative/watch is `观望`.
+- Watch was not mechanically converted to `谨慎持有`.
+- Every Avoid/Extended stock is `watch + 观望`.
+- Candidate rules did not affect Direction, role, condition, or T+1 plans.
+- `rules_applied` contains only actually applied formal rules.
+- Applied rules do not contradict the final primary/alternative set.
+- Every `execution_condition` matches its role.
+- Risk posture, controls, and the primary set are consistent.
+- No percentage, amount, share count, or lot sizing is present.
 
 ## Publish
 
@@ -175,14 +177,15 @@ uv run --frozen ashare-pilot strategy overnight validate --date {date}
 uv run --frozen ashare-pilot strategy overnight render-report --date {date}
 ```
 
-If validation fails, regenerate semantic annotations. Never patch compute
-facts, pool membership, scores, theme fields, or stop-loss numbers.
+If validation fails, regenerate annotations. Never patch compute facts, pool
+membership, scores, theme fields, or stop-loss numbers.
 
 Final JSON views:
 
-- actionable executable → `recommendations`;
-- non-actionable executable → `eligible_watchlist`;
+- `primary` executable with actionable Direction → `recommendations`;
+- `alternative|watch` executable with Direction `观望` →
+  `eligible_watchlist`;
 - deterministic observation pool → `observations`.
 
-The HTML must keep those sections separate and must not label rank tier as a
-buy grade.
+The HTML keeps those sections separate and never presents rank tier as a buy
+grade.

@@ -166,7 +166,7 @@ def test_scan_pool_below_compute_target_is_nonzero_and_keeps_quality_contract(
     assert payload["recall_quality"]["turnover"]["status"] == "unavailable"
 
 
-def test_v2_schema_constants_are_frozen():
+def test_compute_schemas_stay_frozen_while_reasoning_schemas_are_v3():
     assert (
         intraday_contract.SELECTION_POOLS_SCHEMA_VERSION
         == "intraday_selection_pools.v1"
@@ -174,12 +174,12 @@ def test_v2_schema_constants_are_frozen():
     assert intraday_contract.MAPPER_BASE_SCHEMA_VERSION == "intraday_mapper_base.v2"
     assert (
         intraday_contract.MAPPER_ANNOTATIONS_SCHEMA_VERSION
-        == "intraday_mapper_annotations.v2"
+        == "intraday_mapper_annotations.v3"
     )
-    assert intraday_contract.MAPPER_SCHEMA_VERSION == "intraday_mapper.v2"
+    assert intraday_contract.MAPPER_SCHEMA_VERSION == "intraday_mapper.v3"
     assert (
         intraday_contract.OVERNIGHT_STRATEGY_SCHEMA_VERSION
-        == "intraday_overnight_strategy.v2"
+        == "intraday_overnight_strategy.v3"
     )
 
 

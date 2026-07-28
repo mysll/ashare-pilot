@@ -62,8 +62,8 @@ digraph workflow {
 
 只接受：
 
-- `overnight_strategy.json.schema_version=intraday_overnight_strategy.v2`
-- `intraday_mapper.json.schema_version=intraday_mapper.v2`
+- `overnight_strategy.json.schema_version=intraday_overnight_strategy.v3`
+- `intraday_mapper.json.schema_version=intraday_mapper.v3`
 
 在读取复盘字段前先执行：
 
@@ -80,9 +80,10 @@ uv run --frozen ashare-pilot strategy overnight validate \
 
 - **Market Context**: `market_assessment`、`strategy`、`data_quality`、
   `recall_quality`
-- **Recommendations**: 可行动 executable 股票的方向、定性仓位、
+- **Recommendations**: `execution_role=primary` 的可行动 executable 股票，其方向、
   结构化止损、文字止盈、ReasoningTrace 与 RulesApplied
-- **Eligible Watchlist**: executable 但被 Reasoning 明确降为 `观望` 的股票；
+- **Eligible Watchlist**: executable 中的 `alternative` 和 `watch`，全部为
+  `观望`；alternative 单独记录替代观察结果，不能视为同时执行或实际推荐；
   `stop_loss_basis` 必须是 `not_applicable`
 - **Observations**: 确定性观察池及 `score_status`、
   `observation_reasons`、观察摘要与复核条件
@@ -100,7 +101,7 @@ uv run --frozen ashare-pilot strategy overnight validate \
 | 来源 | 类型 | 用途 |
 |------|------|------|
 | `recommendations` | 可行动推荐 | 计算 T 收盘到 T+1 的基准表现，复核止损与 T+1 计划 |
-| `eligible_watchlist` | 合格但观望 | 评估 Reasoning 降级是否避损或踏空，不计入持仓胜率 |
+| `eligible_watchlist` | 备选或合格观察 | alternative 单独记录替代结果，watch 评估机会成本；均不计入推荐胜率 |
 | `observations` | 确定性观察 | 分开评估执行门槛失败和数据缺失；unscored 不评价评分质量 |
 
 ---
@@ -160,7 +161,7 @@ uv run --frozen ashare-pilot strategy overnight validate \
 必须记录行情快照时间。10:00 前的复盘将实时 `price` 标为“T+1 快照价”，
 不得称为“T+1 收盘价”；当日 high/low 也只能解释为截至快照时点的数据。
 
-`overnight_strategy.v2` 不提供实际成交记录、数值买入区间或数值目标价。
+`overnight_strategy.v3` 不提供实际成交记录、仓位百分比、数值买入区间或数值目标价。
 除非另有真实成交凭证，否则不得声称“实际买入”“未买入”“目标价命中”或
 “实际持仓收益”。所有收益统一标注为 **T 日收盘基准收益**。
 
@@ -181,8 +182,8 @@ uv run --frozen ashare-pilot strategy overnight validate \
 
 #### 3a. Recommendation Benchmark Performance
 
-| 代码 | 名称 | 方向 | 定性仓位 | T日收盘 | T+1开盘 | 截至快照最高 | 截至快照最低 | T+1标记价 | 基准收益 | 止损触及 |
-|------|------|:----:|:----:|:-------------:|:------:|:------:|:------:|:------:|:------:|:----:|
+| 代码 | 名称 | 方向 | T日收盘 | T+1开盘 | 截至快照最高 | 截至快照最低 | T+1标记价 | 基准收益 | 止损触及 |
+|------|------|:----:|:-------------:|:------:|:------:|:------:|:------:|:------:|:----:|
 
 结果分类:
 - **正收益** (>+0.5%)
@@ -196,9 +197,9 @@ uv run --frozen ashare-pilot strategy overnight validate \
 - 最大收益 / 最大亏损
 - 止损触及数: X/Y
 
-不得根据定性 `position_plan` 推导数值权重或仓位加权收益。
+V3 不提供账户仓位信息，只计算等权基准收益。
 
-#### 3b. Eligible Watchlist Counterfactual Review
+#### 3b. Alternative / Watch Counterfactual Review
 
 | 代码 | 名称 | Score | Rank Tier | 降级依据 | T+1基准收益 | 评价 |
 |------|------|:-----:|:---------:|----------|:-----------:|------|
@@ -210,8 +211,9 @@ uv run --frozen ashare-pilot strategy overnight validate \
 - **降级踏空**: T+1 明显上涨；结合 `reasoning_trace` 和
   `rules_applied` 判断错误来源
 
-Eligible Watchlist 没有可行动止损，不得计入 recommendation 正收益率、
-止损触及率或 recommendation 基准收益。
+Alternative 和 watch 均没有可行动止损。Alternative 必须单独记录其替代观察
+结果，不得算作实际推荐；watch 继续作为机会成本观察。两者均不得计入
+recommendation 正收益率、止损触及率或 recommendation 基准收益。
 
 #### 3c. T+1 Exit Plan Verification
 
@@ -328,7 +330,7 @@ Spearman rank correlation: score rank vs T+1 benchmark return
 
 **推荐正收益率**: X/Y = XX%  |  **等权平均基准收益**: +X%  |  **最大上涨**: X% (stock)  |  **最大下跌**: X% (stock)
 
-| 代码 | 名称 | 方向 | 定性仓位 | T日收盘 | T+1开盘 | T+1标记价 | 基准收益 | 止损触及 | 结果 |
+| 代码 | 名称 | 方向 | T日收盘 | T+1开盘 | T+1标记价 | 基准收益 | 止损触及 | 结果 |
 ...
 
 ## 二、Eligible Watchlist 降级复盘
@@ -409,7 +411,7 @@ Spearman rank correlation: score rank vs T+1 benchmark return
 
 | Step | Action | Input | Output |
 |------|--------|-------|--------|
-| 1 | Read Strategy | validated v2 `overnight_strategy.json` + `intraday_mapper.json` | Extracted recommendations, eligible watchlist, observations, rules, scores |
+| 1 | Read Strategy | validated v3 `overnight_strategy.json` + `intraday_mapper.json` | Extracted primary recommendations, alternative/watch list, observations, rules, scores |
 | 2 | Fetch Actuals | Stock codes from strategy | T/T+1 price data |
 | 3 | performance-analyst analysis | Predictions + actuals | Full comparison report |
 | 4 | Write Memory | Analysis report | `memory/intraday/{date}/intraday_verification.md` + INDEX/RULES updates |
@@ -434,8 +436,9 @@ Spearman rank correlation: score rank vs T+1 benchmark return
   - Update `memory/INTRADAY_RULES.md` (尾盘规则) or `memory/SHARED_RULES.md` (通用规则) depending on rule scope
 - The strategy date (T) and review date (T+1) are different — verification file uses the strategy date
 - If the strategy file does not exist, report error and suggest running intraday-market-analysis first
-- Reject any schema other than `intraday_overnight_strategy.v2` /
-  `intraday_mapper.v2`; do not apply a legacy compatibility path
+- Reject any schema other than `intraday_overnight_strategy.v3` /
+  `intraday_mapper.v3`; V1/V2 files are archives/fixtures only and have no
+  production review compatibility path
 - Without actual fills, all return figures are T-close benchmarks, not realized
   account P&L; never invent buy zones, target prices, execution rates, or
   numeric position weights

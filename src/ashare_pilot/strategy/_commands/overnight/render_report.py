@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render strategy v2 with the established A-share decision-terminal layout."""
+"""Render strategy v3 with the established A-share decision-terminal layout."""
 
 from __future__ import annotations
 
@@ -81,11 +81,28 @@ def direction_class(value: Any) -> str:
 
 def direction_label(value: Any) -> str:
     return {
-        "持有偏多": "建议买入",
-        "持有": "建议买入",
-        "谨慎持有": "谨慎买入",
-        "观望": "暂不买入",
-    }.get(str(value), str(value or "暂不买入"))
+        "持有偏多": "持有偏多",
+        "持有": "持有",
+        "谨慎持有": "谨慎持有",
+        "观望": "观望",
+    }.get(str(value), str(value or "观望"))
+
+
+def role_label(value: Any) -> str:
+    return {
+        "primary": "主选",
+        "alternative": "备选",
+        "watch": "观察",
+    }.get(str(value), "确定性观察")
+
+
+def posture_label(value: Any) -> str:
+    return {
+        "zero": "不执行",
+        "very_light": "极度谨慎",
+        "light": "谨慎参与",
+        "normal": "常规执行",
+    }.get(str(value), "未确认")
 
 
 def generated_time(value: Any) -> str:
@@ -218,7 +235,6 @@ def data_completeness(
 def strategy_rows(items: list[dict[str, Any]]) -> str:
     rows = []
     for item in items:
-        plan = plan_of(item)
         rows.append(
             f"""<tr>
               <td><span class="badge {direction_class(item.get('direction'))}">{esc(direction_label(item.get('direction')))}</span></td>
@@ -227,12 +243,11 @@ def strategy_rows(items: list[dict[str, Any]]) -> str:
               <td>{esc(item.get('primary_theme'))}</td>
               <td>{score_bar(item.get('overnight_score'))}</td>
               <td><span class="badge risk-{risk_class(item.get('risk_severity'))}">{risk_label(item.get('risk_severity'))}</span></td>
-              <td class="action" title="{esc(plan.get('open_strategy'))}">{esc(plan.get('open_strategy'))}</td>
               <td class="reason" title="{esc(item.get('key_reason'))}">{esc(item.get('key_reason'))}</td>
             </tr>"""
         )
     return "".join(rows) or (
-        '<tr><td colspan="8" class="empty">'
+        '<tr><td colspan="7" class="empty">'
         "无合适执行候选；空执行池是正常业务结果</td></tr>"
     )
 
@@ -249,11 +264,12 @@ def execution_cards(items: list[dict[str, Any]]) -> str:
               </header>
               <div class="card-tags">
                 <span>{esc(item.get('primary_theme'))}</span>
-                <span class="badge {direction_class(item.get('direction'))}">{esc(direction_label(item.get('direction')))}</span>
+                <span class="badge {direction_class(item.get('direction'))}">主选 · {esc(direction_label(item.get('direction')))}</span>
                 <span class="badge risk-{risk_class(item.get('risk_severity'))}">{risk_label(item.get('risk_severity'))}风险</span>
               </div>
               <dl>
                 <div><dt>开盘动作</dt><dd>{esc(plan.get('open_strategy'))}</dd></div>
+                <div><dt>执行条件</dt><dd>{esc(item.get('execution_condition'))}</dd></div>
                 <div><dt>止损纪律</dt><dd>{esc(plan.get('stop_loss'))}</dd></div>
                 <div><dt>止盈计划</dt><dd>{esc(plan.get('take_profit'))}</dd></div>
                 <div><dt>Theme Shadow</dt><dd>{esc(shadow_text(item))}</dd></div>
@@ -265,6 +281,10 @@ def execution_cards(items: list[dict[str, Any]]) -> str:
 
 
 def watch_group(item: dict[str, Any]) -> tuple[str, str]:
+    if item.get("execution_role") == "alternative":
+        return "备选（暂不执行，仅作为替代）", "threshold"
+    if item.get("execution_role") == "watch":
+        return "合格观察", "wait"
     reasons = item.get("observation_reasons")
     reasons = reasons if isinstance(reasons, list) else []
     text = " ".join(
@@ -293,7 +313,8 @@ def watch_group(item: dict[str, Any]) -> tuple[str, str]:
 
 def watch_reason(item: dict[str, Any]) -> str:
     return str(
-        item.get("observation_summary")
+        item.get("execution_condition")
+        or item.get("observation_summary")
         or item.get("key_reason")
         or item.get("primary_observation_reason")
         or "等待条件确认"
@@ -302,6 +323,8 @@ def watch_reason(item: dict[str, Any]) -> str:
 
 def watch_groups(items: list[dict[str, Any]]) -> str:
     order = [
+        "备选（暂不执行，仅作为替代）",
+        "合格观察",
         "涨停封板",
         "板块不可交易",
         "关键数据缺失",
@@ -325,7 +348,7 @@ def watch_groups(items: list[dict[str, Any]]) -> str:
               <td>{esc(item.get('primary_theme'))}</td>
               <td>{esc(item.get('score_status'))}</td>
               <td>{esc(item.get('overnight_score'))}</td>
-              <td><span class="badge watch">暂不买入</span></td>
+              <td><span class="badge watch">{esc(role_label(item.get('execution_role')))}</span></td>
               <td>{esc(watch_reason(item))}</td>
               <td>{esc(shadow_text(item))}</td>
             </tr>"""
@@ -378,13 +401,10 @@ def render(document: dict[str, Any], mapper: dict[str, Any] | None = None) -> st
     market_risk = market.get("risk_severity") or strategy.get("risk_severity")
     risk = risk_class(market_risk)
     risk_score = {"low": 1, "medium": 3, "high": 4, "critical": 5}.get(risk, 3)
-    held = sum(
-        item.get("direction") in {"持有", "持有偏多"}
-        for item in recommendations
+    alternatives = sum(
+        item.get("execution_role") == "alternative" for item in eligible
     )
-    cautious = sum(
-        item.get("direction") == "谨慎持有" for item in recommendations
-    )
+    eligible_watches = len(eligible) - alternatives
     primary_sectors = []
     for item in recommendations:
         sector = str(item.get("primary_theme") or "")
@@ -426,7 +446,7 @@ h1,h2,h3,p{{margin:0}}h1{{font-size:30px;letter-spacing:.02em}}.subtitle{{max-wi
 .market-copy{{margin-top:13px;color:#b9c6d5}}.market-detail{{margin-top:13px;color:#b9c6d5}}.market-detail summary{{cursor:pointer;list-style:none}}.market-detail summary::-webkit-details-marker{{display:none}}.market-detail .toggle-label{{display:block;margin-top:6px;color:var(--sub);font-size:12px}}.market-detail .open-label,.market-detail .market-full{{display:none}}.market-detail[open] .market-copy,.market-detail[open] .closed-label{{display:none}}.market-detail[open] .open-label{{display:block}}.market-detail[open] .market-full{{display:block;margin:8px 0 0}}.decision-layout{{margin-top:18px}}.big-number{{font:800 42px/1 ui-monospace,SFMono-Regular,monospace;color:var(--rise)}}.big-number small{{font:600 14px/1.2 inherit;color:var(--sub)}}.discipline{{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:20px}}.discipline span{{padding:6px 8px;border-radius:6px;background:#151f2b;color:#c9d4e2;font-size:12px}}
 .risk-line{{display:flex;justify-content:space-between;align-items:end;margin:18px 0 12px}}.risk-value{{font-size:26px;font-weight:800;color:var(--warn)}}.risk-value small{{font-size:13px;color:var(--sub)}}.risk-meter{{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}}.risk-meter i{{height:6px;border-radius:5px;background:#233143}}.risk-meter i.on{{background:var(--warn)}}.distribution{{display:grid;gap:8px;margin-top:19px}}.distribution div{{display:grid;grid-template-columns:78px 1fr 26px;gap:9px;align-items:center}}.distribution span{{color:var(--sub);font-size:12px}}.distribution i{{height:7px;border-radius:9px;background:#263548;overflow:hidden}}.distribution i:after{{content:"";display:block;width:var(--w);height:100%;background:var(--c)}}.distribution b{{text-align:right}}
 .section-head{{display:flex;justify-content:space-between;align-items:end;margin:30px 0 11px}}.section-head h2{{font-size:20px}}.section-head h2:before{{content:"";display:inline-block;width:4px;height:18px;margin-right:9px;vertical-align:-2px;border-radius:2px;background:var(--accent)}}.section-head p{{color:var(--sub);font-size:12px}}.panel{{overflow:hidden}}.table-scroll{{overflow:auto}}table{{width:100%;border-collapse:collapse}}th{{color:var(--sub);font-weight:600;background:rgba(10,17,26,.9);white-space:nowrap}}td,th{{padding:12px 10px;border-bottom:1px solid rgba(36,50,68,.75);text-align:left}}tbody tr:hover td{{background:rgba(96,165,250,.05)}}.stock-name{{font-weight:700;color:var(--strong);white-space:nowrap}}
-.badge{{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:24px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}}.long{{color:#fff;background:rgba(255,92,104,.78)}}.cautious{{color:#241b00;background:var(--warn)}}.watch{{color:#cbd7e4;background:var(--muted)}}.risk-low{{color:var(--fall);background:var(--fall-soft)}}.risk-medium{{color:var(--warn);background:var(--warn-soft)}}.risk-high,.risk-critical{{color:#ff746b;background:var(--danger-soft)}}.score{{min-width:82px}}.score b{{font-size:12px;color:var(--rise)}}.score span{{display:block;width:72px;height:4px;margin-top:4px;border-radius:4px;background:#263548}}.score i{{display:block;height:100%;border-radius:4px;background:var(--rise)}}.action,.reason{{max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.reason{{color:#bdc9d7}}
+.badge{{display:inline-flex;align-items:center;justify-content:center;min-width:48px;height:24px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:700;white-space:nowrap}}.long{{color:#fff;background:rgba(255,92,104,.78)}}.cautious{{color:#241b00;background:var(--warn)}}.watch{{color:#cbd7e4;background:var(--muted)}}.risk-low{{color:var(--fall);background:var(--fall-soft)}}.risk-medium{{color:var(--warn);background:var(--warn-soft)}}.risk-high,.risk-critical{{color:#ff746b;background:var(--danger-soft)}}.score{{min-width:82px}}.score b{{font-size:12px;color:var(--rise)}}.score span{{display:block;width:72px;height:4px;margin-top:4px;border-radius:4px;background:#263548}}.score i{{display:block;height:100%;border-radius:4px;background:var(--rise)}}.action,.reason{{max-width:290px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}.overview-table .reason{{max-width:520px}}.reason{{color:#bdc9d7}}
 .execution-grid{{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px}}.execution-card{{padding:17px;display:flex;flex-direction:column;min-height:410px}}.execution-card header{{display:flex;justify-content:space-between;gap:12px}}.execution-card h3{{font-size:18px}}.execution-card header span{{color:var(--sub);font-size:12px}}.card-score{{min-width:54px;text-align:right;font-size:18px;color:var(--rise)}}.card-score small{{display:block;color:var(--sub);font-size:9px;letter-spacing:.12em}}.card-tags{{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:13px 0}}.card-tags>span:first-child{{color:var(--accent);margin-right:auto}}dl{{margin:10px 0 0}}dl div{{padding:9px 0;border-top:1px solid rgba(36,50,68,.7)}}dt{{color:var(--sub);font-size:11px}}dd{{margin:3px 0 0;color:#e4ebf4}}.execution-card footer{{margin-top:auto;padding-top:11px;border-top:1px solid var(--line);display:grid;gap:4px}}.execution-card footer b{{color:var(--sub);font-size:11px}}.execution-card footer span{{color:#c9d4e1}}
 .risk-panel{{display:grid;grid-template-columns:1.15fr .85fr;gap:14px}}.risk-box{{padding:18px}}.risk-box h3{{margin-bottom:11px;font-size:15px}}.risk-box ul{{display:grid;gap:9px;margin:0;padding-left:20px;color:#cbd6e3}}.risk-status{{display:grid;grid-template-columns:1fr 1fr;gap:9px}}.risk-status div{{padding:11px;border:1px solid var(--line);border-radius:9px;background:#0a1420}}.risk-status small{{display:block;color:var(--sub)}}.risk-status b{{display:block;margin-top:4px;color:var(--warn)}}
 .watch-stack{{display:grid;gap:9px}}.watch-group{{overflow:hidden}}.watch-group summary{{display:flex;align-items:center;gap:10px;padding:13px 15px;cursor:pointer;list-style:none}}.watch-group summary::-webkit-details-marker{{display:none}}.watch-group summary em{{font-style:normal;padding:1px 7px;border-radius:999px;background:#243244;color:#cbd6e3}}.representatives{{margin-left:auto;color:var(--sub);font-size:12px}}.group-mark{{width:7px;height:25px;border-radius:4px;background:var(--blue)}}.group-mark.limit{{background:var(--rise)}}.group-mark.blocked{{background:var(--danger)}}.group-mark.missing{{background:#a78bfa}}.group-mark.threshold{{background:var(--warn)}}.tomorrow-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}}.tomorrow-grid article{{padding:15px;border:1px solid var(--line);border-radius:11px;background:var(--panel2)}}.tomorrow-grid small{{display:block;color:var(--sub);margin-bottom:6px}}.tomorrow-grid b{{color:#eef5fc}}.tomorrow-grid .risk-note b{{color:var(--warn)}}.footer{{margin-top:28px;padding-top:17px;border-top:1px solid var(--line);text-align:center;color:var(--sub);font-size:12px}}.empty{{padding:28px;text-align:center;color:var(--sub)}}
@@ -450,17 +470,17 @@ h1,h2,h3,p{{margin:0}}h1{{font-size:30px;letter-spacing:.02em}}.subtitle{{max-wi
 <article class="card cockpit-card"><div class="card-label">风险与策略分布 / Risk</div>
 <div class="risk-line"><div><div class="risk-value">{risk_label(market_risk)}</div><small>当前风险等级</small></div><div class="risk-value">{risk_score}<small> / 5</small></div></div>
 <div class="risk-meter">{''.join('<i class="on"></i>' if index <= risk_score else '<i></i>' for index in range(1, 6))}</div>
-<div class="distribution"><div><span>建议买入</span><i style="--w:{held/max(1,len(recommendations))*100:.0f}%;--c:var(--rise)"></i><b>{held}</b></div>
-<div><span>谨慎买入</span><i style="--w:{cautious/max(1,len(recommendations))*100:.0f}%;--c:var(--warn)"></i><b>{cautious}</b></div>
-<div><span>暂不买入</span><i style="--w:100%;--c:var(--blue)"></i><b>{len(watchlist)}</b></div></div></article>
+<div class="distribution"><div><span>主选</span><i style="--w:100%;--c:var(--rise)"></i><b>{len(recommendations)}</b></div>
+<div><span>备选</span><i style="--w:100%;--c:var(--warn)"></i><b>{alternatives}</b></div>
+<div><span>观察</span><i style="--w:100%;--c:var(--blue)"></i><b>{eligible_watches + len(observations)}</b></div></div></article>
 </section>
 <div class="section-head"><h2>执行策略总览（{len(recommendations)}只）</h2><p>先看尾盘决策和明早动作</p></div>
-<section class="panel"><div class="table-scroll"><table><thead><tr><th>尾盘决策</th><th>代码</th><th>名称</th><th>投资主题</th><th>评分</th><th>风险</th><th>开盘动作</th><th>核心理由</th></tr></thead><tbody>{strategy_rows(recommendations)}</tbody></table></div></section>
+<section class="panel"><div class="table-scroll"><table class="overview-table"><thead><tr><th>尾盘决策</th><th>代码</th><th>名称</th><th>投资主题</th><th>评分</th><th>风险</th><th>核心理由</th></tr></thead><tbody>{strategy_rows(recommendations)}</tbody></table></div></section>
 <div class="section-head"><h2>重点个股执行计划</h2><p>指令卡保留动作、止盈止损与 Theme Shadow</p></div>
 <section class="execution-grid">{execution_cards(recommendations)}</section>
 <div class="section-head"><h2>组合风控</h2><p>交易前置检查</p></div>
 <section class="risk-panel"><article class="card risk-box"><h3>风控规则</h3><ul>{controls_html or '<li>暂无额外风控规则</li>'}<li>竞价或开盘条件不满足时，放弃交易优先于勉强执行。</li></ul></article>
-<article class="card risk-box"><h3>当前风险状态</h3><div class="risk-status"><div><small>风险等级</small><b>{risk_label(market_risk)}</b></div><div><small>风险分值</small><b>{risk_score} / 5</b></div><div><small>主题集中</small><b>{len(primary_sectors)} 个方向</b></div><div><small>仓位上限</small><b>{esc(strategy.get('position_cap'))}</b></div></div></article></section>
+<article class="card risk-box"><h3>当前风险状态</h3><div class="risk-status"><div><small>风险等级</small><b>{risk_label(market_risk)}</b></div><div><small>风险分值</small><b>{risk_score} / 5</b></div><div><small>主题集中</small><b>{len(primary_sectors)} 个方向</b></div><div><small>风险姿态</small><b>{esc(posture_label(strategy.get('risk_posture')))}</b></div></div><p class="market-copy">{esc(strategy.get('execution_principle'))}</p></article></section>
 <div class="section-head"><h2>观察池（{len(watchlist)}只）</h2><p>{len(eligible)} 只合格但观望 / {len(observations)} 只确定性观察，按不执行原因分组</p></div>
 <section class="watch-stack">{watch_groups(watchlist)}</section>
 <div class="section-head"><h2>明日关键关注</h2><p>来自当前策略合同，不补造行情点位</p></div>

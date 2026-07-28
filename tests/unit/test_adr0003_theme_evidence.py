@@ -753,7 +753,7 @@ def test_primary_theme_order_and_annotation_boundary():
     assert stock["market_board"] == "创业板"
 
     annotations = {
-        "schema_version": "intraday_mapper_annotations.v2",
+        "schema_version": "intraday_mapper_annotations.v3",
         "date": "2026-07-23",
         "market_assessment": {"reasoning_trace": "样本"},
         "executable_annotations": [{

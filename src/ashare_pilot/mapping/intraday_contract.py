@@ -18,11 +18,13 @@ from ashare_pilot.market_data.trading_scope import (
 
 HOLD_DIRECTIONS = {"持有偏多", "持有", "谨慎持有"}
 STOP_LOSS_BASES = {"day_low", "ma5", "ma10", "ma20", "not_applicable"}
+EXECUTION_ROLES = {"primary", "alternative", "watch"}
+RISK_POSTURES = {"zero", "very_light", "light", "normal"}
 SELECTION_POOLS_SCHEMA_VERSION = "intraday_selection_pools.v1"
 MAPPER_BASE_SCHEMA_VERSION = "intraday_mapper_base.v2"
-MAPPER_ANNOTATIONS_SCHEMA_VERSION = "intraday_mapper_annotations.v2"
-MAPPER_SCHEMA_VERSION = "intraday_mapper.v2"
-OVERNIGHT_STRATEGY_SCHEMA_VERSION = "intraday_overnight_strategy.v2"
+MAPPER_ANNOTATIONS_SCHEMA_VERSION = "intraday_mapper_annotations.v3"
+MAPPER_SCHEMA_VERSION = "intraday_mapper.v3"
+OVERNIGHT_STRATEGY_SCHEMA_VERSION = "intraday_overnight_strategy.v3"
 
 
 def read_json(path: Path) -> Any:
@@ -157,6 +159,7 @@ def reasoning_invariant_errors(stock: dict[str, Any], reasoning: dict[str, Any])
     errors: list[str] = []
     direction = reasoning.get("direction")
     tradeability = reasoning.get("tradeability")
+    role = reasoning.get("execution_role")
     derived_state = execution_state(stock)
     stored_state = stock.get("execution_state")
     if isinstance(stored_state, dict) and stored_state != derived_state:
@@ -171,6 +174,20 @@ def reasoning_invariant_errors(stock: dict[str, Any], reasoning: dict[str, Any])
         errors.append("sealed limit-up requires direction=观望")
     if state.get("board_excluded") and direction != "观望":
         errors.append("board-policy exclusion requires direction=观望")
+    if role not in EXECUTION_ROLES:
+        errors.append("execution_role must be primary, alternative, or watch")
+    if role == "primary" and not actionable:
+        errors.append("primary execution_role requires actionable direction")
+    if role in {"alternative", "watch"} and direction != "观望":
+        errors.append("alternative/watch execution_role requires direction=观望")
+    if tradeability == "Watch" and role == "primary" and direction != "谨慎持有":
+        errors.append("Watch primary requires direction=谨慎持有")
+    if tradeability in {"Extended", "Avoid"} and (
+        role != "watch" or direction != "观望"
+    ):
+        errors.append("Extended/Avoid requires execution_role=watch and direction=观望")
+    if role == "primary" and not state.get("eligible"):
+        errors.append("primary execution_role requires execution_state.eligible=true")
     if actionable and not state.get("eligible"):
         errors.append("actionable direction requires execution_state.eligible=true")
     if actionable and basis not in STOP_LOSS_BASES - {"not_applicable"}:

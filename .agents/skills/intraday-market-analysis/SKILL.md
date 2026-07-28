@@ -3,7 +3,7 @@ name: intraday-market-analysis
 description: Run the 14:30 overnight-alpha workflow and publish validated executable/observation dual-pool contracts.
 ---
 
-# Intraday Market Analysis (JSON-first V2)
+# Intraday Market Analysis (JSON-first V3)
 
 The pipeline follows Compute → Perception → Reasoning. JSON is the only
 inter-step contract. Human-facing board is `overnight_strategy.html`.
@@ -116,7 +116,9 @@ Output:
 ```
 
 The annotations contain two exact-coverage arrays. `executable_annotations`
-may contain Direction, Tradeability, position and T+1 plans.
+must explicitly assign `primary|alternative|watch` after portfolio
+convergence. Exact coverage means all executable stocks were judged, not that
+all are recommended.
 `observation_annotations` may contain only observation summary, watch
 condition, and risk note. Observation stocks can never be upgraded by
 Reasoning or learned rules.
@@ -141,9 +143,9 @@ Final outputs:
 | File | Role |
 |---|---|
 | `intraday_mapper.base.json` | deterministic compute-layer base |
-| `intraday_mapper.annotations.json` | LLM semantic fields only |
-| `intraday_mapper.json` | validated canonical downstream contract |
-| `overnight_strategy.json` | validated execution-focused view for review and T+1 consumers |
+| `intraday_mapper.annotations.json` | LLM semantic fields, `intraday_mapper_annotations.v3` |
+| `intraday_mapper.json` | validated `intraday_mapper.v3` downstream contract |
+| `overnight_strategy.json` | validated `intraday_overnight_strategy.v3` view for review and T+1 consumers |
 | `overnight_strategy.html` | 中文阅读看板，展示可执行持仓、T+1计划、风控和观察池 |
 
 Downstream consumers and review skills read `intraday_mapper.json` and
@@ -156,8 +158,12 @@ Downstream consumers and review skills read `intraday_mapper.json` and
 - A sealed limit-up stock is observation-only, never a B-tier tail-buy.
 - `selection_pools.json` is the only candidate contract. A/B/C/D is one
   Scored Pool relative rank and never decides executable membership.
-- An empty executable pool is a valid result; publish zero position and the
+- An empty executable pool is a valid result; publish `risk_posture=zero` and the
   observation view rather than treating it as a compute failure.
+- Recommendations contain only `primary`; alternative/watch stocks remain in
+  `eligible_watchlist` and are not simultaneous execution instructions.
+- Do not publish account-independent position percentages, amounts, shares, or
+  lots.
 - Apply `memory/INTRADAY_RULES.md` and `memory/SHARED_RULES.md` in Reasoning when they exist. In a zero-history project, absence means no learned rules and is not an error.
 - All scores come from `uv run --frozen ashare-pilot strategy overnight score`; the LLM never recalculates them.
 - Themes are detected bottom-up from stocks, not from news.
