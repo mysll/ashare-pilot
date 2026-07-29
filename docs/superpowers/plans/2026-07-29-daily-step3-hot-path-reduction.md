@@ -128,15 +128,15 @@ override.
 
 ### Task 1 — Define the compact decision draft
 
-- [ ] Introduce one new temporary draft schema.
-- [ ] Remove `name` from each LLM-selected stock.
-- [ ] Remove root timestamps and fixed contract constants from LLM output.
-- [ ] Replace full plan text with compact decision fields plus sparse
+- [x] Introduce one new temporary draft schema.
+- [x] Remove `name` from each LLM-selected stock.
+- [x] Remove root timestamps and fixed contract constants from LLM output.
+- [x] Replace full plan text with compact decision fields plus sparse
       overrides.
-- [ ] Make no-op reasoning fields optional instead of requiring the literal
+- [x] Make no-op reasoning fields optional instead of requiring the literal
       `—`.
-- [ ] Add maximum lengths for remaining LLM prose fields.
-- [ ] Reject old temporary draft schemas; do not add a compatibility reader.
+- [x] Add maximum lengths for remaining LLM prose fields.
+- [x] Reject old temporary draft schemas; do not add a compatibility reader.
 
 Expected primary files:
 
@@ -146,14 +146,14 @@ Expected primary files:
 
 ### Task 2 — Materialize deterministic strategy fields
 
-- [ ] Copy `name` from the compact candidate selected by `code`.
-- [ ] Generate `generated_at` in Python.
-- [ ] Fill fixed market and portfolio fields in Python.
-- [ ] Generate the standard pre-open and T+1 plans from structured inputs.
-- [ ] Generate deterministic profile trace text.
-- [ ] Apply only validated sparse LLM overrides.
-- [ ] Assemble the existing `daily_strategy.v3` shape before final validation.
-- [ ] Keep `daily_report.html` consuming only the formal strategy contract.
+- [x] Copy `name` from the compact candidate selected by `code`.
+- [x] Generate `generated_at` in Python.
+- [x] Fill fixed market and portfolio fields in Python.
+- [x] Generate the standard pre-open and T+1 plans from structured inputs.
+- [x] Generate deterministic profile trace text.
+- [x] Apply only validated sparse LLM overrides.
+- [x] Assemble the existing `daily_strategy.v3` shape before final validation.
+- [x] Keep `daily_report.html` consuming only the formal strategy contract.
 
 Prefer a focused helper module instead of adding more branching to
 `finalize.py`, for example:
@@ -164,18 +164,18 @@ src/ashare_pilot/strategy/_commands/daily/plan_baseline.py
 
 ### Task 3 — Compact every candidate without prefiltering
 
-- [ ] Preserve all candidate codes exactly once and in original order.
-- [ ] Add top-level candidate defaults for repeated neutral/default values.
-- [ ] Emit candidate fields only when they differ from those defaults.
-- [ ] Deduplicate repeated `profile_base` values.
-- [ ] Omit `major_event` when polarity is `none`.
-- [ ] Omit null anomaly, empty risk types, and zero severity.
-- [ ] Omit the base `ThemeLibrary` role and retain only additional role tags.
-- [ ] Omit `source_themes` when it equals the single primary theme.
-- [ ] Reference top-level theme evidence instead of repeating identical news
+- [x] Preserve all candidate codes exactly once and in original order.
+- [x] Add top-level candidate defaults for repeated neutral/default values.
+- [x] Emit candidate fields only when they differ from those defaults.
+- [x] Deduplicate repeated `profile_base` values.
+- [x] Omit `major_event` when polarity is `none`.
+- [x] Omit null anomaly, empty risk types, and zero severity.
+- [x] Omit the base `ThemeLibrary` role and retain only additional role tags.
+- [x] Omit `source_themes` when it equals the single primary theme.
+- [x] Reference top-level evidence sets instead of repeating identical news
       refs on many candidates.
-- [ ] Round displayed technical floats to contract-safe precision.
-- [ ] Preserve every score, Pattern state, risk, role, evidence, and strategy
+- [x] Round displayed technical floats to contract-safe precision.
+- [x] Preserve every score, Pattern state, risk, role, evidence, and strategy
       input needed by the current rubric.
 
 Expected primary files:
@@ -187,13 +187,13 @@ The temporary compact-input schema must be bumped. Do not accept both layouts.
 
 ### Task 4 — Reduce repetitive selected-stock prose
 
-- [ ] Keep `source_basis`, Direction reasoning, and risk reasoning concise and
+- [x] Keep `source_basis`, Direction reasoning, and risk reasoning concise and
       auditable.
-- [ ] Replace repeated generic entry/risk prose with deterministic templates.
-- [ ] Require LLM prose only for actual exceptions, overrides, or
+- [x] Replace repeated generic entry/risk prose with deterministic templates.
+- [x] Require LLM prose only for actual exceptions, overrides, or
       stock-specific risks.
-- [ ] Preserve canonical `news#<id>`, role-tag, and source-theme grounding.
-- [ ] Keep the final HTML human-readable after template materialization.
+- [x] Preserve canonical `news#<id>`, role-tag, and source-theme grounding.
+- [x] Keep the final HTML human-readable after template materialization.
 
 Expected primary files:
 
@@ -205,44 +205,44 @@ Expected primary files:
 
 ### Task 5 — Update validation and failure semantics
 
-- [ ] Validate selected membership and duplicate codes before materialization.
-- [ ] Validate optional source theme against candidate source themes.
-- [ ] Validate all LLM-owned enums and override structures.
-- [ ] Validate the fully materialized `daily_strategy.v3` with the existing
+- [x] Validate selected membership and duplicate codes before materialization.
+- [x] Validate optional source theme against candidate source themes.
+- [x] Validate all LLM-owned enums and override structures.
+- [x] Validate the fully materialized `daily_strategy.v3` with the existing
       formal validator.
-- [ ] Treat deterministic materialization errors as code/contract failures,
+- [x] Treat deterministic materialization errors as code/contract failures,
       not LLM-repairable errors.
-- [ ] Allow one repair only for LLM-owned decision fields.
-- [ ] Record retry count automatically; do not rely on copied deterministic
+- [x] Allow one repair only for LLM-owned decision fields.
+- [x] Record retry count automatically; do not rely on copied deterministic
       fields or LLM-supplied timing metadata.
 
 ### Task 6 — Preserve ownership and equivalence
 
-- [ ] Keep final regime LLM-owned.
-- [ ] Keep selected codes and order LLM-owned.
-- [ ] Keep Direction, rating, position tier, rule application, and
+- [x] Keep final regime LLM-owned.
+- [x] Keep selected codes and order LLM-owned.
+- [x] Keep Direction, rating, position tier, rule application, and
       RiskSeverity effects LLM-owned.
-- [ ] Keep all candidates visible to the LLM.
-- [ ] Keep Python profile hints advisory.
-- [ ] Preserve selected-stock source grounding.
-- [ ] Preserve formal observation-pool completion in Python.
-- [ ] Preserve the `daily_strategy.v3` and HTML output interfaces.
+- [x] Keep all candidates visible to the LLM.
+- [x] Keep Python profile hints advisory.
+- [x] Preserve selected-stock source grounding.
+- [x] Preserve formal observation-pool completion in Python.
+- [x] Preserve the `daily_strategy.v3` and HTML output interfaces.
 
 ## 6. Tests
 
 ### 6.1 Unit tests
 
-- [ ] Candidate-default compression round-trips to the same semantic rows.
-- [ ] Candidate count, code set, and order remain identical.
-- [ ] Candidate defaults never hide a non-default risk, event, role, Pattern,
+- [x] Candidate-default compression round-trips to the same semantic rows.
+- [x] Candidate count, code set, and order remain identical.
+- [x] Candidate defaults never hide a non-default risk, event, role, Pattern,
       score, or evidence ref.
-- [ ] Selecting by code always materializes the canonical stock name.
-- [ ] Spacing or alias differences can no longer cause a name retry.
-- [ ] Fixed root/market/portfolio/T+1 fields are generated by Python.
-- [ ] Plan baselines are deterministic for each entry profile and anchor.
-- [ ] Sparse overrides are whitelist-validated and reason-required.
-- [ ] Old temporary input and draft schemas fail closed.
-- [ ] Zero selected stocks, duplicate codes, unknown codes, unsupported refs,
+- [x] Selecting by code always materializes the canonical stock name.
+- [x] Spacing or alias differences can no longer cause a name retry.
+- [x] Fixed root/market/portfolio/T+1 fields are generated by Python.
+- [x] Plan baselines are deterministic for each entry setup and anchor.
+- [x] Sparse overrides are whitelist-validated and reason-required.
+- [x] Old temporary input and draft schemas fail closed.
+- [x] Zero selected stocks, duplicate codes, unknown codes, unsupported refs,
       and invalid overrides fail closed.
 
 ### 6.2 Frozen replay
@@ -308,3 +308,25 @@ environments are materially different.
 - Full test suite passes.
 - Comparable live runs show lower input bytes, draft bytes, retry rate, and
   Strategy LLM duration.
+
+## 9. Implementation status — 2026-07-29
+
+Implemented Tasks 1–6. The current temporary contracts are
+`strategy_llm_input.tmp.v3` and `daily_strategy_draft.tmp.v3`; the formal
+`daily_strategy.v3` contract is unchanged.
+
+Verification completed:
+
+- full suite: 392 passed, 184 skipped, 10 subtests passed;
+- 2026-07-29 replay retained all 21 candidates in order;
+- compact input: 15,319 bytes, down from 24,637 bytes;
+- equivalent five-stock decision draft estimate: 3,865 bytes, down from the
+  previous 10,816-byte minified draft;
+- candidate profile bases deduplicated to 2 rows and candidate evidence sets
+  deduplicated to 3 rows.
+
+Still pending:
+
+- live shadow publication check;
+- at least five comparable live runs before claiming a stable LLM-duration or
+  retry-rate improvement.

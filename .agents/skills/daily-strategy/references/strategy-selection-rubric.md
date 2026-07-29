@@ -7,7 +7,8 @@
 按输入顺序检查每一行，至少比较：
 
 - composite / tech / theme_heat / news_impact / auction / money_flow；
-- primary/source themes、role_tags、Pattern states、risk_type；
+- primary/source themes、role_tags、Pattern states、risk_type；候选缺省字段按
+  顶层 `candidate_defaults` 还原，`profile_ref` 在 `profile_bases` 中查找；
 - major_event、anomaly、conditional news evidence；
 - DirectionBase 与 RiskSeverityBase advisory hints；
 - profile base、价格位置和 ATR%。
@@ -28,8 +29,10 @@
 2. 检查 confidence exceptions、Pattern、major event 和 anomaly；有条件新闻时只使用顶层 `news_evidence` 对应项。
 3. 对每个 risk_type 独立判断 severity，取最大值；非 strong-sector 下 severity 3 将 Direction 上限压到偏多。severity 只写进 `reasoning.risk`，不要新增字段。
 4. 阅读完整 RULES/SHARED_RULES，匹配规则并写 `rules_applied`；规则 override 必须有可追溯理由。
-5. 确定 rating、entry profile、anchor、trigger/no-buy、position budget、pre-open 与 T+1 plan。
-6. 对 Python `profile_base` 只提交必要的白名单 `profile_overrides`；每项必须说明理由。
+5. 确定 rating、entry profile、anchor、position tier 与 entry setup；标准
+   trigger/no-buy、pre-open 与 T+1 plan 由 Python 生成。
+6. 对 Python `profile_base` 只提交必要的白名单 `profile_overrides`；执行
+   计划确有例外时才提交稀疏 `plan_overrides`，每项必须说明理由。
 
 ## 4. 证据边界
 

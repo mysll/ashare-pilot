@@ -16,11 +16,17 @@ from ashare_pilot.mapping.daily_contract import theme_projection_errors
 
 from .trade_profile import compute_trade_profile
 
-SCHEMA = "strategy_llm_input.tmp.v2"
+SCHEMA = "strategy_llm_input.tmp.v3"
 SCORE_KEYS = ("composite", "tech", "theme_heat", "news_impact", "auction", "money_flow")
 PATTERN_KEYS = ("heat", "leader", "auction", "rotation", "volume")
 NEWS_RE = re.compile(r"^news#(\d+)$")
 NEWS_ANY_RE = re.compile(r"news#(\d+)")
+CANDIDATE_DEFAULTS = {
+    "role_tags": ["ThemeLibrary"],
+    "risk_type": [],
+    "risk_severity_base_hint": 0,
+    "major_event": {"polarity": "none", "confidence": 100},
+}
 
 
 def canonical_bytes(value: Any) -> bytes:
@@ -40,6 +46,13 @@ def compact_write(path: Path, value: Any) -> None:
 
 def number(value: Any) -> float | None:
     return float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+
+
+def rounded(value: Any, digits: int = 4) -> Any:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return value
+    result = round(float(value), digits)
+    return int(result) if result.is_integer() else result
 
 
 def percent_number(value: Any) -> float | None:
@@ -206,6 +219,38 @@ def candidate_news_id(candidate: dict[str, Any]) -> int | None:
     return int(match.group(1)) if match else None
 
 
+def expand_candidate(compact: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
+    """Expand v3 defaults/references for Python validation and materialization."""
+    result = dict(row)
+    primary_theme = result.get("primary_theme")
+    if "source_themes" not in result:
+        result["source_themes"] = [primary_theme] if isinstance(primary_theme, str) else []
+    extras = result.get("role_tags")
+    if extras is None:
+        result["role_tags"] = list(CANDIDATE_DEFAULTS["role_tags"])
+    elif isinstance(extras, list):
+        result["role_tags"] = list(CANDIDATE_DEFAULTS["role_tags"]) + [
+            tag for tag in extras if tag not in CANDIDATE_DEFAULTS["role_tags"]
+        ]
+    for key in ("risk_type", "risk_severity_base_hint", "major_event"):
+        if key not in result:
+            value = CANDIDATE_DEFAULTS[key]
+            result[key] = dict(value) if isinstance(value, dict) else list(value) if isinstance(value, list) else value
+    profile_ref = result.pop("profile_ref", None)
+    if profile_ref is not None:
+        profiles = compact.get("profile_bases")
+        if not isinstance(profiles, dict) or not isinstance(profiles.get(profile_ref), dict):
+            raise ValueError(f"compact candidate {result.get('code')} has invalid profile_ref {profile_ref!r}")
+        result["profile_base"] = dict(profiles[profile_ref])
+    evidence_ref = result.pop("evidence_ref", None)
+    if evidence_ref is not None:
+        evidence_sets = compact.get("evidence_sets")
+        if not isinstance(evidence_sets, dict) or not isinstance(evidence_sets.get(evidence_ref), list):
+            raise ValueError(f"compact candidate {result.get('code')} has invalid evidence_ref {evidence_ref!r}")
+        result["news_link"] = ",".join(evidence_sets[evidence_ref])
+    return result
+
+
 def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
                 news: dict[str, Any], indices: dict[str, Any]) -> dict[str, Any]:
     if view.get("schema_version") != "daily_strategy_input.v2":
@@ -252,6 +297,10 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
     output_candidates: list[dict[str, Any]] = []
     evidence_ids: set[int] = set()
     seen: set[str] = set()
+    profile_ids: dict[bytes, str] = {}
+    profile_bases: dict[str, dict[str, Any]] = {}
+    evidence_set_ids: dict[bytes, str] = {}
+    evidence_sets: dict[str, list[str]] = {}
     for candidate in view.get("candidates", []):
         if not isinstance(candidate, dict) or not isinstance(candidate.get("code"), str):
             raise ValueError("every strategy-view candidate must be an object with code")
@@ -265,7 +314,7 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
             if isinstance(item, dict) and isinstance(item.get("name"), str)
         ]
         primary_theme = source_themes[0] if source_themes else None
-        scores = {key: score_value(candidate, key) for key in SCORE_KEYS}
+        scores = {key: rounded(score_value(candidate, key)) for key in SCORE_KEYS}
         confidence_exceptions = {
             key: candidate.get("scores", {}).get(key, {}).get("confidence") for key in SCORE_KEYS
             if candidate.get("scores", {}).get(key, {}).get("confidence") != 100
@@ -286,30 +335,72 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
             evidence_ids.add(news_id)
         risks = candidate.get("risk_type") if isinstance(candidate.get("risk_type"), list) else []
         strategy_inputs = candidate.get("strategy_inputs", {}) if isinstance(candidate.get("strategy_inputs"), dict) else {}
+        profile_base = {
+            "regime_basis": regime,
+            **build_profile(candidate, pool_entry, regime, primary_theme, market_state, indices),
+        }
+        for redundant in ("ref_ma20", "ref_ma10", "ref_ma5", "ref_high20", "time_horizon"):
+            profile_base.pop(redundant, None)
+        profile_key = canonical_bytes(profile_base)
+        profile_ref = profile_ids.get(profile_key)
+        if profile_ref is None:
+            profile_ref = f"p{len(profile_ids) + 1}"
+            profile_ids[profile_key] = profile_ref
+            profile_bases[profile_ref] = profile_base
+        extra_roles = [
+            tag for tag in (candidate.get("role_tags") or [])
+            if tag not in CANDIDATE_DEFAULTS["role_tags"]
+        ]
         row: dict[str, Any] = {
             "code": code, "name": candidate.get("name"),
-            "primary_theme": primary_theme, "source_themes": source_themes,
-            "role_tags": candidate.get("role_tags") or [], "news_link": candidate.get("news_link"),
-            "scores": scores, "risk_type": risks, "pattern": pattern,
-            "major_event": {
-                "polarity": candidate.get("major_event", {}).get("polarity"),
-                "confidence": candidate.get("major_event", {}).get("confidence"),
+            "primary_theme": primary_theme,
+            "scores": scores, "pattern": pattern,
+            "strategy_inputs": {
+                key: rounded(strategy_inputs.get(key))
+                for key in ("price_source", "price", "ma5", "ma20", "atr", "atr_pct", "high20", "low20")
             },
-            "anomaly": candidate.get("anomaly"),
-            "strategy_inputs": {key: strategy_inputs.get(key) for key in ("price_source", "price", "ma5", "ma20", "atr", "atr_pct", "high20", "low20")},
             "profile_inputs": {key: value for key, value in {
                 "board_streak": raw_value("board_streak"), "yesterday_limit_up": raw_value("yesterday_limit_up")
             }.items() if value is not None},
             "direction_base_hint": direction_base(scores["composite"]),
-            "risk_severity_base_hint": risk_severity(risks, regime),
-            "profile_base": {"regime_basis": regime, **build_profile(candidate, pool_entry, regime, primary_theme, market_state, indices)},
+            "profile_ref": profile_ref,
         }
-        # Reference prices and T+1 already exist in strategy_inputs/the output
-        # contract. Avoid duplicating them in every advisory profile row.
-        for redundant in ("ref_ma20", "ref_ma10", "ref_ma5", "ref_high20", "time_horizon"):
-            row["profile_base"].pop(redundant, None)
+        if len(source_themes) != 1 or source_themes[0] != primary_theme:
+            row["source_themes"] = source_themes
+        if extra_roles:
+            row["role_tags"] = extra_roles
+        news_link = candidate.get("news_link")
+        candidate_refs = [
+            f"news#{item_id}" for item_id in NEWS_ANY_RE.findall(news_link)
+        ] if isinstance(news_link, str) else []
+        if candidate_refs:
+            evidence_key = canonical_bytes(candidate_refs)
+            evidence_ref = evidence_set_ids.get(evidence_key)
+            if evidence_ref is None:
+                evidence_ref = f"e{len(evidence_set_ids) + 1}"
+                evidence_set_ids[evidence_key] = evidence_ref
+                evidence_sets[evidence_ref] = candidate_refs
+            row["evidence_ref"] = evidence_ref
+        elif isinstance(news_link, str) and news_link:
+            row["news_link"] = news_link
+        if risks:
+            row["risk_type"] = risks
+        severity = risk_severity(risks, regime)
+        if severity:
+            row["risk_severity_base_hint"] = severity
+        major_event = {
+            "polarity": candidate.get("major_event", {}).get("polarity"),
+            "confidence": candidate.get("major_event", {}).get("confidence"),
+        }
+        if major_event != CANDIDATE_DEFAULTS["major_event"]:
+            row["major_event"] = major_event
+        anomaly = candidate.get("anomaly")
+        if anomaly not in (None, "", "—"):
+            row["anomaly"] = anomaly
+        if not row["profile_inputs"]:
+            row.pop("profile_inputs")
         if auction_change_pct is not None:
-            row["strategy_inputs"]["auction_change_pct"] = auction_change_pct
+            row["strategy_inputs"]["auction_change_pct"] = rounded(auction_change_pct)
         if trigger_flags:
             row["triggers"] = {"flags": trigger_flags, "conditional_news": conditional_triggers}
         if confidence_exceptions:
@@ -328,6 +419,9 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
         "source": {"strategy_view_sha256": canonical_sha256(view)},
         "market_inputs": {"market_state": market_state, "indices": indices, "regime_hint": regime},
         "themes": [{key: item.get(key) for key in ("name", "rank", "final_heat", "attention_direction", "evidence_refs")} for item in themes],
+        "candidate_defaults": CANDIDATE_DEFAULTS,
+        "profile_bases": profile_bases,
+        "evidence_sets": evidence_sets,
         "news_evidence": evidence, "candidates": output_candidates,
     }
 
@@ -369,8 +463,11 @@ def main(argv=None) -> int:
         # from this module.
         from .draft_link import INPUT_HASH_FILENAME, write_input_hash
         write_input_hash(output.with_name(INPUT_HASH_FILENAME), result)
-        if output.stat().st_size > 90 * 1024:
-            print(f"[WARN] compact input exceeds 90KB warning threshold: {output.stat().st_size} bytes", file=sys.stderr)
+        output_size = output.stat().st_size
+        if len(result["candidates"]) <= 21 and output_size > 16 * 1024:
+            print(f"[WARN] compact input exceeds 16KB target for <=21 candidates: {output_size} bytes", file=sys.stderr)
+        elif output_size > 80 * 1024:
+            print(f"[WARN] compact input exceeds 80KB warning threshold: {output_size} bytes", file=sys.stderr)
     except Exception as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1

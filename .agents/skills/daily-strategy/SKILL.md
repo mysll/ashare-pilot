@@ -36,9 +36,20 @@ portfolio-manager 的热阶段只读取：
 - `memory/RULES.md`（存在时）
 - `memory/SHARED_RULES.md`（存在时）
 
-紧凑输入字段必须按当前结构读取：`pattern.*` 已是状态字符串，`triggers`
-仅在触发复读时存在，市场状态位于 `market_inputs.market_state`，指数位于
-`market_inputs.indices`。禁止通过临时脚本猜测嵌套结构。
+紧凑输入 `strategy_llm_input.tmp.v3` 必须按当前结构读取：
+
+- `pattern.*` 已是状态字符串，`triggers` 仅在触发复读时存在；
+- 市场状态位于 `market_inputs.market_state`，指数位于
+  `market_inputs.indices`；
+- `candidate_defaults` 是所有候选的隐含默认值；候选行缺少对应字段时使用默认值；
+- 候选只列除 `ThemeLibrary` 以外的 `role_tags`，未列时仍隐含
+  `ThemeLibrary`；
+- 候选未列 `source_themes` 时，其唯一来源主题等于 `primary_theme`；
+- `profile_ref` 指向顶层 `profile_bases`，不得把它当成缺失画像。
+- `evidence_ref` 指向顶层 `evidence_sets`，其中的 canonical news refs 都属于
+  该候选。
+
+禁止通过临时脚本猜测或展开结构。
 
 零历史项目中缺少这两个文件表示尚无已学习规则；继续基于当日合同推理，不得预先生成或
 虚构历史规则。
@@ -62,15 +73,20 @@ uv run --frozen ashare-pilot strategy daily finalize \
 
 未传时仅记录 `mtime_estimate`，该次 `step3_timing.json` 不具备 Gate D 统计资格。
 
-finalize 校验 Python 维护的输入指纹、草稿时序、候选和证据归属，按最终 regime 重算 Trade Profile，应用带理由的白名单 overrides，补齐全部未选候选观察行，验证 `daily_strategy.v3`，再发布 JSON 与 HTML。
+`strategy.draft.json` 只写 LLM 拥有的决策字段。不要复制候选名称、时间戳、
+固定 market/portfolio 字段、完整开盘计划、T+1 风险计划或 profile trace。
+finalize 校验 Python 维护的输入指纹、草稿时序、候选和证据归属，按最终
+regime 重算 Trade Profile，生成确定性执行计划，应用带理由的白名单
+overrides，补齐全部未选候选观察行，验证 `daily_strategy.v3`，再发布 JSON
+与 HTML。
 
 ## 失败与重试
 
 - prepare 失败：修复源合同或重新执行 Step 2；不得手改紧凑输入绕过覆盖校验。
 - 草稿校验失败：portfolio-manager 收集首次 validator 返回的完整错误集合，
-  一次性修正 `strategy.draft.json` 的全部错误，以累计实测 LLM 时长和
-  `--validation-retries 1` 重新运行 finalize。第二次仍失败则停止并报告
-  完整剩余错误；不得继续循环或交给主编排修复。
+  一次性修正 `strategy.draft.json` 的全部错误，以累计实测 LLM 时长重新运行
+  finalize。Python 根据当前输入哈希自动记录重试次数；不得手填次数。第二次
+  仍失败则停止并报告完整剩余错误；不得继续循环或交给主编排修复。
 - 输入指纹缺失或不匹配：重新运行 prepare，不得手改 `.strategy_llm_input.sha256`。
 - 草稿早于当前 prepare：重新读取当前 `.strategy_llm_input.json` 并完整重写草稿，不得沿用旧草稿。
 - profile override 非白名单、无理由或与 T+1 矛盾：删除或修正 override；finalize 不静默修复。

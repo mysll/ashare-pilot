@@ -60,6 +60,27 @@ def complete_same_run(stages: dict[str, Any]) -> bool:
     )
 
 
+def validation_retry_count(path: Path, date: str, compact_input: Path) -> int:
+    """Count prior failed validations linked to the current compact input."""
+    if not path.exists() or not compact_input.exists():
+        return 0
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        if doc.get("schema_version") != "daily_step3_timing.v1" or doc.get("date") != date:
+            return 0
+        digest = file_sha256(compact_input)
+        attempts = doc.get("validation_attempts", [])
+        return sum(
+            1
+            for item in attempts
+            if isinstance(item, dict)
+            and item.get("status") == "failed"
+            and item.get("input_sha256") == digest
+        )
+    except Exception:
+        return 0
+
+
 def update_report(path: Path, date: str, stage: str, duration: float | None = None,
                   inputs: list[Path] | None = None, outputs: list[Path] | None = None,
                   counts: dict[str, int] | None = None, validation_retries: int | None = None,

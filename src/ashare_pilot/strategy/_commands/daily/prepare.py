@@ -123,8 +123,11 @@ def main(argv=None) -> int:
         compact["market_inputs"]["index_fetch_failed"] = index_failed
         compact_write(output_path, compact)
         write_input_hash(input_hash_path, compact)
-        if output_path.stat().st_size > 80 * 1024:
-            print(f"[WARN] compact input exceeds 70KB warning threshold: {output_path.stat().st_size} bytes", file=sys.stderr)
+        output_size = output_path.stat().st_size
+        if len(compact["candidates"]) <= 21 and output_size > 16 * 1024:
+            print(f"[WARN] compact input exceeds 16KB target for <=21 candidates: {output_size} bytes", file=sys.stderr)
+        elif output_size > 80 * 1024:
+            print(f"[WARN] compact input exceeds 80KB warning threshold: {output_size} bytes", file=sys.stderr)
         duration = time.perf_counter() - started
         counts = {
             "candidate_count": len(compact["candidates"]),

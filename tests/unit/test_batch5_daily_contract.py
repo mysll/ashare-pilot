@@ -3,18 +3,20 @@ from __future__ import annotations
 import copy
 import json
 import os
+import re
 import tempfile
 import unittest
 from pathlib import Path
 
-from ashare_pilot.strategy._commands.daily.timing import update_report
+from ashare_pilot.strategy._commands.daily.timing import update_report, validation_retry_count
 from ashare_pilot.strategy._commands.daily.draft_link import (
     INPUT_HASH_FILENAME, validate_draft_link, write_input_hash,
 )
 from ashare_pilot.strategy._commands.daily.llm_input import (
-    build_input, derive_regime, index_percent, reread_triggers,
+    build_input, derive_regime, expand_candidate, index_percent, reread_triggers,
 )
 from ashare_pilot.strategy._commands.daily.finalize import materialize, validate_draft
+from ashare_pilot.strategy._commands.daily.plan_baseline import entry_trigger
 from ashare_pilot.strategy._commands.daily.prepare import fetch_indices, normalize_indices
 from ashare_pilot.strategy._commands.daily.render_report import render_report
 from ashare_pilot.strategy._commands.daily.validate_strategy import validate
@@ -63,27 +65,19 @@ def small_inputs(date: str, count: int = 2):
 
 def selected_stock(row: dict) -> dict:
     return {
-        "code": row["code"], "name": row["name"], "sector": "测试主题", "direction": "偏多", "rating": "4★",
-        "entry_profile": "回调布局", "anchor": "MA20", "entry_trigger": "回踩MA20确认", "no_buy_condition": "跌破MA20不收回",
-        "position_tier": "STANDARD", "horizon": "T+1",
-        "preopen_plan": {"decision": "CONDITIONAL", "earliest_entry_time": "09:35:05", "latest_entry_time": "10:00:00",
-                         "requires_first_bar": True, "requires_market_confirmation": True, "requires_theme_confirmation": True,
-                         "entry_setup": "PULLBACK", "pre_entry_invalidations": ["市场转弱"]},
-        "t1_risk_plan": {"overnight_risk": "medium", "gap_up_action": "分批兑现", "flat_open_action": "失败退出",
-                         "gap_down_action": "禁止补仓", "max_holding_days": 2},
-        "rules_applied": ["R70"], "profile_trace": "确定性回调基线",
-        "reasoning": {"source_basis": "测试主题 ThemeLibrary", "direction_path": "base=偏多", "risk": "—", "reread": "—", "override": "—"},
+        "code": row["code"], "direction": "偏多", "rating": "4★",
+        "entry_profile": "回调布局", "anchor": "MA20",
+        "position_tier": "STANDARD", "entry_setup": "PULLBACK",
+        "rules_applied": ["R70"],
+        "reasoning": {"source_basis": "测试主题 ThemeLibrary", "direction_path": "base=偏多"},
         "profile_overrides": {},
     }
 
 
 def draft_for(date: str, compact: dict, selected: list[dict], regime: str = "neutral") -> dict:
     return {
-        "schema_version": "daily_strategy_draft.tmp.v2", "date": date, "generated_at": f"{date}T01:30:00+00:00",
-        "market": {"regime_prior": regime, "requires_open_confirmation": True,
-                   "stop_atr_multiplier": 1.5, "notes": "fixture"},
-        "portfolio_limits": {"max_new_positions": 10, "max_theme_positions": 10,
-                             "max_correlated_names": 10},
+        "schema_version": "daily_strategy_draft.tmp.v3", "date": date,
+        "market": {"regime_prior": regime, "notes": "fixture"},
         "stocks": selected, "exclusion_overrides": [],
     }
 
@@ -119,7 +113,8 @@ class Step3RealFrozenGateTests(unittest.TestCase):
             with self.subTest(date=date):
                 fixture = load_fixture(date)
                 compact = build_input(fixture["view"], fixture["theme_stocks"], fixture["pool"], fixture["news"], fixture["indices"])
-                source_rows, projected_rows = fixture["view"]["candidates"], compact["candidates"]
+                source_rows = fixture["view"]["candidates"]
+                projected_rows = [expand_candidate(compact, row) for row in compact["candidates"]]
                 self.assertEqual([row["code"] for row in source_rows], [row["code"] for row in projected_rows])
                 self.assertEqual(fixture["view"]["market_state"], compact["market_inputs"]["market_state"])
                 for source, projected in zip(source_rows, projected_rows):
@@ -128,7 +123,10 @@ class Step3RealFrozenGateTests(unittest.TestCase):
                     self.assertEqual({key: item.get("state") for key, item in source["pattern"].items()}, projected["pattern"])
                     self.assertEqual(source["major_event"]["polarity"], projected["major_event"]["polarity"])
                     self.assertEqual(source.get("anomaly"), projected.get("anomaly"))
-                    self.assertEqual(source.get("news_link"), projected.get("news_link"))
+                    self.assertEqual(
+                        re.findall(r"news#\d+", str(source.get("news_link") or "")),
+                        re.findall(r"news#\d+", str(projected.get("news_link") or "")),
+                    )
                 evidence_ids = {f"news#{item['id']}" for item in compact["news_evidence"]}
                 for row in projected_rows:
                     if row.get("triggers", {}).get("conditional_news"):
@@ -174,10 +172,10 @@ class Step3BoundaryTests(unittest.TestCase):
         date = "2026-07-15"
         _, compact = small_inputs(date)
         row = compact["candidates"][0]
-        incomplete = {"code": row["code"], "name": row["name"], "sector": "测试主题"}
+        incomplete = {"code": row["code"], "sector": "测试主题"}
         errors = validate_draft(draft_for(date, compact, [incomplete]), compact, date)
         self.assertTrue(any("direction" in error for error in errors))
-        self.assertTrue(any("preopen_plan" in error for error in errors))
+        self.assertTrue(any("entry_setup" in error for error in errors))
         self.assertTrue(any("reasoning" in error for error in errors))
 
     def test_composite_default_confidence_does_not_trigger_news_reread(self):
@@ -359,13 +357,104 @@ class Step3BoundaryTests(unittest.TestCase):
             self.assertFalse(doc["gate_d_eligible"])
             self.assertEqual(["draft invalid"], doc["validation_attempts"][0]["errors"])
 
-    def test_materialize_drops_legacy_max_holding_days(self):
+    def test_validation_retry_count_is_inferred_from_current_input_hash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            compact = root / "input.json"
+            draft = root / "draft.json"
+            report = root / "step3_timing.json"
+            compact.write_text('{"input":1}', encoding="utf-8")
+            draft.write_text("{}", encoding="utf-8")
+            update_report(report, "2026-07-15", "prepare", 1, [], [compact])
+            update_report(
+                report,
+                "2026-07-15",
+                "finalize",
+                1,
+                [compact, draft],
+                [],
+                validation_status="failed",
+                validation_errors=["draft invalid"],
+            )
+            self.assertEqual(1, validation_retry_count(report, "2026-07-15", compact))
+            compact.write_text('{"input":2}', encoding="utf-8")
+            self.assertEqual(0, validation_retry_count(report, "2026-07-15", compact))
+
+    def test_materialize_owns_fixed_fields_and_canonical_name(self):
         date = "2026-07-15"
         _, compact = small_inputs(date)
         stock = selected_stock(compact["candidates"][0])
         draft = draft_for(date, compact, [stock])
         strategy = materialize(draft, compact)
-        self.assertNotIn("max_holding_days", strategy["stocks"][0]["t1_risk_plan"])
+        selected = strategy["stocks"][0]
+        self.assertEqual(compact["candidates"][0]["name"], selected["name"])
+        self.assertEqual("T+1", selected["horizon"])
+        self.assertEqual("09:35:05", selected["preopen_plan"]["earliest_entry_time"])
+        self.assertTrue(selected["profile_trace"])
+        self.assertEqual(
+            {"max_new_positions": 7, "max_theme_positions": 3, "max_correlated_names": 2},
+            strategy["portfolio_limits"],
+        )
+
+    def test_old_temporary_schemas_fail_closed(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        draft = draft_for(date, compact, [selected_stock(compact["candidates"][0])])
+        draft["schema_version"] = "daily_strategy_draft.tmp.v2"
+        self.assertTrue(any("daily_strategy_draft.tmp.v3" in error for error in validate_draft(draft, compact, date)))
+        compact["schema_version"] = "strategy_llm_input.tmp.v2"
+        self.assertTrue(any("strategy_llm_input.tmp.v3" in error for error in validate_draft(draft, compact, date)))
+
+    def test_candidate_defaults_and_profile_refs_expand_semantically(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        row = compact["candidates"][0]
+        self.assertNotIn("risk_type", row)
+        self.assertNotIn("major_event", row)
+        self.assertNotIn("source_themes", row)
+        self.assertNotIn("role_tags", row)
+        self.assertNotIn("profile_base", row)
+        expanded = expand_candidate(compact, row)
+        self.assertEqual([], expanded["risk_type"])
+        self.assertEqual(["ThemeLibrary"], expanded["role_tags"])
+        self.assertEqual(["测试主题"], expanded["source_themes"])
+        self.assertIsInstance(expanded["profile_base"], dict)
+
+    def test_plan_override_is_sparse_reasoned_and_whitelisted(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        stock = selected_stock(compact["candidates"][0])
+        stock["plan_overrides"] = {
+            "entry_trigger": {"value": "仅在放量站回MA20后参与", "reason": "个股波动较大"}
+        }
+        draft = draft_for(date, compact, [stock])
+        self.assertEqual([], validate_draft(draft, compact, date))
+        self.assertEqual("仅在放量站回MA20后参与", materialize(draft, compact)["stocks"][0]["entry_trigger"])
+        stock["plan_overrides"]["latest_entry_time"] = {"value": "10:30:00", "reason": "越界"}
+        self.assertTrue(any("not whitelisted" in error for error in validate_draft(draft, compact, date)))
+
+    def test_plan_baselines_cover_all_entry_setups_and_anchors(self):
+        setups = (
+            "LIMIT_UP_CONT", "MOMENTUM", "FIRST_BAR_OR_PULLBACK",
+            "PULLBACK", "DEFENSIVE", "WATCH_ONLY",
+        )
+        anchors = ("MA5", "MA10", "MA20", "OPEN", "VWAP", "首根5min", "FLEX", "无", "—")
+        for setup in setups:
+            for anchor in anchors:
+                with self.subTest(setup=setup, anchor=anchor):
+                    self.assertTrue(entry_trigger(anchor, setup))
+
+    def test_empty_duplicate_and_unknown_selections_fail_closed(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        empty = draft_for(date, compact, [])
+        self.assertTrue(any("must be non-empty" in error for error in validate_draft(empty, compact, date)))
+        stock = selected_stock(compact["candidates"][0])
+        duplicate = draft_for(date, compact, [copy.deepcopy(stock), copy.deepcopy(stock)])
+        self.assertTrue(any("duplicate" in error for error in validate_draft(duplicate, compact, date)))
+        stock["code"] = "sh699999"
+        unknown = draft_for(date, compact, [stock])
+        self.assertTrue(any("not present" in error for error in validate_draft(unknown, compact, date)))
 
 
 if __name__ == "__main__":

@@ -45,9 +45,13 @@ def test_daily_compact_uses_qualitative_position_tiers(tmp_path: Path) -> None:
     new_compact = llm_input.build_input(
         fixture["view"], fixture["theme_stocks"], fixture["pool"], fixture["news"], fixture["indices"]
     )
-    assert new_compact["schema_version"] == "strategy_llm_input.tmp.v2"
-    assert all(row["profile_base"]["position_tier"] in {"WATCH_ONLY", "LIGHT", "STANDARD"} for row in new_compact["candidates"])
-    assert all("ref_ma10" not in row["profile_base"] for row in new_compact["candidates"])
+    assert new_compact["schema_version"] == "strategy_llm_input.tmp.v3"
+    profiles = [
+        llm_input.expand_candidate(new_compact, row)["profile_base"]
+        for row in new_compact["candidates"]
+    ]
+    assert all(row["position_tier"] in {"WATCH_ONLY", "LIGHT", "STANDARD"} for row in profiles)
+    assert all("ref_ma10" not in row for row in profiles)
     assert "position_budget" not in json.dumps(new_compact)
 
 

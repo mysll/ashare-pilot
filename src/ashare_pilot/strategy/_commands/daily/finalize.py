@@ -8,15 +8,20 @@ import json
 import re
 import sys
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from ashare_pilot.market_data.runtime import workspace_path
 
 from .draft_link import INPUT_HASH_FILENAME, validate_draft_link
-from .timing import update_report
-from .llm_input import SCHEMA as INPUT_SCHEMA, index_percent
+from .timing import update_report, validation_retry_count
+from .llm_input import SCHEMA as INPUT_SCHEMA, expand_candidate, index_percent
+from .plan_baseline import (
+    PLAN_OVERRIDE_FIELDS,
+    PORTFOLIO_LIMITS,
+    generated_at,
+    materialize_stock_plan,
+)
 from .trade_profile import compute_trade_profile
 from .render_report import render_report
 from .validate_strategy import (
@@ -24,7 +29,7 @@ from .validate_strategy import (
     REGIME_STOCK_LIMITS, STOP_POLICIES, validate as validate_strategy,
 )
 
-DRAFT_SCHEMA = "daily_strategy_draft.tmp.v2"
+DRAFT_SCHEMA = "daily_strategy_draft.tmp.v3"
 FINAL_SCHEMA = "daily_strategy.v3"
 NEWS_RE = re.compile(r"news#\d+")
 KNOWN_ROLE_TAGS = {"ThemeLibrary", "MarketActive", "NewsDirect", "MultiTheme", "Anchor", "LHB"}
@@ -55,76 +60,79 @@ def candidate_index(compact: dict[str, Any]) -> tuple[list[str], dict[str, dict[
         if code in by_code:
             raise ValueError(f"duplicate compact candidate: {code}")
         codes.append(code)
-        by_code[code] = row
+        by_code[code] = expand_candidate(compact, row)
     return codes, by_code
 
 
 def draft_contract_errors(draft: dict[str, Any]) -> list[str]:
-    """Run the final v3 contract against draft-owned fields before materialize.
-
-    A valid placeholder profile prevents Python-owned profile materialization
-    from masking or delaying errors in LLM-owned stock decisions.
-    """
+    """Validate only fields owned by the LLM decision draft."""
     errors: list[str] = []
-    generated_at = draft.get("generated_at")
-    if not isinstance(generated_at, str) or not generated_at.strip():
-        errors.append("generated_at: must be non-empty ISO-8601 string")
-    else:
-        try:
-            datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-        except ValueError:
-            errors.append("generated_at: must be valid ISO-8601")
-
     market = draft.get("market")
     if not isinstance(market, dict):
         errors.append("market: must be object")
     else:
-        if not isinstance(market.get("stop_atr_multiplier"), (int, float)) or isinstance(market.get("stop_atr_multiplier"), bool):
-            errors.append("market.stop_atr_multiplier: must be number")
-        if "position_multiplier" in market:
-            errors.append("market.position_multiplier: forbidden; v3 uses qualitative position tiers")
+        extra = sorted(set(market) - {"regime_prior", "notes"})
+        if extra:
+            errors.append(f"market: deterministic fields are forbidden in draft: {extra}")
+        if market.get("regime_prior") not in REGIME_STOCK_LIMITS:
+            errors.append(f"market.regime_prior: unsupported {market.get('regime_prior')!r}")
         if not isinstance(market.get("notes"), str) or not market.get("notes", "").strip():
             errors.append("market.notes: must be non-empty string")
+        elif len(market["notes"]) > 300:
+            errors.append("market.notes: must be at most 300 characters")
 
     stocks = draft.get("stocks") if isinstance(draft.get("stocks"), list) else []
-    provisional_stocks: list[Any] = []
     required = {
-        "code", "name", "sector", "direction", "rating", "entry_profile", "anchor",
-        "entry_trigger", "no_buy_condition", "position_tier", "horizon", "preopen_plan",
-        "t1_risk_plan", "rules_applied", "profile_trace", "reasoning", "profile_overrides",
+        "code", "direction", "rating", "entry_profile", "anchor",
+        "position_tier", "entry_setup", "rules_applied", "reasoning",
+    }
+    forbidden = {
+        "name", "generated_at", "entry_trigger", "no_buy_condition", "horizon",
+        "preopen_plan", "t1_risk_plan", "profile_trace", "profile",
     }
     for index, stock in enumerate(stocks):
         if not isinstance(stock, dict):
-            provisional_stocks.append(stock)
             continue
         base = f"stocks[{index}]"
         for field in sorted(required - set(stock)):
             errors.append(f"{base}.{field}: missing required draft field")
+        present_forbidden = sorted(forbidden & set(stock))
+        if present_forbidden:
+            errors.append(f"{base}: deterministic fields are forbidden in draft: {present_forbidden}")
+        if stock.get("direction") not in {"看多", "偏多"}:
+            errors.append(f"{base}.direction: main strategy only allows 看多 or 偏多")
+        if stock.get("rating") not in {"5★", "4★", "3★", "2★", "1★", "—"}:
+            errors.append(f"{base}.rating: invalid enum")
+        if stock.get("entry_profile") not in {"趋势跟随", "回调布局", "强势接力", "防御布局"}:
+            errors.append(f"{base}.entry_profile: invalid enum")
+        if stock.get("anchor") not in ANCHORS:
+            errors.append(f"{base}.anchor: invalid enum")
+        if stock.get("position_tier") not in {"WATCH_ONLY", "LIGHT", "STANDARD"}:
+            errors.append(f"{base}.position_tier: invalid enum")
+        if stock.get("entry_setup") not in {
+            "LIMIT_UP_CONT", "MOMENTUM", "FIRST_BAR_OR_PULLBACK",
+            "PULLBACK", "DEFENSIVE", "WATCH_ONLY",
+        }:
+            errors.append(f"{base}.entry_setup: invalid enum")
+        elif (stock.get("position_tier") == "WATCH_ONLY") != (stock.get("entry_setup") == "WATCH_ONLY"):
+            errors.append(f"{base}.entry_setup: WATCH_ONLY setup and position tier must be used together")
         rules = stock.get("rules_applied")
         if "rules_applied" in stock and not (isinstance(rules, list) and all(isinstance(item, str) and item for item in rules)):
             errors.append(f"{base}.rules_applied: must be list of non-empty rule IDs")
-        if not isinstance(stock.get("profile_trace"), str) or not stock.get("profile_trace", "").strip():
-            errors.append(f"{base}.profile_trace: must be non-empty string")
         reasoning = stock.get("reasoning")
         if not isinstance(reasoning, dict):
             errors.append(f"{base}.reasoning: must be object")
         else:
-            for field in ("source_basis", "direction_path", "risk", "reread", "override"):
+            for field in ("source_basis", "direction_path"):
                 if not isinstance(reasoning.get(field), str) or not reasoning.get(field, "").strip():
                     errors.append(f"{base}.reasoning.{field}: must be non-empty string")
-        provisional = {key: value for key, value in stock.items() if key != "profile_overrides"}
-        provisional["profile"] = {
-            "playbook": "PULLBACK", "preferred_anchor": "FLEX", "chase_policy": "NO_CHASE",
-            "entry_window": "ANY", "stop_policy": "ATR_1.5", "time_horizon": "T+1",
-        }
-        provisional_stocks.append(provisional)
-
-    provisional_doc = {
-        "schema_version": FINAL_SCHEMA, "date": draft.get("date"),
-        "market": draft.get("market"), "portfolio_limits": draft.get("portfolio_limits"),
-        "stocks": provisional_stocks, "observation_pool": [],
-    }
-    errors.extend(validate_strategy(provisional_doc))
+            for field, value in reasoning.items():
+                if field not in {"source_basis", "direction_path", "risk", "reread", "override"}:
+                    errors.append(f"{base}.reasoning.{field}: unsupported field")
+                elif not isinstance(value, str) or not value.strip():
+                    errors.append(f"{base}.reasoning.{field}: must be non-empty string when present")
+                elif len(value) > 300:
+                    errors.append(f"{base}.reasoning.{field}: must be at most 300 characters")
     return errors
 
 
@@ -162,7 +170,39 @@ def validate_profile_overrides(overrides: Any, stock: dict[str, Any], base: str,
                 errors.append(f"{path}.value: must equal exact or 2-decimal Step 2 source value")
     horizon = overrides.get("time_horizon") if isinstance(overrides, dict) else None
     if isinstance(horizon, dict) and horizon.get("value") != stock.get("horizon"):
-        errors.append(f"{base}.profile_overrides.time_horizon: must equal selected stock horizon")
+        if horizon.get("value") != "T+1":
+            errors.append(f"{base}.profile_overrides.time_horizon: must remain T+1")
+
+
+def validate_plan_overrides(overrides: Any, base: str, errors: list[str]) -> None:
+    if overrides is None:
+        return
+    if not isinstance(overrides, dict):
+        errors.append(f"{base}.plan_overrides: must be object")
+        return
+    for field, override in overrides.items():
+        path = f"{base}.plan_overrides.{field}"
+        if field not in PLAN_OVERRIDE_FIELDS:
+            errors.append(f"{path}: field is not whitelisted")
+            continue
+        if not isinstance(override, dict) or set(override) != {"value", "reason"}:
+            errors.append(f"{path}: must contain exactly value and reason")
+            continue
+        if not isinstance(override.get("reason"), str) or not override["reason"].strip():
+            errors.append(f"{path}.reason: must be non-empty")
+        value = override.get("value")
+        if field in {"entry_trigger", "no_buy_condition"}:
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{path}.value: must be non-empty string")
+        elif field == "pre_entry_invalidations":
+            if not isinstance(value, list) or not value or not all(isinstance(item, str) and item for item in value):
+                errors.append(f"{path}.value: must be non-empty list[str]")
+        elif field == "t1_risk_plan":
+            required = {"overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action"}
+            if not isinstance(value, dict) or set(value) != required:
+                errors.append(f"{path}.value: must contain exactly {sorted(required)}")
+            elif not all(isinstance(item, str) and item for item in value.values()):
+                errors.append(f"{path}.value: all values must be non-empty strings")
 
 
 def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date: str) -> list[str]:
@@ -175,6 +215,9 @@ def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date
         errors.append(f"input: must be {INPUT_SCHEMA} non-contract artifact")
     if "source" in draft:
         errors.append("source: forbidden; input fingerprint is Python-owned")
+    for field in ("generated_at", "portfolio_limits"):
+        if field in draft:
+            errors.append(f"{field}: forbidden; field is Python-owned")
     errors.extend(draft_contract_errors(draft))
     _, candidates = candidate_index(compact)
     stocks = draft.get("stocks")
@@ -206,10 +249,11 @@ def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date
         seen.add(code)
         candidate = candidates[code]
         stock_for_profile_validation = dict(stock)
+        stock_for_profile_validation["horizon"] = "T+1"
         stock_for_profile_validation["_candidate_strategy_inputs"] = candidate.get("strategy_inputs", {})
-        if stock.get("name") != candidate.get("name"):
-            errors.append(f"{base}.name: differs from compact candidate")
-        if stock.get("sector") not in candidate.get("source_themes", []):
+        source_themes = candidate.get("source_themes", [])
+        sector = stock.get("sector", candidate.get("primary_theme"))
+        if sector not in source_themes:
             errors.append(f"{base}.sector: must be one of candidate source_themes")
         reasoning = stock.get("reasoning")
         source_basis = reasoning.get("source_basis", "") if isinstance(reasoning, dict) else ""
@@ -227,6 +271,7 @@ def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date
         if unsupported_tags:
             errors.append(f"{base}.reasoning.source_basis: unsupported role tags {sorted(unsupported_tags)}")
         validate_profile_overrides(stock.get("profile_overrides", {}), stock_for_profile_validation, base, errors)
+        validate_plan_overrides(stock.get("plan_overrides", {}), base, errors)
     overrides = draft.get("exclusion_overrides", [])
     if not isinstance(overrides, list):
         errors.append("exclusion_overrides: must be list when present")
@@ -279,17 +324,19 @@ def materialize(draft: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
     selected: list[dict[str, Any]] = []
     selected_codes: set[str] = set()
     for draft_stock in draft["stocks"]:
-        stock = {key: value for key, value in draft_stock.items() if key != "profile_overrides"}
-        if isinstance(stock.get("t1_risk_plan"), dict):
-            stock["t1_risk_plan"] = {
-                key: value
-                for key, value in stock["t1_risk_plan"].items()
-                if key != "max_holding_days"
-            }
-        profile = recompute_profile(candidates[stock["code"]], compact, regime)
+        candidate = candidates[draft_stock["code"]]
+        stock = {
+            key: value
+            for key, value in draft_stock.items()
+            if key not in {"profile_overrides", "plan_overrides", "entry_setup"}
+        }
+        stock["name"] = candidate.get("name") or stock["code"]
+        stock["sector"] = draft_stock.get("sector", candidate.get("primary_theme"))
+        profile = recompute_profile(candidate, compact, regime)
         stock["profile"] = apply_overrides(profile, draft_stock.get("profile_overrides", {}))
-        if stock["profile"].get("time_horizon") != stock.get("horizon"):
-            raise ValueError(f"{stock['code']} final profile time_horizon contradicts selected stock")
+        if stock["profile"].get("time_horizon") != "T+1":
+            raise ValueError(f"{stock['code']} final profile time_horizon contradicts T+1")
+        stock.update(materialize_stock_plan(draft_stock, stock["profile"], regime))
         selected.append(stock)
         selected_codes.add(stock["code"])
     explicit = {item["code"]: item["reason"] for item in draft.get("exclusion_overrides", [])}
@@ -313,8 +360,14 @@ def materialize(draft: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
         observations.append({"code": code, "name": candidate.get("name") or code, "reason": reason})
     return {
         "schema_version": FINAL_SCHEMA, "date": draft["date"],
-        "generated_at": draft.get("generated_at"), "market": draft.get("market"),
-        "portfolio_limits": draft.get("portfolio_limits"), "stocks": selected,
+        "generated_at": generated_at(),
+        "market": {
+            "regime_prior": regime,
+            "requires_open_confirmation": True,
+            "stop_atr_multiplier": 1.5,
+            "notes": draft["market"]["notes"],
+        },
+        "portfolio_limits": dict(PORTFOLIO_LIMITS), "stocks": selected,
         "observation_pool": observations,
     }
 
@@ -325,7 +378,6 @@ def main(argv=None) -> int:
     parser.add_argument("--input-dir", help="Input contracts directory; defaults to predict/{date}")
     parser.add_argument("--output-dir", help="Output directory; defaults to input directory")
     parser.add_argument("--draft")
-    parser.add_argument("--validation-retries", type=int, default=0)
     parser.add_argument("--llm-duration", type=float, help="Measured LLM wall time in seconds; preferred for Gate D")
     args = parser.parse_args(argv)
     if args.llm_duration is not None and args.llm_duration < 0:
@@ -336,6 +388,14 @@ def main(argv=None) -> int:
     compact_path = input_dir / ".strategy_llm_input.json"
     input_hash_path = input_dir / INPUT_HASH_FILENAME
     draft_path = Path(args.draft) if args.draft else input_dir / "strategy.draft.json"
+    timing_path = output_dir / "step3_timing.json"
+    validation_retries = validation_retry_count(timing_path, args.date, compact_path)
+    if validation_retries > 1:
+        print(
+            "[ERROR] finalize_daily_strategy failed: one draft repair already failed; stop",
+            file=sys.stderr,
+        )
+        return 1
     failure_recorded = False
     try:
         compact, draft = load(compact_path), load(draft_path)
@@ -345,23 +405,23 @@ def main(argv=None) -> int:
         llm_timing_method = "measured" if args.llm_duration is not None else "mtime_estimate"
         candidate_count = len(compact.get("candidates", [])) if isinstance(compact.get("candidates"), list) else 0
         selected_count = len(draft.get("stocks", [])) if isinstance(draft.get("stocks"), list) else 0
-        update_report(output_dir / "step3_timing.json", args.date, "strategy_llm", llm_duration,
+        update_report(timing_path, args.date, "strategy_llm", llm_duration,
                       [compact_path, input_hash_path], [draft_path],
                       {"candidate_count": candidate_count, "selected_count": selected_count,
                        "observation_count": 0, "conditional_news_count": len(compact.get("news_evidence", [])),
                        "llm_input_bytes": compact_path.stat().st_size, "llm_output_bytes": draft_path.stat().st_size},
-                      validation_retries=args.validation_retries, timing_method=llm_timing_method)
+                      validation_retries=validation_retries, timing_method=llm_timing_method)
         errors = validate_draft_link(compact, draft_path, input_hash_path)
         errors.extend(validate_draft(draft, compact, args.date))
         if errors:
             update_report(
-                output_dir / "step3_timing.json",
+                timing_path,
                 args.date,
                 "finalize",
                 time.perf_counter() - started,
                 [compact_path, input_hash_path, draft_path],
                 [],
-                validation_retries=args.validation_retries,
+                validation_retries=validation_retries,
                 validation_status="failed",
                 validation_errors=errors,
             )
@@ -387,24 +447,24 @@ def main(argv=None) -> int:
         strategy_tmp.replace(strategy_path)
         html_tmp.replace(html_path)
         duration = time.perf_counter() - started
-        update_report(output_dir / "step3_timing.json", args.date, "finalize", duration,
+        update_report(timing_path, args.date, "finalize", duration,
                       [compact_path, input_hash_path, draft_path], [strategy_path, html_path],
                       {"candidate_count": len(compact["candidates"]), "selected_count": len(strategy["stocks"]),
                        "observation_count": len(strategy["observation_pool"]),
                        "conditional_news_count": len(compact.get("news_evidence", [])),
                        "llm_input_bytes": compact_path.stat().st_size, "llm_output_bytes": draft_path.stat().st_size},
-                      validation_retries=args.validation_retries,
+                      validation_retries=validation_retries,
                       validation_status="passed")
     except Exception as exc:
         if not failure_recorded:
             update_report(
-                output_dir / "step3_timing.json",
+                timing_path,
                 args.date,
                 "finalize",
                 time.perf_counter() - started,
                 [compact_path, input_hash_path, draft_path],
                 [],
-                validation_retries=args.validation_retries,
+                validation_retries=validation_retries,
                 validation_status="failed",
                 validation_errors=str(exc).splitlines(),
             )
