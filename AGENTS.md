@@ -3,8 +3,11 @@
 ## Environment Setup
 
 ```bash
-# Required environment variable
+# Required environment variable (Windows cmd)
 set PYTHONIOENCODING=utf-8
+
+# Bash / Linux equivalent
+export PYTHONIOENCODING=utf-8
 
 # Optional eager sync; uv run also syncs automatically
 uv sync --frozen
@@ -19,6 +22,7 @@ the environment automatically.
 
 **Prerequisites:**
 - Chrome browser installed (required for cookie extraction)
+- OpenCode CLI available on `PATH` when using the scheduler
 - `.cookie` restored from a trusted source or generated on Windows; the core
   CLI does not load East Money credentials from `.env`
 
@@ -45,10 +49,11 @@ update_cookie.bat    # Opens Chrome for login/captcha verification
 ## Directory Layout
 
 ```
-predict/{date}/          Daily pipeline outputs (news.json, news.md, themes.json, theme_stocks.json, mapper.json, strategy.json, daily_report.html)
-intraday/{date}/         Intraday overnight outputs (intraday_mapper.base.json, annotations.json, intraday_mapper.json, overnight_strategy.json, overnight_strategy.html)
+predict/{date}/          Daily V5 outputs (news/themes, stock pool, mapper, strategy.json, daily_report.html, timing files)
+intraday/{date}/         Intraday overnight outputs (mapper base/annotations/final, overnight_strategy.json, overnight_strategy.html)
+operation/{date}/        Intraday human-operation snapshots, decisions, run pointers, and operation_guide.html
 .cache/intraday/{date}/  Intraday compute cache (market_breadth, indices, concept_dashboard, scan_pool, compute_pool_enriched, theme_ranking, opportunity_pool)
-memory/daily/{date}/     Morning verification (verification.md)
+memory/daily/{date}/     Morning verification (verification.json and verification.md)
 memory/intraday/{date}/  Intraday verification (intraday_verification.md)
 memory/RULES.md          Learned morning rules; an empty template in a zero-history project
 memory/INTRADAY_RULES.md Learned intraday rules; an empty template in a zero-history project
@@ -56,19 +61,41 @@ memory/SHARED_RULES.md   Learned shared rules; an empty template in a zero-histo
 memory/RULE_GOVERNANCE.md Initialized lifecycle/evidence policy; contains no strategy rules
 memory/PERFORMANCE.md    Initialized zero-sample ledger; updated from actual reviews
 memory/MEMORY.md         Initialized memory navigation and write-path description
-.opencode/agents/        Custom subagent definitions (financial-news-analyst, financial-news-mapper, intraday-market-observer, trading-strategist)
+.agents/skills/          Canonical workflow and leaf-skill instructions
+.opencode/agents/        Specialist agents (sector/equity/microstructure/performance analysts, macro strategist, portfolio manager)
+.opencode/commands/      User-facing daily, intraday, review, and operation-guide commands
+resources/schemas/       Authoritative JSON schemas for inter-step contracts
+resources/templates/     Initialized memory and report templates
 src/ashare_pilot/        Agent-neutral Python APIs and the unified CLI
 config/                  Authoritative project configuration
 data/theme-library/      Authoritative persistent theme data
+logs/                    Scheduler and task logs
 ```
 
-## Two-Agent System
+## Analysis and Execution Workflows
 
-**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Generates `predict/{date}/strategy.json` (HTML report optional).
+**Morning Analysis (09:20 trading days):** Orchestrates `daily-market-analysis` and its designated specialist agents. Reads `RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical strategy output is validated `daily_strategy.v3` at `predict/{date}/strategy.json`; the human board is `daily_report.html`.
 
-**Intraday Agent (14:30 weekdays):** Orchestrates skill `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical outputs: `intraday/{date}/intraday_mapper.json` + `overnight_strategy.json`; human board: `overnight_strategy.html`. JSON is the only inter-step contract.
+**Opening Operation Guide (on demand after 09:35):** Orchestrates `intraday-operation-guide`. It discovers the valid 09:35/09:40 confirmation state, may perform a later recheck, and publishes immutable snapshots/decisions plus `operation_run.latest.json` and `operation_guide.html`. This is human guidance only and never places orders. Run the state-aware lifecycle instead of manually choosing a confirmation stage:
 
-Both agents write verification after market close: Morning → `memory/daily/{date}/verification.md`, Intraday → `memory/intraday/{date}/intraday_verification.md`. Rules are versioned with verification history.
+```bash
+uv run --frozen ashare-pilot operations guide run --date YYYY-MM-DD
+```
+
+**Intraday Overnight Analysis (14:30 trading days):** Orchestrates `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical outputs are validated `intraday_mapper.v3` at `intraday/{date}/intraday_mapper.json` and `intraday_overnight_strategy.v3` at `overnight_strategy.json`; the human board is `overnight_strategy.html`.
+
+Reviews use the canonical JSON contracts and actual market results. Morning review writes under `memory/daily/{date}/`; intraday review writes under `memory/intraday/{date}/`. Rules are versioned with verification history and may only advance according to `memory/RULE_GOVERNANCE.md`.
+
+### Agent Ownership
+
+- `sector-analyst`: daily news and Theme perception
+- `equity-analyst`: daily stock-pool and mapper perception
+- `portfolio-manager`: daily and overnight strategy reasoning
+- `market-microstructure-analyst`: intraday market and stock perception
+- `macro-strategist`: intraday mapper reasoning
+- `performance-analyst`: daily and intraday review
+
+When a workflow skill mandates specialist dispatch, the orchestrator must use those exact roles and keep inter-agent prompts limited to the paths and outputs defined by the skill. JSON files are the only inter-step contracts.
 
 ## Core Commands
 
@@ -96,6 +123,16 @@ uv run --frozen ashare-pilot news fetch --date YYYY-MM-DD --output-dir predict/Y
 uv run --frozen ashare-pilot themes query list --json
 uv run --frozen ashare-pilot themes query candidates <theme> --json
 uv run --frozen ashare-pilot themes query stock sz000977,sh601869 --roles --json
+
+# Validate published strategy contracts
+uv run --frozen ashare-pilot strategy daily validate predict/YYYY-MM-DD/strategy.json
+uv run --frozen ashare-pilot strategy overnight validate intraday/YYYY-MM-DD/overnight_strategy.json
+
+# State-aware opening confirmation and human operation board (never places orders)
+uv run --frozen ashare-pilot operations guide run --date YYYY-MM-DD
+
+# Generate daily verification data after market close
+uv run --frozen ashare-pilot review daily verify --help
 ```
 
 ## Theme Library Build Order
@@ -119,6 +156,12 @@ uv run --frozen ashare-pilot themes library build         # 3. Build index files
   `news.md` may be reorganized by the LLM as a readable briefing
 - Require `predict/{date}/news.json` before Step 2; all downstream news evidence
   references use `news#<id>` and never Markdown line numbers
+- Daily V5 ownership is strict: Step 1 produces news + Themes; Step 2 is perception
+  only and MUST NOT produce Direction or RiskSeverity; Step 3 is the sole reasoning layer
+- `mapper.strategy_view.json` is the compact Step 2 → Step 3 contract; the Step 3
+  LLM writes selected-only decisions and deterministic code finalizes `strategy.json`
+- `strategy.json` uses qualitative `WATCH_ONLY` / `LIGHT` / `STANDARD` position
+  tiers; do not reintroduce legacy numeric position contracts
 - A-share scope only (sh/sz prefix). HK/US and other markets are excluded from the daily workflow
 - Pre-market data availability: auction data from 9:15-9:25, technicals from yesterday's close, money flow is yesterday's
 
@@ -129,7 +172,8 @@ Initialize a new project with `uv run --frozen ashare-pilot automation memory in
 ## Automation
 
 ```bash
-auto.bat                        # Start the configured trading-day task daemon
+auto.bat                        # Windows: start the configured trading-day task daemon
+./auto.sh                       # Bash/Linux equivalent
 uv run --frozen ashare-pilot automation scheduler run --dry-run                 # Validate config and show upcoming runs
 uv run --frozen ashare-pilot automation scheduler run --once daily-analysis     # Run one configured task now
 uv run --frozen ashare-pilot automation scheduler run --config path/to/tasks.json
@@ -139,5 +183,9 @@ uv run --frozen ashare-pilot automation rules check     # Validate rule IDs, cap
 Scheduler tasks are defined in `config/cron-tasks.json`. Times use
 the `Asia/Shanghai` timezone from `config/trading-calendar.json` and
 run only on configured A-share trading days. `T0` means the trigger trading
-day; `TP1` means the previous trading day. Config changes require a daemon
-restart, and schedules missed while the daemon was stopped are not replayed.
+day; `TP1` means the previous trading day. The default schedule runs morning
+analysis at 09:20, previous-day intraday review at 09:45, intraday overnight
+analysis at 14:30, and morning-strategy review at 15:10. The opening operation
+guide remains state-aware and on demand unless explicitly added as a scheduler
+task. Config changes require a daemon restart, and schedules missed while the
+daemon was stopped are not replayed.
