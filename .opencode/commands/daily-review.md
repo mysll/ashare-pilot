@@ -1,6 +1,5 @@
 ---
 description: 每日复盘 (盘后验证早盘策略, 生成 verification.json/md, 更新规则和记忆)
-agent: general
 ---
 
 Load skill `daily-trading-review` and execute the full review workflow.

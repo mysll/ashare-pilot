@@ -58,11 +58,11 @@
 
 | 旧入口 | 新 CLI |
 |--------|--------|
-| `build_theme_evidence_input.py` | `mapping daily build-theme-evidence` |
+| `build_theme_evidence_input.py` | `themes daily prepare` |
 | `build_theme_stocks_universe.py` | `mapping daily build-theme-stock-universe` |
 | `build_theme_stocks_base.py` | `mapping daily build-theme-stock-base` |
 | `build_theme_stocks_json.py` | `mapping daily build-theme-stocks` |
-| `validate_themes_json.py` | `mapping daily validate-themes` |
+| `validate_themes_json.py` | `themes daily publish` |
 | `validate_theme_stocks_json.py` | `mapping daily validate-theme-stocks` |
 | `build_mapper_base.py` | `mapping daily build-mapper-base` |
 | `validate_mapper_annotations.py` | `mapping daily validate-annotations` |

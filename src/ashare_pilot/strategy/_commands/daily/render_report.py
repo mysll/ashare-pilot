@@ -147,7 +147,9 @@ def theme_items(themes: dict[str, Any] | None, view: dict[str, Any] | None) -> l
                 "rank": x.get("rank"),
                 "name": x.get("name"),
                 "status": "tradeable",
-                "heat": x.get("final_heat"),
+                "score": {"final_heat": x.get("final_heat")},
+                "attention_direction": x.get("attention_direction"),
+                "evidence_refs": x.get("evidence_refs"),
             }
             for x in view["themes"]
             if isinstance(x, dict)
@@ -164,15 +166,16 @@ def render_market_chips(notes: Any) -> str:
 
 
 def render_theme_lens(items: list[dict[str, Any]]) -> str:
-    top = sorted(items, key=lambda x: float(x.get("heat") or 0), reverse=True)[:6]
+    heat_of = lambda item: float(value_at(item, "score", "final_heat") or 0)
+    top = sorted(items, key=heat_of, reverse=True)[:6]
     if not top:
         return '<div class="empty">暂无主题热度数据</div>'
     colors = ["#FF5C68", "#FF7A45", "#FDB022", "#A78BFA", "#60A5FA", "#22D3EE"]
-    total = sum(float(x.get("heat") or 0) for x in top) or 1
+    total = sum(heat_of(x) for x in top) or 1
     start, segments, rows = 0.0, [], []
-    maximum = max(float(x.get("heat") or 0) for x in top) or 1
+    maximum = max(heat_of(x) for x in top) or 1
     for idx, item in enumerate(top):
-        heat = float(item.get("heat") or 0)
+        heat = heat_of(item)
         end = start + heat / total * 360
         color = colors[idx]
         segments.append(f"{color} {start:.1f}deg {end:.1f}deg")
@@ -183,7 +186,7 @@ def render_theme_lens(items: list[dict[str, Any]]) -> str:
         start = end
     leader = top[0]
     return f"""<div class="theme-lens">
-      <div class="donut" style="background:conic-gradient({','.join(segments)})"><div><b>{number(leader.get('heat'),0)}</b><span>{esc(leader.get('name'))}</span></div></div>
+      <div class="donut" style="background:conic-gradient({','.join(segments)})"><div><b>{number(heat_of(leader),0)}</b><span>{esc(leader.get('name'))}</span></div></div>
       <div class="theme-ranks">{''.join(rows)}</div>
     </div>"""
 
@@ -225,15 +228,14 @@ def display_stock_name(stock: dict[str, Any], super_codes: set[str]) -> str:
 def render_theme_rows(items: list[dict[str, Any]]) -> str:
     rows = []
     for item in sorted(items, key=lambda x: (x.get("rank") or 999))[:20]:
-        evidence = str(item.get("evidence") or "—")
-        refs = [x.strip() for x in evidence.split(",") if x.strip()]
+        refs = item.get("evidence_refs") if isinstance(item.get("evidence_refs"), list) else []
         evidence_html = "".join(f'<span class="evidence-tag">{esc(x)}</span>' for x in refs[:3]) or "—"
         rows.append(
             f"""<tr class="{'theme-top' if (item.get('rank') or 999) <= 3 else ''}">
               <td class="rank">{esc(item.get('rank'))}</td><td class="strong">{esc(item.get('name'))}</td>
               <td><span class="badge {status_class(item.get('status'))}">{status_label(item.get('status'))}</span></td>
-              <td>{score_bar(item.get('heat'))}</td><td>{number(item.get('confidence'),0)}</td>
-              <td><span class="badge {direction_class(direction_label(item.get('direction')))}">{esc(direction_label(item.get('direction')))}</span></td>
+              <td>{score_bar(value_at(item,'score','final_heat'))}</td><td>{number(item.get('confidence'),0)}</td>
+              <td><span class="badge {direction_class(direction_label(item.get('attention_direction')))}">{esc(direction_label(item.get('attention_direction')))}</span></td>
               <td class="theme-meaning" title="{esc(item.get('reason'))}"><span class="cell-clamp one-line">{esc(item.get('reason'))}</span></td><td>{evidence_html}</td>
             </tr>"""
         )
@@ -419,6 +421,12 @@ def render_report(
     themes: dict[str, Any] | None,
     news_json_path: Path,
 ) -> str:
+    if not isinstance(themes, dict) or themes.get("schema_version") != "daily_themes.v2":
+        raise ValueError("themes.json schema_version must be daily_themes.v2")
+    if not isinstance(view, dict) or view.get("schema_version") != "daily_strategy_input.v2":
+        raise ValueError("strategy view schema_version must be daily_strategy_input.v2")
+    if not isinstance(mapper, dict) or mapper.get("schema_version") != "daily_mapper.v2":
+        raise ValueError("mapper.json schema_version must be daily_mapper.v2")
     market = strategy.get("market") if isinstance(strategy.get("market"), dict) else {}
     stocks = actionable_stocks(strategy)
     mapper = mapper if isinstance(mapper, dict) else {}

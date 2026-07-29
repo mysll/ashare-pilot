@@ -188,7 +188,7 @@ def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date
     elif len(stocks) > limit:
         errors.append(f"stocks: {regime} allows at most {limit}, got {len(stocks)}")
     theme_refs = {
-        item.get("name"): set(NEWS_RE.findall(str(item.get("evidence") or "")))
+        item.get("name"): set(item.get("evidence_refs") or [])
         for item in compact.get("themes", []) if isinstance(item, dict)
     }
     seen: set[str] = set()

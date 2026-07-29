@@ -16,6 +16,20 @@ from ashare_pilot.market_data.runtime import workspace_path
 CODE_RE = re.compile(r"\b(?:[a-z]{2}\d{6}|[a-z]{2,4}_[a-z0-9]+)\b", re.IGNORECASE)
 MISSING_VALUES = {"", "-", "--", "None", "none", "null", "N/A", "鈥?", "鈥擿", "—"}
 NUMERIC_TOLERANCE = 0.005
+THEME_PROJECTION_FIELDS = {
+    "name",
+    "rank",
+    "final_heat",
+    "attention_direction",
+    "evidence_refs",
+}
+THEME_ATTENTION_DIRECTIONS = {
+    "bullish",
+    "mixed",
+    "panic",
+    "neutral",
+    "unknown",
+}
 NEWS_IMPACT_MATRIX = {
     ("R4", "P0"): 0,
     ("R4", "P3"): 95,
@@ -91,6 +105,38 @@ def parse_int(value: Any) -> int | None:
     if number is None:
         return None
     return int(number)
+
+
+def theme_projection_errors(item: Any, path: str) -> list[str]:
+    errors: list[str] = []
+    if not isinstance(item, dict):
+        return [f"{path}: must be object"]
+    missing = sorted(THEME_PROJECTION_FIELDS - set(item))
+    unexpected = sorted(set(item) - THEME_PROJECTION_FIELDS)
+    if missing:
+        errors.append(f"{path}: missing fields {missing}")
+    if unexpected:
+        errors.append(f"{path}: unexpected fields {unexpected}")
+    if not clean_text(item.get("name")):
+        errors.append(f"{path}.name: required")
+    rank = item.get("rank")
+    if not isinstance(rank, int) or isinstance(rank, bool) or rank < 1:
+        errors.append(f"{path}.rank: must be positive integer")
+    heat = item.get("final_heat")
+    if (
+        not isinstance(heat, (int, float))
+        or isinstance(heat, bool)
+        or not 0 <= heat <= 100
+    ):
+        errors.append(f"{path}.final_heat: must be number in [0, 100]")
+    if item.get("attention_direction") not in THEME_ATTENTION_DIRECTIONS:
+        errors.append(f"{path}.attention_direction: invalid enum")
+    refs = item.get("evidence_refs")
+    if not isinstance(refs, list) or not all(
+        isinstance(ref, str) and re.fullmatch(r"news#\d+", ref) for ref in refs
+    ):
+        errors.append(f"{path}.evidence_refs: must be canonical news ref list")
+    return errors
 
 
 def format_num(value: Any, percent: bool = False) -> str:
@@ -446,8 +492,12 @@ def deterministic_filter_from_technical(technical: dict[str, Any]) -> dict[str, 
 
 def publish_theme_stocks(base_doc: dict[str, Any], date: str) -> dict[str, Any]:
     """Publish the deterministic theme-stock contract without an LLM overlay."""
+    if base_doc.get("schema_version") != "daily_theme_stocks_base.v2":
+        raise ValueError(
+            "theme stock base schema_version must be daily_theme_stocks_base.v2"
+        )
     doc = json.loads(json.dumps(base_doc, ensure_ascii=False))
-    doc["schema_version"] = "daily_theme_stocks.v1"
+    doc["schema_version"] = "daily_theme_stocks.v2"
     doc["date"] = date
     doc["generated_at"] = utc_now_iso()
     doc["generation_mode"] = "deterministic_base_publish"
@@ -553,13 +603,27 @@ def build_deterministic_mapper_base(
     theme_stocks_doc: dict[str, Any],
     scope: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    if theme_stocks_doc.get("schema_version") != "daily_theme_stocks.v2":
+        raise ValueError(
+            "theme_stocks schema_version must be daily_theme_stocks.v2"
+        )
+    projection_errors = [
+        error
+        for index, theme in enumerate(theme_stocks_doc.get("themes", []))
+        for error in theme_projection_errors(theme, f"themes[{index}]")
+    ]
+    if projection_errors:
+        raise ValueError(
+            "invalid theme projection:\n"
+            + "\n".join(f"  - {error}" for error in projection_errors)
+        )
     theme_stock_by_code: dict[str, dict[str, Any]] = {}
     theme_heat_by_name: dict[str, float] = {}
     for theme in theme_stocks_doc.get("themes", []):
         if not isinstance(theme, dict):
             continue
         name = clean_text(theme.get("name"))
-        heat = parse_float(theme.get("heat"))
+        heat = parse_float(theme.get("final_heat"))
         if name and heat is not None:
             theme_heat_by_name[name] = heat
     for stock in theme_stocks_doc.get("stocks", []):
@@ -577,10 +641,11 @@ def build_deterministic_mapper_base(
             {
                 "name": item.get("name"),
                 "rank": parse_int(item.get("rank")) or i,
-                "final_heat": parse_float(item.get("heat")),
-                "direction": clean_text(item.get("direction")),
-                "evidence": clean_text(item.get("evidence")),
-                "heat_trace": "from themes.json via theme_stocks.json",
+                "final_heat": parse_float(item.get("final_heat")),
+                "attention_direction": clean_text(
+                    item.get("attention_direction")
+                ),
+                "evidence_refs": list(item.get("evidence_refs") or []),
             }
         )
 
@@ -627,12 +692,18 @@ def build_deterministic_mapper_base(
     resolved_scope = scope or load_trading_scope()
 
     return {
-        "schema_version": "daily_mapper_base.v1",
+        "schema_version": "daily_mapper_base.v2",
         "date": date,
         "generated_at": utc_now_iso(),
         "generation_mode": "deterministic_theme_stock_base",
         "market_state": {
-            "dominant_themes": [{"name": item["name"], "heat": item.get("final_heat")} for item in themes[:3]],
+            "dominant_themes": [
+                {
+                    "name": item["name"],
+                    "final_heat": item.get("final_heat"),
+                }
+                for item in themes[:3]
+            ],
             "financing_flow": None,
             "risk_flags": [],
             "board_policy": board_policy_from_scope(resolved_scope),
@@ -645,8 +716,10 @@ def build_deterministic_mapper_base(
 
 
 def normalize_base_doc(base: dict[str, Any], date: str) -> dict[str, Any]:
+    if base.get("schema_version") != "daily_mapper_base.v2":
+        raise ValueError("mapper base schema_version must be daily_mapper_base.v2")
     doc = dict(base)
-    doc["schema_version"] = "daily_mapper.v1"
+    doc["schema_version"] = "daily_mapper.v2"
     doc["date"] = date
     doc["generated_at"] = utc_now_iso()
     doc["generation_mode"] = "annotations_merge"

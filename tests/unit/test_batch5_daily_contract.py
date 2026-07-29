@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import tempfile
@@ -44,13 +45,16 @@ def candidate(code: str) -> dict:
 def small_inputs(date: str, count: int = 2):
     codes = [f"sh{600000 + index:06d}" for index in range(count)]
     view = {
-        "schema_version": "daily_strategy_input.v1", "date": date,
+        "schema_version": "daily_strategy_input.v2", "date": date,
         "source": {"mapper_sha256": "fixture"},
-        "market_state": {"dominant_themes": [{"name": "测试主题", "heat": 70}]},
-        "themes": [{"name": "测试主题", "rank": 1, "final_heat": 70, "direction": "bullish", "evidence": ""}],
+        "market_state": {"dominant_themes": [{"name": "测试主题", "final_heat": 70}]},
+        "themes": [{"name": "测试主题", "rank": 1, "final_heat": 70,
+                    "attention_direction": "bullish", "evidence_refs": []}],
         "candidates": [candidate(code) for code in codes], "observation_pool": [],
     }
-    themes = {"date": date, "stocks": [{"code": code, "source_themes": [{"name": "测试主题", "score": 70}]} for code in codes]}
+    themes = {"schema_version": "daily_theme_stocks.v2", "date": date,
+              "themes": copy.deepcopy(view["themes"]),
+              "stocks": [{"code": code, "source_themes": [{"name": "测试主题", "score": 70}]} for code in codes]}
     pool = [{"code": code, "raw_observation": {}, "computed_perception": {}} for code in codes]
     news = {"date": date, "items": []}
     indices = {code: {"code": code, "percent": 0.0} for code in ("sh000001", "sz399001", "sh000688")}
@@ -152,7 +156,15 @@ class Step3RealFrozenGateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             news_path = Path(tmp) / "news.json"
             news_path.write_text(json.dumps({"date": date, "items": []}), encoding="utf-8")
-            html = render_report(date, strategy, None, {"observation_pool": [], "excluded_stocks": []}, None, news_path)
+            html = render_report(
+                date,
+                strategy,
+                {"schema_version": "daily_strategy_input.v2", "market_state": {},
+                 "themes": [], "candidates": [], "observation_pool": []},
+                {"schema_version": "daily_mapper.v2", "observation_pool": [], "excluded_stocks": []},
+                {"schema_version": "daily_themes.v2", "themes": []},
+                news_path,
+            )
         self.assertIn("标准仓", html)
         self.assertIn("不代表账户百分比或具体手数", html)
 
@@ -180,7 +192,7 @@ class Step3BoundaryTests(unittest.TestCase):
         self.assertIn("auction_news_contradiction", reread_triggers(row, 3.1))
 
     def test_regime_hint_requires_neutral_broad_index_for_strong_sector(self):
-        state = {"dominant_themes": [{"name": "强主题", "heat": 90}]}
+        state = {"dominant_themes": [{"name": "强主题", "final_heat": 90}]}
         themes = [{"name": "强主题", "final_heat": 90}]
         indices = {"sh000001": {"percent": 0.8}, "sh000688": {"percent": 2.5}}
         self.assertEqual("neutral", derive_regime(indices, state, themes))

@@ -51,6 +51,32 @@ def test_capability_group_uses_explicit_workspace(
 
 
 @pytest.mark.parametrize(
+    "removed_command",
+    ["validate-annotations", "finalize", "validate"],
+)
+def test_removed_daily_theme_commands_are_not_public(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    removed_command: str,
+) -> None:
+    workspace = make_workspace(tmp_path / "workspace")
+
+    with pytest.raises(SystemExit) as raised:
+        main(
+            [
+                "--workspace",
+                str(workspace),
+                "themes",
+                "daily",
+                removed_command,
+            ]
+        )
+
+    assert raised.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
     "command",
     [
         ["market-data", "quote"],
@@ -74,11 +100,11 @@ def test_capability_group_uses_explicit_workspace(
         ["themes", "query"],
         ["themes", "dashboard", "build"],
         ["themes", "ranking", "compute"],
-        ["mapping", "daily", "build-theme-evidence"],
+        ["themes", "daily", "prepare"],
+        ["themes", "daily", "publish"],
         ["mapping", "daily", "build-theme-stock-universe"],
         ["mapping", "daily", "build-theme-stock-base"],
         ["mapping", "daily", "build-theme-stocks"],
-        ["mapping", "daily", "validate-themes"],
         ["mapping", "daily", "validate-theme-stocks"],
         ["mapping", "daily", "build-mapper-base"],
         ["mapping", "daily", "validate-annotations"],

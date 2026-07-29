@@ -54,8 +54,17 @@ def test_daily_mapper_cli_uses_workspace_outside_repository(
     output_dir = workspace.root / "predict" / date
     output_dir.mkdir(parents=True)
     theme_stocks = {
+        "schema_version": "daily_theme_stocks.v2",
         "date": date,
-        "themes": [{"name": "银行", "rank": 1, "heat": 70}],
+        "themes": [
+            {
+                "name": "银行",
+                "rank": 1,
+                "final_heat": 70,
+                "attention_direction": "bullish",
+                "evidence_refs": [],
+            }
+        ],
         "stocks": [
             {
                 "code": "sz000001",

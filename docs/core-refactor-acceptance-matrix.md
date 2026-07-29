@@ -55,11 +55,11 @@
 
 | ID | 旧入口 | 新 CLI | 公共 API | N | B | F | C | A | 状态 |
 |----|--------|--------|----------|---|---|---|---|---|------|
-| MP01 | `build_theme_evidence_input.py` | `mapping daily build-theme-evidence` | `build_theme_evidence` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
+| MP01 | `build_theme_evidence_input.py` | `themes daily prepare` | internal Daily Theme contract | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP02 | `build_theme_stocks_universe.py` | `mapping daily build-theme-stock-universe` | `mapping` 主题池公共能力 | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP03 | `build_theme_stocks_base.py` | `mapping daily build-theme-stock-base` | `build_daily_mapper` / `publish_theme_stocks` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP04 | `build_theme_stocks_json.py` | `mapping daily build-theme-stocks` | `publish_theme_stocks` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
-| MP05 | `validate_themes_json.py` | `mapping daily validate-themes` | `validate_themes` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
+| MP05 | `validate_themes_json.py` | `themes daily publish` | internal Daily Theme contract | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP06 | `validate_theme_stocks_json.py` | `mapping daily validate-theme-stocks` | `validate_theme_stocks` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP07 | `build_mapper_base.py` | `mapping daily build-mapper-base` | `build_daily_mapper` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |
 | MP08 | `validate_mapper_annotations.py` | `mapping daily validate-annotations` | `validate_daily_annotations` | ✓ | ✓ | ✓ | ✓ | ✓ | PASS |

@@ -1,6 +1,5 @@
 ---
 description: 盘中操作指南 (基于早盘策略+实时数据, 生成A/B/C/D操作指令HTML)
-agent: general
 ---
 
 Load skill `intraday-operation-guide` and execute the full operation guide workflow.

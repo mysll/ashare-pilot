@@ -97,6 +97,34 @@
       "provenance": "Minimized code and role counts from the validated 2026-07-28 mapper base and reasoning artifacts."
     },
     {
+      "path": "themes/2026-07-29/evidence.json",
+      "source_date": "2026-07-29",
+      "legacy_commands": ["themes daily prepare"],
+      "scenario": "Frozen 21-theme provenance-rich Daily Theme evidence replay.",
+      "provenance": "Deterministically rebuilt from the canonical 2026-07-29 news fixture and public Theme Library."
+    },
+    {
+      "path": "themes/2026-07-29/annotations.json",
+      "source_date": "2026-07-29",
+      "legacy_commands": ["validate_themes_json.py"],
+      "scenario": "Frozen compact semantic annotations for Daily Theme v2.",
+      "provenance": "Semantic fields projected from the audited 2026-07-29 Theme artifact onto accepted canonical refs."
+    },
+    {
+      "path": "themes/2026-07-29/news.json",
+      "source_date": "2026-07-29",
+      "legacy_commands": ["fetch_news.py"],
+      "scenario": "Canonical news subset required by the frozen Daily Theme replay.",
+      "provenance": "Minimized public news rows referenced by the 2026-07-29 annotations."
+    },
+    {
+      "path": "themes/2026-07-29/themes.json",
+      "source_date": "2026-07-29",
+      "legacy_commands": ["validate_themes_json.py"],
+      "scenario": "Frozen deterministic daily_themes.v2 heat, status, and rank replay.",
+      "provenance": "Generated only from the paired frozen evidence and semantic annotations."
+    },
+    {
       "path": "strategy/step3_real/2026-07-09.json",
       "source_date": "2026-07-09",
       "legacy_commands": ["prepare_daily_strategy.py", "finalize_daily_strategy.py"],

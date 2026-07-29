@@ -107,8 +107,8 @@ def parse_strategies(doc: dict[str, Any], expected_date: str) -> dict[str, dict[
 
 
 def parse_mapper_inputs(doc: dict[str, Any], expected_date: str) -> dict[str, dict[str, Any]]:
-    if doc.get("schema_version") != "daily_mapper.v1":
-        raise ValueError("mapper.json schema_version must be daily_mapper.v1")
+    if doc.get("schema_version") != "daily_mapper.v2":
+        raise ValueError("mapper.json schema_version must be daily_mapper.v2")
     if doc.get("date") != expected_date:
         raise ValueError(f"mapper.json date mismatch: expected {expected_date}, got {doc.get('date')!r}")
 

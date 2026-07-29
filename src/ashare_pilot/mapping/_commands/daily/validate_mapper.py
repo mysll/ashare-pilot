@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from ashare_pilot.mapping.daily_contract import CODE_RE, default_predict_dir, ensure_doc_date, load_pool, load_trading_scope, numbers_match, raw_value, read_json, scope_decision
+from ashare_pilot.mapping.daily_contract import CODE_RE, default_predict_dir, ensure_doc_date, load_pool, load_trading_scope, numbers_match, raw_value, read_json, scope_decision, theme_projection_errors
 
 
 PRICE_SOURCES = {"PrevClose", "Auction", "Live"}
@@ -47,10 +47,16 @@ def check_score(errors: list[str], obj: Any, path: str, require_trace: bool = Fa
 
 def check_doc(doc: dict[str, Any], pool: dict[str, dict[str, Any]] | None, scope: dict[str, Any] | None = None) -> list[str]:
     errors: list[str] = []
-    if doc.get("schema_version") != "daily_mapper.v1":
-        add(errors, "schema_version", "must be daily_mapper.v1")
+    if doc.get("schema_version") != "daily_mapper.v2":
+        add(errors, "schema_version", "must be daily_mapper.v2")
     if not isinstance(doc.get("date"), str) or not re.match(r"^\d{4}-\d{2}-\d{2}$", doc.get("date", "")):
         add(errors, "date", "must be YYYY-MM-DD")
+    themes = doc.get("themes")
+    if not isinstance(themes, list):
+        add(errors, "themes", "must be list")
+    else:
+        for i, theme in enumerate(themes):
+            errors.extend(theme_projection_errors(theme, f"themes[{i}]"))
 
     candidates = doc.get("candidate_pool")
     if not isinstance(candidates, list):

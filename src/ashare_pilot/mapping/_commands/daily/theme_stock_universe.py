@@ -14,7 +14,10 @@ from .theme_stock_base import (
     universe_doc,
 )
 from ashare_pilot.mapping.daily_contract import CODE_RE, clean_text, default_predict_dir, ensure_doc_date, load_trading_scope, parse_float, read_json, write_json
-from .validate_themes import validate as validate_themes_doc
+from ashare_pilot.themes._commands.daily.contract import (
+    THEMES_SCHEMA,
+    formal_theme_shape_errors,
+)
 
 
 def collect_theme_specs_from_json(path: Path, date: str) -> list[dict[str, object]]:
@@ -22,14 +25,10 @@ def collect_theme_specs_from_json(path: Path, date: str) -> list[dict[str, objec
     if not isinstance(data, dict):
         raise ValueError(f"themes.json must be a JSON object: {path}")
     ensure_doc_date(data, date, str(path))
-    errors = validate_themes_doc(data)
-    if errors:
+    if data.get("schema_version") != THEMES_SCHEMA:
         raise ValueError(
-            f"themes.json failed validation before universe build: {path}\n"
-            + "\n".join(f"  - {item}" for item in errors)
+            f"themes.json schema_version must be {THEMES_SCHEMA}: {path}"
         )
-    if data.get("schema_version") != "daily_themes.v1":
-        raise ValueError(f"themes.json schema_version must be daily_themes.v1: {path}")
     themes = data.get("themes")
     if not isinstance(themes, list):
         raise ValueError(f"themes.json missing themes[]: {path}")
@@ -37,24 +36,43 @@ def collect_theme_specs_from_json(path: Path, date: str) -> list[dict[str, objec
     result: list[dict[str, object]] = []
     seen: set[str] = set()
     for i, item in enumerate(themes):
-        if not isinstance(item, dict):
-            raise ValueError(f"themes[{i}] must be object")
-        status = clean_text(item.get("status")) or clean_text(item.get("pool")) or "tradeable"
-        if status not in {"tradeable", "candidate"}:
+        shape_errors = formal_theme_shape_errors(item, f"themes[{i}]")
+        if shape_errors:
+            raise ValueError(
+                "themes.json formal Theme validation failed:\n"
+                + "\n".join(f"  - {error}" for error in shape_errors)
+            )
+        assert isinstance(item, dict)
+        status = clean_text(item.get("status"))
+        if status not in {"tradeable", "watch", "discarded"}:
+            raise ValueError(
+                f"themes[{i}].status must be tradeable, watch, or discarded"
+            )
+        if status != "tradeable":
             continue
-        name = clean_text(item.get("name") or item.get("theme"))
+        name = clean_text(item.get("name"))
         if not name or name in seen:
             continue
-        heat = parse_float(item.get("heat") or item.get("final_heat") or item.get("final"))
-        confidence = parse_float(item.get("confidence") or item.get("conf"))
+        score = item.get("score")
+        if not isinstance(score, dict):
+            raise ValueError(f"themes[{i}].score must be object")
+        final_heat = parse_float(score.get("final_heat"))
+        evidence_refs = item.get("evidence_refs")
+        if final_heat is None:
+            raise ValueError(f"themes[{i}].score.final_heat must be numeric")
+        if not isinstance(evidence_refs, list) or not all(
+            isinstance(ref, str) for ref in evidence_refs
+        ):
+            raise ValueError(f"themes[{i}].evidence_refs must be string list")
         result.append(
             {
                 "name": name,
-                "rank": int(parse_float(item.get("rank")) or len(result) + 1),
-                "heat": heat,
-                "confidence": confidence,
-                "direction": clean_text(item.get("direction")),
-                "evidence": clean_text(item.get("evidence")),
+                "rank": int(parse_float(item.get("rank")) or 0),
+                "final_heat": final_heat,
+                "attention_direction": clean_text(
+                    item.get("attention_direction")
+                ),
+                "evidence_refs": evidence_refs,
             }
         )
         seen.add(name)

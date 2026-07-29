@@ -19,7 +19,7 @@ PUBLIC_CONTRACTS = {
         "build_concept_dashboard", "compute_theme_ranking",
     },
     "mapping": {
-        "build_theme_evidence", "build_daily_mapper", "merge_daily_mapper",
+        "build_daily_mapper", "merge_daily_mapper",
         "merge_intraday_mapper", "build_scan_pool", "validate_daily_mapper",
         "validate_intraday_annotations",
     },

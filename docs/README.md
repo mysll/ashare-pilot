@@ -7,6 +7,7 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 
 | 文档 | 摘要 |
 |------|------|
+| [Daily Theme 迁移至 Step 1 重构方案](daily-theme-step1-refactor-plan.md) | 将新闻与Theme归并到Step 1，以 `daily_themes.v2`、精简LLM语义注释和Python确定性组装完成无兼容层的原子切换，并收缩Step 2为纯股票映射。 |
 | [入场质量回测纪要](entry-quality-backtest-memo.md) | 早盘策略入场环节的质量回测:要解决的问题、数据口径、如何复跑(`entry_quality_backtest.py`)、首轮结论(MA5/MA20 锚保留、格式已锁、确认闸门待前向数据) |
 | [A股早盘推荐与二次确认系统 Spec](morning-recommendation-system-spec.md) | `daily-market-analysis` 与 `intraday-operation-guide` 的职责边界、时序、数据合同、T+1 风控和阶段验收标准。 |
 | [A股早盘推荐与二次确认系统开发实施文档](morning-recommendation-system-development.md) | 逐文件开发任务、函数设计、v1→v2 迁移、离线 fixture、测试命令、提交切片与实施顺序。 |

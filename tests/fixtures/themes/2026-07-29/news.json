@@ -1,0 +1,420 @@
+{
+  "schema_version": "daily_news.v1",
+  "date": "2026-07-29",
+  "items": [
+    {
+      "id": 1,
+      "category": "policy",
+      "source_item_no": 1,
+      "title": "身有桎梏 心向鸿鹄——记国防科技大学计算机学院研究员王戟",
+      "url": "http://politics.people.com.cn/n1/2026/0729/c461001-40769760.html",
+      "source": "People.cn",
+      "desc": ""
+    },
+    {
+      "id": 7,
+      "category": "policy",
+      "source_item_no": 7,
+      "title": "王沪宁出席全国政协\"加快农业农村现代化\"专题协商会",
+      "url": "http://politics.people.com.cn/n1/2026/0729/c1024-40769759.html",
+      "source": "People.cn",
+      "desc": ""
+    },
+    {
+      "id": 19,
+      "category": "hotspot",
+      "source_item_no": 12,
+      "title": "美国防部将部分中国科研机构列入制裁清单，商务部：坚决反对",
+      "url": "https://www.thepaper.cn/newsDetail_forward_33679912",
+      "source": "The Paper",
+      "desc": ""
+    },
+    {
+      "id": 34,
+      "category": "flash",
+      "source_item_no": 7,
+      "title": "存储芯片概念震荡回升 C长鑫涨超10%",
+      "url": "https://www.cls.cn/detail/2439950",
+      "source": "CLS",
+      "desc": ""
+    },
+    {
+      "id": 38,
+      "category": "flash",
+      "source_item_no": 11,
+      "title": "锂矿概念持续反弹 永杉锂业涨停",
+      "url": "https://www.cls.cn/detail/2439946",
+      "source": "CLS",
+      "desc": ""
+    },
+    {
+      "id": 40,
+      "category": "flash",
+      "source_item_no": 13,
+      "title": "大金融板块持续走高 华林证券直线涨停",
+      "url": "https://www.cls.cn/detail/2439941",
+      "source": "CLS",
+      "desc": ""
+    },
+    {
+      "id": 44,
+      "category": "flash",
+      "source_item_no": 17,
+      "title": "互联金融板块异动拉升 兆日科技20cm涨停",
+      "url": "https://www.cls.cn/detail/2439934",
+      "source": "CLS",
+      "desc": ""
+    },
+    {
+      "id": 52,
+      "category": "finance",
+      "source_item_no": 5,
+      "title": "惠城环保7月29日加速下跌",
+      "url": "https://finance.eastmoney.com/a/202607293825012082.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 54,
+      "category": "finance",
+      "source_item_no": 7,
+      "title": "骄成超声新设子公司 含半导体器件相关业务",
+      "url": "https://finance.eastmoney.com/a/202607293825010188.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 67,
+      "category": "finance",
+      "source_item_no": 20,
+      "title": "涨超2.2%，有色ETF富国(159168)连续3天净流入",
+      "url": "https://finance.eastmoney.com/a/202607293825011895.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 68,
+      "category": "finance",
+      "source_item_no": 21,
+      "title": "涨超2.0%，粮食ETF易方达(159038)冲击3连涨",
+      "url": "https://finance.eastmoney.com/a/202607293825011624.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 70,
+      "category": "finance",
+      "source_item_no": 23,
+      "title": "涨超2.1%，有色ETF景顺(560290)近10个交易日净流入1128.97万元",
+      "url": "https://finance.eastmoney.com/a/202607293825011284.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 72,
+      "category": "finance",
+      "source_item_no": 25,
+      "title": "涨超2.1%，稀有金属ETF富国(159055)盘中上涨2.12%",
+      "url": "https://finance.eastmoney.com/a/202607293825010930.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 74,
+      "category": "finance",
+      "source_item_no": 27,
+      "title": "6N级高纯氟化氢实现国产突破，科创新材料ETF博时(588010)翻红，连续4天获资金净流入",
+      "url": "https://finance.eastmoney.com/a/202607293825011774.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 75,
+      "category": "finance",
+      "source_item_no": 28,
+      "title": "涨超2.0%，稀土ETF富国(159713)近5个交易日净流入2302.65万元",
+      "url": "https://finance.eastmoney.com/a/202607293825012350.html",
+      "source": "Eastmoney",
+      "desc": ""
+    },
+    {
+      "id": 82,
+      "category": "macro",
+      "source_item_no": 6,
+      "title": "创业板指涨超2%，早盘一度跌超2%，食品饮料、零售等方向涨幅居前，全市场超4300家个股上涨。",
+      "url": "https://wallstreetcn.com/live/3141478",
+      "source": "Wallstreet CN",
+      "desc": ""
+    },
+    {
+      "id": 83,
+      "category": "macro",
+      "source_item_no": 7,
+      "title": "A股锂矿概念持续反弹，永杉锂业、科达制造涨停，国城矿业、金圆股份、天齐锂业、西藏矿业、盛新锂能涨幅靠前。",
+      "url": "https://wallstreetcn.com/live/3141475",
+      "source": "Wallstreet CN",
+      "desc": ""
+    },
+    {
+      "id": 86,
+      "category": "macro",
+      "source_item_no": 10,
+      "title": "A股证券板块午后持续上扬，华林证券封板涨停，中银证券、国盛证券、华安证券、国金证券、首创证券跟涨。",
+      "url": "https://wallstreetcn.com/live/3141469",
+      "source": "Wallstreet CN",
+      "desc": ""
+    },
+    {
+      "id": 88,
+      "category": "macro",
+      "source_item_no": 12,
+      "title": "A股金融股震荡拉升，兆日科技20cm涨停，华林证券涨超7%，指南针、银之杰、海德股份、中银证券涨幅居前。",
+      "url": "https://wallstreetcn.com/live/3141465",
+      "source": "Wallstreet CN",
+      "desc": ""
+    },
+    {
+      "id": 89,
+      "category": "macro",
+      "source_item_no": 13,
+      "title": "A股消费电子板块直线拉升，昀冢科技涨超10%，国光电器此前涨停，蓝思科技、长盈精密、影石创新、惠威科技、朗特智能等跟涨。",
+      "url": "https://wallstreetcn.com/live/3141463",
+      "source": "Wallstreet CN",
+      "desc": ""
+    },
+    {
+      "id": 117,
+      "category": "sentiment",
+      "source_item_no": 11,
+      "title": "腾讯控股 (+3.31%)",
+      "url": "https://xueqiu.com/s/00700",
+      "source": "Xueqiu",
+      "desc": ""
+    },
+    {
+      "id": 127,
+      "category": "stcn",
+      "source_item_no": 1,
+      "title": "IPv6概念迎利好，高成长+杠杆资金净买入股出炉（附名单）",
+      "url": "https://www.stcn.com/article/detail/4046818.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 128,
+      "category": "stcn",
+      "source_item_no": 2,
+      "title": "11部门联合发文，中药行业又迎政策利好，融资7月净买入9只中药股",
+      "url": "https://www.stcn.com/article/detail/4046330.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 129,
+      "category": "stcn",
+      "source_item_no": 3,
+      "title": "算力中心供配电架构迎革新 固态变压器站上产业风口",
+      "url": "https://www.stcn.com/article/detail/4046124.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 130,
+      "category": "stcn",
+      "source_item_no": 4,
+      "title": "投资、并购、合作多路并进 消费电子企业涌入智算中心赛道",
+      "url": "https://www.stcn.com/article/detail/4046126.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 131,
+      "category": "stcn",
+      "source_item_no": 5,
+      "title": "新能源汽车出海遇“险”阻，车险出海待提速，险企多模式探索“保障共同体”",
+      "url": "https://www.stcn.com/article/detail/4046127.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 140,
+      "category": "stcn",
+      "source_item_no": 14,
+      "title": "盘中急拉，道指涨超500点！费城半导体指数三连跌",
+      "url": "https://www.stcn.com/article/detail/4046329.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 144,
+      "category": "stcn",
+      "source_item_no": 18,
+      "title": "一鸣食品直线涨停！食品饮料、MLCC‌等多个板块异动",
+      "url": "https://www.stcn.com/article/detail/4046757.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 146,
+      "category": "stcn",
+      "source_item_no": 20,
+      "title": "二季度券商股获主动基金增持2.19亿股",
+      "url": "https://www.stcn.com/article/detail/4046408.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 153,
+      "category": "stcn",
+      "source_item_no": 27,
+      "title": "中信证券：看好特斯拉机器人的量产和应用前景",
+      "url": "https://www.stcn.com/article/detail/4046299.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 154,
+      "category": "stcn",
+      "source_item_no": 28,
+      "title": "骄成超声新设子公司，含半导体器件相关业务",
+      "url": "https://www.stcn.com/article/detail/4046932.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 155,
+      "category": "stcn",
+      "source_item_no": 29,
+      "title": "现货黄金站上4040美元/盎司 现货白银站上58美元/盎司",
+      "url": "https://www.stcn.com/article/detail/4046927.html",
+      "source": "STCN",
+      "desc": ""
+    },
+    {
+      "id": 163,
+      "category": "yicai",
+      "source_item_no": 7,
+      "title": "证券板块午后走高  |",
+      "url": "https://www.yicai.com/brief/103296813.html",
+      "source": "Yicai",
+      "desc": ""
+    },
+    {
+      "id": 173,
+      "category": "yicai",
+      "source_item_no": 17,
+      "title": "港股午盘丨恒生指数涨1.37% 腾讯控股涨超4%  |",
+      "url": "https://www.yicai.com/brief/103296707.html",
+      "source": "Yicai",
+      "desc": ""
+    },
+    {
+      "id": 174,
+      "category": "yicai",
+      "source_item_no": 18,
+      "title": "沃尔核材：光模块和铜缆各有优势，分别应用于数据中心不同的传输距离与应用场景  |",
+      "url": "https://www.yicai.com/brief/103296699.html",
+      "source": "Yicai",
+      "desc": ""
+    },
+    {
+      "id": 179,
+      "category": "21jingji",
+      "source_item_no": 5,
+      "title": "“易中天”急跌之后：订单、物料与技术构筑光模块三组定价锚",
+      "url": "https://m.21jingji.com/article/20260729/herald/929f9699b4da3b6627793cd65b5b45e2.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 183,
+      "category": "21jingji",
+      "source_item_no": 9,
+      "title": "从一片年轻的公寓区 看机构间REITs市场的“扩募样本”",
+      "url": "https://m.21jingji.com/article/20260729/herald/0db22a541c63107dc11d061bc2616464.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 188,
+      "category": "21jingji",
+      "source_item_no": 14,
+      "title": "AI短剧用户突破6亿 产业爆发重塑内容生产逻辑",
+      "url": "https://m.21jingji.com/article/20260729/herald/e5e524cb2444e05d9efcf7b06636527f.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 196,
+      "category": "21jingji",
+      "source_item_no": 22,
+      "title": "中国大模型坐到了全球AI牌局主桌",
+      "url": "https://m.21jingji.com/article/20260729/herald/fc1ba36780b36701d9b36eeee0c584fd.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 203,
+      "category": "21jingji",
+      "source_item_no": 29,
+      "title": "乳业股集体拉升，多股涨停",
+      "url": "https://m.21jingji.com/article/20260729/herald/23d70e9e3e22b5cb626d4a9e3e564d1e.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 204,
+      "category": "21jingji",
+      "source_item_no": 30,
+      "title": "专访量子密码学之父吉尔·布拉萨德‌：海水里的量子革命",
+      "url": "https://m.21jingji.com/article/20260728/herald/8cd95dfb237f1f1e4320ba5878225f44.html",
+      "source": "21Jingji",
+      "desc": ""
+    },
+    {
+      "id": 211,
+      "category": "sina",
+      "source_item_no": 7,
+      "title": "纳指期货承压下跌 芯片股持续重挫",
+      "url": "https://finance.sina.com.cn/stock/usstock/c/2026-07-28/doc-inikknsf6234343.shtml",
+      "source": "Sina Finance",
+      "desc": ""
+    },
+    {
+      "id": 221,
+      "category": "sina",
+      "source_item_no": 17,
+      "title": "美国防部将部分中国科研机构列入制裁清单，中方：强烈不满、坚决反对，将采取必要措施，维护中方科研机构的正当合法权益",
+      "url": "https://finance.sina.com.cn/wm/2026-07-29/doc-inikmqcp0051077.shtml",
+      "source": "Sina Finance",
+      "desc": ""
+    },
+    {
+      "id": 226,
+      "category": "sina",
+      "source_item_no": 22,
+      "title": "AI热潮下韩国青少年不再拼高考，转向半导体技校",
+      "url": "https://finance.sina.com.cn/stock/usstock/c/2026-07-29/doc-inikmivv5997350.shtml",
+      "source": "Sina Finance",
+      "desc": ""
+    },
+    {
+      "id": 227,
+      "category": "sina",
+      "source_item_no": 23,
+      "title": "ChatGPT周活跃用户即将突破10亿，较最初预期晚了半年多",
+      "url": "https://finance.sina.com.cn/stock/usstock/c/2026-07-29/doc-inikmytp5876819.shtml",
+      "source": "Sina Finance",
+      "desc": ""
+    },
+    {
+      "id": 231,
+      "category": "sina",
+      "source_item_no": 27,
+      "title": "三年累计亏损近14亿元 奥动新能源二次递表港交所",
+      "url": "https://finance.sina.com.cn/jjxw/2026-07-29/doc-inikmcpz2818419.shtml",
+      "source": "Sina Finance",
+      "desc": ""
+    }
+  ]
+}

@@ -253,10 +253,11 @@ def _load_concept_cache_snapshot():
     return snapshot
 
 
-def _compute_market_view(theme_data, top=10):
+def _compute_market_view(theme_data, top=10, snapshot=None):
     """从 theme_data 的 stocks 列表匹配缓存快照，计算 market 视图"""
     stocks = theme_data.get("stocks", []) or []
-    snapshot = _load_concept_cache_snapshot()
+    if snapshot is None:
+        snapshot = _load_concept_cache_snapshot()
 
     # 构建 industry_score 映射（来自 industry_leaders + candidate_stocks）
     industry_scores = {}

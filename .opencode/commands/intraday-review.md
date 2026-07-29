@@ -1,6 +1,5 @@
 ---
 description: 尾盘复盘 (T+1验证隔夜策略, 对比预测与实际, 更新尾盘规则)
-agent: general
 ---
 
 Load skill `intraday-trading-review` and execute the full verification workflow.

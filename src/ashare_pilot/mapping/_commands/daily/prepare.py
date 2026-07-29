@@ -4,14 +4,12 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import time
 from pathlib import Path
 from typing import Any
 
 from .timing import update_report
-from .theme_evidence import build_input as build_theme_evidence_input
 from .theme_stock_base import build_filtered_doc, load_extra_stocks, load_universe, theme_library_dir
 from .theme_stock_universe import collect_theme_specs_from_json, enrich_structured_source_flags
 from .theme_stock_base import build_doc_from_themes, universe_doc
@@ -19,15 +17,26 @@ from ashare_pilot.mapping.daily_contract import (build_deterministic_mapper_base
                              ensure_doc_date, load_trading_scope, read_json, write_json, publish_theme_stocks)
 from .validate_theme_stocks import check_doc as check_theme_stocks_doc
 from ashare_pilot.indicators._commands.pool_fetch import main as fetch_pool_indicators
-from ashare_pilot.themes._commands.query import _compute_market_view, _resolve_theme
+from ashare_pilot.themes._commands.query import (
+    _compute_market_view,
+    _load_concept_cache_snapshot,
+    _resolve_theme,
+)
 
 
 def market_views_for(themes: list[dict[str, Any]]) -> dict[str, Any]:
-    result = {}
+    resolved_themes = []
     for theme in themes:
         data = _resolve_theme(theme["name"])
         if data:
-            result[theme["name"]] = _compute_market_view(data, top=10)
+            resolved_themes.append((theme["name"], data))
+    if not resolved_themes:
+        return {"themes": {}}
+    snapshot = _load_concept_cache_snapshot()
+    result = {
+        name: _compute_market_view(data, top=10, snapshot=snapshot)
+        for name, data in resolved_themes
+    }
     return {"themes": result}
 
 
@@ -35,7 +44,6 @@ def annotation_input(
     base: dict[str, Any],
     theme_stocks: dict[str, Any],
     news_doc: dict[str, Any] | None,
-    theme_evidence: dict[str, Any] | None,
 ) -> dict[str, Any]:
     """Build a compact, candidate-linked semantic input without duplicating news prose."""
     theme_stock_by_code = {
@@ -54,27 +62,11 @@ def annotation_input(
         for item in (news_doc.get("items", []) if isinstance(news_doc, dict) else [])
         if isinstance(item, dict) and isinstance(item.get("id"), int)
     }
-    evidence_rows: dict[tuple[str, ...], dict[str, Any]] = {}
-    refs_by_theme: dict[str, list[str]] = {}
-    for theme in theme_evidence.get("themes", []) if isinstance(theme_evidence, dict) else []:
-        if not isinstance(theme, dict) or not isinstance(theme.get("name"), str):
-            continue
-        refs: list[str] = []
-        for item in theme.get("items", []):
-            if not isinstance(item, dict):
-                continue
-            item_refs = [ref for ref in item.get("ids", []) if isinstance(ref, str) and re.fullmatch(r"news#\d+", ref)]
-            if not item_refs:
-                continue
-            refs.extend(item_refs)
-            evidence_rows[tuple(item_refs)] = {
-                "refs": item_refs,
-                "category": item.get("category"),
-                "source": item.get("source"),
-                "title": item.get("title"),
-                **({"desc": item.get("desc")} if item.get("desc") else {}),
-            }
-        refs_by_theme[theme["name"]] = list(dict.fromkeys(refs))
+    refs_by_theme = {
+        theme["name"]: list(theme.get("evidence_refs") or [])
+        for theme in theme_stocks.get("themes", [])
+        if isinstance(theme, dict) and isinstance(theme.get("name"), str)
+    }
 
     referenced: set[str] = set()
     candidates = []
@@ -107,10 +99,8 @@ def annotation_input(
         )
 
     compact_evidence = [
-        row for refs, row in evidence_rows.items() if referenced.intersection(refs)
+        canonical_news[ref] for ref in sorted(referenced) if ref in canonical_news
     ]
-    covered = {ref for row in compact_evidence for ref in row["refs"]}
-    compact_evidence.extend(canonical_news[ref] for ref in sorted(referenced - covered) if ref in canonical_news)
     return {
         "schema_version": "mapper_annotation_input.tmp.v1",
         "date": base.get("date"),
@@ -143,7 +133,9 @@ def main(argv=None) -> int:
             args.date, themes, scope, theme_library_dir(), 15, 10, 15,
             load_extra_stocks(extra_path if extra_path.exists() else None, args.date),
         )
+        market_views_started = time.perf_counter()
         market_views = market_views_for(themes)
+        market_views_duration = time.perf_counter() - market_views_started
         write_json(market_path, market_views)
         news_path = predict / "news.json"
         news = read_json(news_path) if news_path.exists() else None
@@ -176,29 +168,21 @@ def main(argv=None) -> int:
             raise ValueError("theme_stocks validation failed before publication:\n" + "\n".join(f"  - {item}" for item in final_errors))
         write_json(final_path, final)
         mapper_base = build_deterministic_mapper_base(args.date, pool, final, scope)
-        evidence_path = predict / ".theme_evidence_input.json"
-        if evidence_path.exists():
-            theme_evidence = read_json(evidence_path)
-        elif isinstance(news, dict):
-            theme_evidence = build_theme_evidence_input(news, theme_library_dir())
-            write_json(evidence_path, theme_evidence)
-        else:
-            theme_evidence = None
         write_json(
             mapper_input_path,
             annotation_input(
                 mapper_base,
                 final,
                 news if isinstance(news, dict) else None,
-                theme_evidence if isinstance(theme_evidence, dict) else None,
             ),
         )
         duration = time.perf_counter() - started
         update_report(predict / "step2_timing.json", args.date, "prepare", duration,
-                      [themes_path, news_path, extra_path, evidence_path], [universe_path, pool_path, final_path, mapper_input_path],
+                      [themes_path, news_path, extra_path], [universe_path, pool_path, final_path, mapper_input_path],
                       {"news_count": len(news.get("items", [])) if isinstance(news, dict) and isinstance(news.get("items"), list) else 0,
                        "theme_count": len(themes), "universe_count": len(stocks),
-                       "candidate_count": len(mapper_base["candidate_pool"])}, failures)
+                       "candidate_count": len(mapper_base["candidate_pool"])}, failures,
+                      market_views_duration=market_views_duration)
         update_report(predict / "step2_timing.json", args.date, "indicators", indicator_duration,
                       [universe_path], [pool_path], {"universe_count": len(stocks)}, failures)
     except Exception as exc:

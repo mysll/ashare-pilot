@@ -4,7 +4,6 @@ from ashare_pilot.mapping.api import (
     build_daily_mapper,
     build_scan_pool,
     build_strategy_view,
-    build_theme_evidence,
     compute_quick_score,
     merge_daily_mapper,
     merge_intraday_mapper,
@@ -14,14 +13,12 @@ from ashare_pilot.mapping.api import (
     validate_daily_mapper,
     validate_intraday_annotations,
     validate_theme_stocks,
-    validate_themes,
 )
 
 __all__ = [
     "build_daily_mapper",
     "build_scan_pool",
     "build_strategy_view",
-    "build_theme_evidence",
     "compute_quick_score",
     "merge_daily_mapper",
     "merge_intraday_mapper",
@@ -31,5 +28,4 @@ __all__ = [
     "validate_daily_mapper",
     "validate_intraday_annotations",
     "validate_theme_stocks",
-    "validate_themes",
 ]

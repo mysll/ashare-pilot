@@ -4,14 +4,15 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from ashare_pilot.mapping._commands.daily.compare_regression import (
     classify_changes,
     diff,
     normalized,
 )
-from ashare_pilot.mapping._commands.daily.prepare import annotation_input
-from ashare_pilot.mapping._commands.daily.theme_evidence import build_input
+from ashare_pilot.mapping._commands.daily.prepare import annotation_input, market_views_for
+from ashare_pilot.themes._commands.daily.evidence import build_input
 from ashare_pilot.mapping._commands.daily.theme_stock_base import (
     merge_extra_stock,
     stock_template,
@@ -32,6 +33,7 @@ from ashare_pilot.mapping.daily_contract import (
     merge_annotations,
     publish_theme_stocks,
 )
+from ashare_pilot.themes._commands.query import _compute_market_view
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "mapping"
 ROOT = Path(__file__).resolve().parents[2]
@@ -53,8 +55,9 @@ def pool_entry(amount=80000, auction=None):
 
 def theme_stocks():
     return {
-        "schema_version": "daily_theme_stocks.v1", "date": "2026-07-14",
-        "themes": [{"name": "银行", "rank": 1, "heat": 70, "direction": "bullish", "evidence": "news#1"}],
+        "schema_version": "daily_theme_stocks.v2", "date": "2026-07-14",
+        "themes": [{"name": "银行", "rank": 1, "final_heat": 70,
+                    "attention_direction": "bullish", "evidence_refs": ["news#1"]}],
         "stocks": [
             {"code": "sz000001", "name": "平安银行", "source_themes": [{"name": "银行", "score": 70}],
              "source_flags": {"candidate": True, "market": False, "news": False, "lhb": False},
@@ -69,15 +72,16 @@ def theme_stocks():
 class OwnershipTests(unittest.TestCase):
     def test_invalid_theme_status_does_not_add_unrelated_direction_error(self):
         doc = {
-            "schema_version": "daily_themes.v1",
+            "schema_version": "daily_themes.v2",
             "date": "2026-07-14",
             "themes": [{
                 "name": "银行",
                 "rank": 1,
-                "heat": 70,
                 "confidence": 90,
                 "status": "excluded",
-                "direction": "bullish",
+                "attention_direction": "bullish",
+                "score": {"final_heat": 70},
+                "evidence_refs": [],
             }],
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -85,13 +89,19 @@ class OwnershipTests(unittest.TestCase):
             path.write_text(json.dumps(doc), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, r"themes\[0\]\.status") as raised:
                 collect_theme_specs_from_json(path, "2026-07-14")
-        self.assertNotIn("themes[].direction", str(raised.exception))
+        self.assertNotIn("attention_direction", str(raised.exception))
 
     def test_candidate_membership_and_theme_ownership_ignore_annotations(self):
         doc = build_deterministic_mapper_base("2026-07-14", {"sz000001": pool_entry()}, theme_stocks())
         self.assertEqual([item["code"] for item in doc["candidate_pool"]], ["sz000001"])
         self.assertEqual([(item["name"], item["rank"], item["final_heat"]) for item in doc["themes"]], [("银行", 1, 70.0)])
-        self.assertEqual((doc["themes"][0]["direction"], doc["themes"][0]["evidence"]), ("bullish", "news#1"))
+        self.assertEqual(
+            (
+                doc["themes"][0]["attention_direction"],
+                doc["themes"][0]["evidence_refs"],
+            ),
+            ("bullish", ["news#1"]),
+        )
 
     def test_deterministic_base_preserves_structured_news_ref(self):
         fixture = theme_stocks()
@@ -200,14 +210,13 @@ class OwnershipTests(unittest.TestCase):
         errors, _ = validate_candidate_coverage(doc, theme_stocks(), compact)
         self.assertTrue(any("must not be downgraded" in item for item in errors))
 
-    def test_2026_07_29_uniform_theme_evidence_replay_has_no_r2_blocker(self):
+    def test_2026_07_29_replay_has_valid_candidate_evidence(self):
         predict = ROOT / "predict" / "2026-07-29"
         if not predict.exists():
             self.skipTest("2026-07-29 frozen replay is not available")
         annotations = json.loads((predict / "mapper.annotations.json").read_text(encoding="utf-8"))
         stocks = json.loads((predict / "theme_stocks.json").read_text(encoding="utf-8"))
         compact = json.loads((predict / ".mapper_annotation_input.json").read_text(encoding="utf-8"))
-        self.assertTrue(all(not item.get("direct_news_refs") for item in compact["candidates"]))
         errors, _ = validate_candidate_coverage(annotations, stocks, compact)
         self.assertEqual(errors, [])
 
@@ -245,6 +254,37 @@ class PatternTests(unittest.TestCase):
 
 
 class SourceTests(unittest.TestCase):
+    def test_market_views_loads_one_snapshot_for_all_themes(self):
+        snapshot = {"sz000001": {"name": "平安银行"}}
+        with (
+            patch(
+                "ashare_pilot.mapping._commands.daily.prepare._load_concept_cache_snapshot",
+                return_value=snapshot,
+            ) as load_snapshot,
+            patch(
+                "ashare_pilot.mapping._commands.daily.prepare._resolve_theme",
+                side_effect=lambda name: {"name": name, "stocks": []},
+            ),
+            patch(
+                "ashare_pilot.mapping._commands.daily.prepare._compute_market_view",
+                side_effect=lambda data, top, snapshot: {"name": data["name"], "snapshot": snapshot},
+            ) as compute,
+        ):
+            result = market_views_for([{"name": "银行"}, {"name": "保险"}])
+
+        load_snapshot.assert_called_once_with()
+        self.assertIs(compute.call_args_list[0].kwargs["snapshot"], snapshot)
+        self.assertIs(compute.call_args_list[1].kwargs["snapshot"], snapshot)
+        self.assertEqual(set(result["themes"]), {"银行", "保险"})
+
+    def test_market_view_accepts_an_explicit_empty_snapshot(self):
+        with patch(
+            "ashare_pilot.themes._commands.query._load_concept_cache_snapshot",
+        ) as load_snapshot:
+            result = _compute_market_view({"stocks": []}, snapshot={})
+        load_snapshot.assert_not_called()
+        self.assertEqual(result["top_gainers"], [])
+
     def test_extra_cannot_self_assert_source_flags(self):
         stock = stock_template("sz000001", "平安银行")
         merge_extra_stock(stock, {"source": "news_direct", "source_themes": ["银行"],
@@ -276,7 +316,7 @@ class SourceTests(unittest.TestCase):
 
     def test_publish_deletes_annotation_metadata_and_prose(self):
         base = theme_stocks()
-        base["schema_version"] = "daily_theme_stocks_base.v1"
+        base["schema_version"] = "daily_theme_stocks_base.v2"
         published = publish_theme_stocks(base, "2026-07-14")
         self.assertEqual(published["generation_mode"], "deterministic_base_publish")
         self.assertNotIn("annotation_schema_version", published)
@@ -293,8 +333,12 @@ class SourceTests(unittest.TestCase):
                 {"id": 9, "category": "policy", "source": "y", "title": "GPU算力政策发布", "url": "https://example.test/9", "source_item_no": 3, "desc": ""},
             ]}
             result = build_input(news, library)
-            item = result["themes"][0]["items"][0]
-            self.assertEqual(item["ids"], ["news#8", "news#9"])
+            item = result["themes"][0]["evidence"][0]
+            self.assertEqual(item["refs"], ["news#8", "news#9"])
+            self.assertEqual(
+                {(match["kind"], match["term"]) for match in item["matches"]},
+                {("alias", "算力"), ("keyword", "GPU")},
+            )
             self.assertNotIn("url", item)
             self.assertNotIn("source_item_no", item)
 
@@ -307,10 +351,8 @@ class SourceTests(unittest.TestCase):
             {"id": 7, "category": "company", "source": "x", "title": "平安银行发布公告", "desc": "直接事件"},
             {"id": 8, "category": "policy", "source": "y", "title": "银行政策", "desc": "行业事件"},
         ]}
-        evidence = {"themes": [{"name": "银行", "items": [
-            {"ids": ["news#8"], "category": "policy", "source": "y", "title": "银行政策", "desc": "行业事件"}
-        ]}]}
-        result = annotation_input(base, fixture, news, evidence)
+        fixture["themes"][0]["evidence_refs"] = ["news#8"]
+        result = annotation_input(base, fixture, news)
         candidate = result["candidates"][0]
         self.assertEqual(candidate["source_themes"], ["银行"])
         self.assertEqual(candidate["direct_news_refs"], ["news#7"])
@@ -326,8 +368,15 @@ class SourceTests(unittest.TestCase):
             )]
             for path in (news, themes, mapper_input, annotations, mapper):
                 path.write_text("{}\n", encoding="utf-8")
-            update_report(report, "2026-07-14", "theme_llm", 1, [news], [themes])
-            update_report(report, "2026-07-14", "prepare", 2, [themes], [mapper_input])
+            update_report(
+                report,
+                "2026-07-14",
+                "prepare",
+                2,
+                [themes],
+                [mapper_input],
+                market_views_duration=1.25,
+            )
             update_report(
                 report,
                 "2026-07-14",
@@ -349,7 +398,11 @@ class SourceTests(unittest.TestCase):
             )
             complete = json.loads(report.read_text(encoding="utf-8"))
             self.assertTrue(complete["complete_same_run"])
-            self.assertEqual(complete["total_recorded_seconds"], 10)
+            self.assertEqual(complete["total_recorded_seconds"], 9)
+            self.assertEqual(
+                complete["stages"]["prepare"]["market_views"]["duration_seconds"],
+                1.25,
+            )
             self.assertEqual(
                 complete["stages"]["mapper_annotation_llm"]["validation_retry_count"],
                 1,

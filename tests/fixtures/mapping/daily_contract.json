@@ -26,10 +26,16 @@
     }
   },
   "theme_stocks": {
-    "schema_version": "daily_theme_stocks.v1",
+    "schema_version": "daily_theme_stocks.v2",
     "date": "2026-07-14",
     "themes": [
-      {"name": "银行", "rank": 1, "heat": 70, "direction": "bullish", "evidence": "news#1"}
+      {
+        "name": "银行",
+        "rank": 1,
+        "final_heat": 70,
+        "attention_direction": "bullish",
+        "evidence_refs": ["news#1"]
+      }
     ],
     "stocks": [
       {

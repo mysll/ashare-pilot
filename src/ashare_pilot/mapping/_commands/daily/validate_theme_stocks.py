@@ -23,10 +23,11 @@ from ashare_pilot.mapping.daily_contract import (
     scope_decision,
     technical_value,
     theme_stock_filter,
+    theme_projection_errors,
 )
 
 
-SCHEMA_VERSION = "daily_theme_stocks.v1"
+SCHEMA_VERSION = "daily_theme_stocks.v2"
 FILTER_STATUSES = {"candidate", "observation", "removed"}
 REMOVED_SOURCES = {"board-policy", "hard-filter", "soft-filter", "indicators-fetch-failed", "manual", "removed"}
 
@@ -95,15 +96,7 @@ def check_doc(doc: dict[str, Any], scope: dict[str, Any], pool: dict[str, dict[s
         add(errors, "themes", "must be list")
     else:
         for i, theme in enumerate(themes):
-            if not isinstance(theme, dict):
-                add(errors, f"themes[{i}]", "must be object")
-                continue
-            if not clean_text(theme.get("name")):
-                add(errors, f"themes[{i}].name", "required")
-            for field in ("heat", "confidence"):
-                value = theme.get(field)
-                if value is not None and (not is_num(value) or not 0 <= value <= 100):
-                    add(errors, f"themes[{i}].{field}", "must be number in [0, 100] or null")
+            errors.extend(theme_projection_errors(theme, f"themes[{i}]"))
 
     board_codes: set[str] = set()
     for i, item in enumerate(doc.get("board_excluded", [])):

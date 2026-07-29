@@ -109,3 +109,16 @@ def register_cli(subparsers: argparse._SubParsersAction) -> None:
         "ashare_pilot.themes._commands.ranking",
         "ashare-pilot themes ranking compute",
     )
+
+    daily = _group(commands, "daily", "Daily news-to-theme extraction.")
+    for command, help_text, module in (
+        ("prepare", "Fetch news and build compact Theme evidence.", "evidence"),
+        ("publish", "Validate and atomically publish themes.json.", "publish"),
+    ):
+        _leaf(
+            daily,
+            command,
+            help_text,
+            f"ashare_pilot.themes._commands.daily.{module}",
+            f"ashare-pilot themes daily {command}",
+        )

@@ -12,9 +12,8 @@ from typing import Any
 
 from ashare_pilot.mapping.daily_contract import default_predict_dir, read_json, utc_now_iso, write_json
 
-TOTAL_STAGES = {"theme_llm", "prepare", "mapper_annotation_llm", "finalize"}
+TOTAL_STAGES = {"prepare", "mapper_annotation_llm", "finalize"}
 DOWNSTREAM_STAGES = {
-    "theme_llm": {"prepare", "indicators", "mapper_annotation_llm", "finalize"},
     "prepare": {"mapper_annotation_llm", "finalize"},
     "mapper_annotation_llm": {"finalize"},
 }
@@ -58,8 +57,7 @@ def complete_same_run(stages: dict[str, Any]) -> bool:
     if not TOTAL_STAGES.issubset(stages):
         return False
     return bool(stages["finalize"].get("outputs")) and (
-        stages_linked(stages["theme_llm"], stages["prepare"])
-        and stages_linked(stages["prepare"], stages["mapper_annotation_llm"])
+        stages_linked(stages["prepare"], stages["mapper_annotation_llm"])
         and stages_linked(stages["mapper_annotation_llm"], stages["finalize"])
     )
 
@@ -69,17 +67,18 @@ def update_report(path: Path, date: str, stage: str, duration: float | None = No
                   counts: dict[str, int] | None = None, failures: int | None = None,
                   validation_retries: int | None = None,
                   validation_status: str | None = None,
-                  validation_errors: list[str] | None = None) -> None:
+                  validation_errors: list[str] | None = None,
+                  market_views_duration: float | None = None) -> None:
     try:
         doc = read_json(path) if path.exists() else {"schema_version": "daily_step2_timing.v1", "date": date, "stages": {}}
         if not isinstance(doc, dict):
             doc = {"schema_version": "daily_step2_timing.v1", "date": date, "stages": {}}
         stages = doc.setdefault("stages", {})
-        if stage == "theme_llm":
+        if stage == "prepare":
             doc["validation_attempts"] = []
         for downstream in DOWNSTREAM_STAGES.get(stage, set()):
             stages.pop(downstream, None)
-        stages[stage] = {
+        entry = {
             "recorded_at": utc_now_iso(),
             "duration_seconds": round(duration, 3) if duration is not None else None,
             "inputs": [item for item in (artifact(p) for p in inputs or []) if item],
@@ -92,6 +91,11 @@ def update_report(path: Path, date: str, stage: str, duration: float | None = No
                 else {}
             ),
         }
+        if market_views_duration is not None:
+            entry["market_views"] = {
+                "duration_seconds": round(market_views_duration, 3),
+            }
+        stages[stage] = entry
         if validation_status is not None:
             attempts = doc.setdefault("validation_attempts", [])
             attempts.append({
@@ -125,6 +129,7 @@ def main(argv=None) -> int:
     parser.add_argument("--count", action="append", default=[], metavar="NAME=INT")
     parser.add_argument("--failures", type=int)
     parser.add_argument("--validation-retries", type=int)
+    parser.add_argument("--market-views-duration", type=float)
     args = parser.parse_args(argv)
     counts = {}
     for item in args.count:
@@ -132,7 +137,7 @@ def main(argv=None) -> int:
         counts[key] = int(value)
     update_report(default_predict_dir(args.date) / "step2_timing.json", args.date, args.stage, args.duration,
                   [Path(p) for p in args.input], [Path(p) for p in args.output], counts, args.failures,
-                  args.validation_retries)
+                  args.validation_retries, market_views_duration=args.market_views_duration)
     return 0
 
 

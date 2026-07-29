@@ -36,8 +36,8 @@ def main(argv=None) -> int:
     except ValueError as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)
         return 1
-    if base.get("schema_version") != "daily_theme_stocks_base.v1":
-        print("[ERROR] base schema_version must be daily_theme_stocks_base.v1", file=sys.stderr)
+    if base.get("schema_version") != "daily_theme_stocks_base.v2":
+        print("[ERROR] base schema_version must be daily_theme_stocks_base.v2", file=sys.stderr)
         return 1
     doc = publish_theme_stocks(base, args.date)
     write_json(output_path, doc)

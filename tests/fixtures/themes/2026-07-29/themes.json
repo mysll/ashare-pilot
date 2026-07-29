@@ -1,0 +1,660 @@
+{
+  "schema_version": "daily_themes.v2",
+  "date": "2026-07-29",
+  "themes": [
+    {
+      "rank": 1,
+      "name": "金融地产",
+      "status": "tradeable",
+      "confidence": 92,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 88,
+        "emotion_raw": 85,
+        "emotion_coefficient": 1.0,
+        "news_density": 70.0,
+        "capital": 65,
+        "base_heat": 82.1,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 82.1
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#40",
+        "news#44",
+        "news#86",
+        "news#88",
+        "news#146",
+        "news#163",
+        "news#183"
+      ],
+      "reason": "Multiple limit-ups: 华林证券涨停, 兆日科技20cm涨停; 证券板块持续上扬; 券商获主动基金增持2.19亿股; REITs market activity"
+    },
+    {
+      "rank": 2,
+      "name": "有色金属",
+      "status": "tradeable",
+      "confidence": 90,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 80,
+        "emotion_raw": 80,
+        "emotion_coefficient": 1.0,
+        "news_density": 70.0,
+        "capital": 75,
+        "base_heat": 78.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 78.0
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "锂矿概念"
+      ],
+      "evidence_refs": [
+        "news#38",
+        "news#67",
+        "news#70",
+        "news#72",
+        "news#75",
+        "news#83",
+        "news#155"
+      ],
+      "reason": "锂矿概念持续反弹 永杉锂业/科达制造涨停; 有色/稀有金属/稀土ETF连续净流入; 黄金站上4040美元"
+    },
+    {
+      "rank": 3,
+      "name": "食品饮料",
+      "status": "tradeable",
+      "confidence": 88,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 85,
+        "emotion_raw": 80,
+        "emotion_coefficient": 1.0,
+        "news_density": 30.0,
+        "capital": 45,
+        "base_heat": 71.25,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 71.25
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "乳业"
+      ],
+      "evidence_refs": [
+        "news#82",
+        "news#144",
+        "news#203"
+      ],
+      "reason": "一鸣食品涨停; 乳业股集体拉升多股涨停; 食品饮料方向涨幅居前 (创业板指涨超2%领涨方向)"
+    },
+    {
+      "rank": 4,
+      "name": "消费电子",
+      "status": "tradeable",
+      "confidence": 85,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 80,
+        "emotion_raw": 75,
+        "emotion_coefficient": 1.0,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 66.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 66.0
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#89",
+        "news#130"
+      ],
+      "reason": "消费电子板块直线拉升: 昀冢科技+10%, 国光电器涨停; 消费电子企业涌入智算中心赛道"
+    },
+    {
+      "rank": 5,
+      "name": "AI算力",
+      "status": "tradeable",
+      "confidence": 82,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 65,
+        "emotion_raw": 75,
+        "emotion_coefficient": 1.0,
+        "news_density": 30.0,
+        "capital": 45,
+        "base_heat": 60.75,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 60.75
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "数据中心"
+      ],
+      "evidence_refs": [
+        "news#129",
+        "news#130",
+        "news#174"
+      ],
+      "reason": "算力中心供配电架构革新(固态变压器); 消费电子企业涌入智算中心; 沃尔核材讨论光模块铜缆优势"
+    },
+    {
+      "rank": 6,
+      "name": "中药",
+      "status": "tradeable",
+      "confidence": 85,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 55,
+        "emotion_raw": 75,
+        "emotion_coefficient": 1.0,
+        "news_density": 10.0,
+        "capital": 65,
+        "base_heat": 55.25,
+        "policy": {
+          "tier": "ministry",
+          "polarity": "bullish",
+          "bonus": 5,
+          "coefficient": 1.0,
+          "evidence_ref": "news#128"
+        },
+        "final_heat": 60.25
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#128"
+      ],
+      "reason": "11部门联合发文中药政策利好 (Ministry-level policy bonus +5, bullish polarity); 融资7月净买入9只中药股"
+    },
+    {
+      "rank": 7,
+      "name": "半导体",
+      "status": "discarded",
+      "confidence": 85,
+      "attention_direction": "mixed",
+      "score": {
+        "market_action": 45,
+        "emotion_raw": 85,
+        "emotion_coefficient": 0.8,
+        "news_density": 60.0,
+        "capital": 45,
+        "base_heat": 54.15,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 54.15
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "存储芯片"
+      ],
+      "evidence_refs": [
+        "news#34",
+        "news#54",
+        "news#140",
+        "news#154",
+        "news#211",
+        "news#226"
+      ],
+      "reason": "C长鑫+11%但兆易创新-7.4%/二连跌停, 紫光-10%, 通富微电-9.5%, 费城半导体三连跌; mixed signals → discarded (CATALYST consideration: C长鑫IPO但STAR板+related A-shares crash方向对立)"
+    },
+    {
+      "rank": 8,
+      "name": "农业",
+      "status": "watch",
+      "confidence": 75,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 55,
+        "emotion_raw": 60,
+        "emotion_coefficient": 1.0,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 50.25,
+        "policy": {
+          "tier": "ministry",
+          "polarity": "neutral",
+          "bonus": 5,
+          "coefficient": 0.5,
+          "evidence_ref": "news#7"
+        },
+        "final_heat": 52.75
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#7",
+        "news#68"
+      ],
+      "reason": "全国政协加快农业农村现代化专题协商会 (Ministry-level policy +5); 粮食ETF冲击3连涨; heat 40-54 with bullish direction → watch"
+    },
+    {
+      "rank": 9,
+      "name": "光通信",
+      "status": "watch",
+      "confidence": 75,
+      "attention_direction": "mixed",
+      "score": {
+        "market_action": 60,
+        "emotion_raw": 70,
+        "emotion_coefficient": 0.8,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 51.3,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 51.3
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#174",
+        "news#179"
+      ],
+      "reason": "沃尔核材评论光模块优势但光模块\"易中天\"急跌文章; direction mixed (0.8) → not watch-eligible → discarded"
+    },
+    {
+      "rank": 10,
+      "name": "新材料",
+      "status": "watch",
+      "confidence": 75,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 55,
+        "emotion_raw": 65,
+        "emotion_coefficient": 1.0,
+        "news_density": 10.0,
+        "capital": 55,
+        "base_heat": 51.25,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 51.25
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "新材料"
+      ],
+      "evidence_refs": [
+        "news#74"
+      ],
+      "reason": "6N级高纯氟化氢国产突破; 科创新材料ETF翻红连续4天净流入; heat 40-54 with bullish direction → watch"
+    },
+    {
+      "rank": 11,
+      "name": "AI应用",
+      "status": "watch",
+      "confidence": 80,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 50,
+        "emotion_raw": 70,
+        "emotion_coefficient": 1.0,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 51.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 51.0
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#196",
+        "news#227"
+      ],
+      "reason": "中国大模型全球AI牌局主桌; ChatGPT周活将破10亿; heat 40-54 with bullish direction → watch"
+    },
+    {
+      "rank": 12,
+      "name": "互联网平台",
+      "status": "watch",
+      "confidence": 72,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 50,
+        "emotion_raw": 65,
+        "emotion_coefficient": 1.0,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 49.5,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 49.5
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#117",
+        "news#173"
+      ],
+      "reason": "腾讯控股+3.31%/+4%; 恒指涨1.37%; heat 40-54 with bullish direction → watch"
+    },
+    {
+      "rank": 13,
+      "name": "军工",
+      "status": "discarded",
+      "confidence": 70,
+      "attention_direction": "mixed",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 65,
+        "emotion_coefficient": 0.8,
+        "news_density": 30.0,
+        "capital": 45,
+        "base_heat": 42.6,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 42.6
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#1",
+        "news#19",
+        "news#221"
+      ],
+      "reason": "国防科大人物报道+美制裁科研机构; 无明确板块市场行动; heat < 55, mixed direction → discarded"
+    },
+    {
+      "rank": 14,
+      "name": "5G/6G通信",
+      "status": "watch",
+      "confidence": 65,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 55,
+        "emotion_coefficient": 1.0,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 40.5,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 40.5
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "IPv6"
+      ],
+      "evidence_refs": [
+        "news#127"
+      ],
+      "reason": "IPv6概念迎利好但无明显市场行动确认; heat < 40 but direction bullish; discarded"
+    },
+    {
+      "rank": 15,
+      "name": "人形机器人",
+      "status": "watch",
+      "confidence": 65,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 55,
+        "emotion_coefficient": 1.0,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 40.5,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 40.5
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#153"
+      ],
+      "reason": "仅中信证券研报看好, 无市场行动或直接催化剂; heat < 40 but bullish direction; discarded"
+    },
+    {
+      "rank": 16,
+      "name": "游戏文娱",
+      "status": "watch",
+      "confidence": 65,
+      "attention_direction": "bullish",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 55,
+        "emotion_coefficient": 1.0,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 40.5,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 40.5
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#188"
+      ],
+      "reason": "AI短剧用户突破6亿但无市场行动确认; heat < 40 but bullish → discarded"
+    },
+    {
+      "rank": 17,
+      "name": "PCB/被动元件",
+      "status": "discarded",
+      "confidence": 60,
+      "attention_direction": "neutral",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 50,
+        "emotion_coefficient": 0.8,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 36.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 36.0
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "MLCC"
+      ],
+      "evidence_refs": [
+        "news#144"
+      ],
+      "reason": "MLCC仅作为news#144食品报道附带提及, 无明显板块催化; heat < 40, neutral direction → discarded"
+    },
+    {
+      "rank": 18,
+      "name": "量子科技",
+      "status": "discarded",
+      "confidence": 55,
+      "attention_direction": "neutral",
+      "score": {
+        "market_action": 40,
+        "emotion_raw": 50,
+        "emotion_coefficient": 0.8,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 36.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 36.0
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#204"
+      ],
+      "reason": "量子密码学人物专访, 无直接催化; confidence < 60 → discarded"
+    },
+    {
+      "rank": 19,
+      "name": "新能源",
+      "status": "discarded",
+      "confidence": 70,
+      "attention_direction": "panic",
+      "score": {
+        "market_action": 30,
+        "emotion_raw": 60,
+        "emotion_coefficient": 0.5,
+        "news_density": 20.0,
+        "capital": 45,
+        "base_heat": 30.0,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 30.0
+      },
+      "catalyst": null,
+      "matched_concepts": [
+        "新能源"
+      ],
+      "evidence_refs": [
+        "news#131",
+        "news#231"
+      ],
+      "reason": "新能源汽车出海遇险阻; 奥动新能源亏损; panic-driven attention → discarded"
+    },
+    {
+      "rank": 20,
+      "name": "新能源车",
+      "status": "discarded",
+      "confidence": 65,
+      "attention_direction": "panic",
+      "score": {
+        "market_action": 30,
+        "emotion_raw": 55,
+        "emotion_coefficient": 0.5,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 27.75,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 27.75
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#131"
+      ],
+      "reason": "新能源汽车出海遇险阻; panic-driven → discarded"
+    },
+    {
+      "rank": 21,
+      "name": "环保",
+      "status": "discarded",
+      "confidence": 60,
+      "attention_direction": "panic",
+      "score": {
+        "market_action": 25,
+        "emotion_raw": 50,
+        "emotion_coefficient": 0.5,
+        "news_density": 10.0,
+        "capital": 45,
+        "base_heat": 24.75,
+        "policy": {
+          "tier": "none",
+          "polarity": "neutral",
+          "bonus": 0,
+          "coefficient": 0.5,
+          "evidence_ref": null
+        },
+        "final_heat": 24.75
+      },
+      "catalyst": null,
+      "matched_concepts": [],
+      "evidence_refs": [
+        "news#52"
+      ],
+      "reason": "惠城环保个股加速下跌, 非板块级事件 → discarded"
+    }
+  ]
+}

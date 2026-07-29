@@ -7,7 +7,6 @@ from typing import Any
 from ashare_pilot.mapping._commands.daily.strategy_view import (
     build_view as build_strategy_view,
 )
-from ashare_pilot.mapping._commands.daily.theme_evidence import build_input
 from ashare_pilot.mapping._commands.daily.validate_annotations import (
     validate as validate_daily_annotations,
 )
@@ -16,9 +15,6 @@ from ashare_pilot.mapping._commands.daily.validate_mapper import (
 )
 from ashare_pilot.mapping._commands.daily.validate_theme_stocks import (
     check_doc as validate_theme_stocks,
-)
-from ashare_pilot.mapping._commands.daily.validate_themes import (
-    validate as validate_themes,
 )
 from ashare_pilot.mapping._commands.intraday.scan_pool import (
     build_scan_pool,
@@ -36,14 +32,6 @@ from ashare_pilot.mapping.intraday_contract import (
     merge_annotations as merge_intraday_annotations,
     reasoning_invariant_errors,
 )
-
-
-def build_theme_evidence(
-    news: dict[str, Any], theme_library_dir
-) -> dict[str, Any]:
-    """Build the compact daily theme-evidence document from frozen inputs."""
-
-    return build_input(news, theme_library_dir)
 
 
 def build_daily_mapper(
@@ -77,7 +65,6 @@ __all__ = [
     "build_daily_mapper",
     "build_scan_pool",
     "build_strategy_view",
-    "build_theme_evidence",
     "compute_quick_score",
     "merge_daily_mapper",
     "merge_intraday_mapper",
@@ -87,5 +74,4 @@ __all__ = [
     "validate_daily_mapper",
     "validate_intraday_annotations",
     "validate_theme_stocks",
-    "validate_themes",
 ]

@@ -83,6 +83,8 @@ def excluded_payload(items: list[Any], mode: str) -> dict[str, Any] | list[dict[
 
 
 def build_view(doc: dict[str, Any], include_excluded: str = "summary", include_trace: bool = False) -> dict[str, Any]:
+    if doc.get("schema_version") != "daily_mapper.v2":
+        raise ValueError("mapper schema_version must be daily_mapper.v2")
     candidates = []
     for stock in doc.get("candidate_pool", []):
         if not isinstance(stock, dict):
@@ -138,7 +140,7 @@ def build_view(doc: dict[str, Any], include_excluded: str = "summary", include_t
     ]
 
     view: dict[str, Any] = {
-        "schema_version": "daily_strategy_input.v1",
+        "schema_version": "daily_strategy_input.v2",
         "date": doc.get("date"),
         "generated_at": utc_now_iso(),
         "source": {
@@ -153,8 +155,8 @@ def build_view(doc: dict[str, Any], include_excluded: str = "summary", include_t
                 "name": item.get("name"),
                 "rank": item.get("rank"),
                 "final_heat": item.get("final_heat"),
-                "direction": item.get("direction"),
-                "evidence": item.get("evidence"),
+                "attention_direction": item.get("attention_direction"),
+                "evidence_refs": item.get("evidence_refs"),
             }
             for item in doc.get("themes", [])
             if isinstance(item, dict)
@@ -189,8 +191,8 @@ def main(argv=None) -> int:
     if not isinstance(doc, dict):
         print("[ERROR] mapper root must be object", file=sys.stderr)
         return 1
-    if doc.get("schema_version") != "daily_mapper.v1":
-        print("[ERROR] input schema_version must be daily_mapper.v1", file=sys.stderr)
+    if doc.get("schema_version") != "daily_mapper.v2":
+        print("[ERROR] input schema_version must be daily_mapper.v2", file=sys.stderr)
         return 1
     try:
         ensure_doc_date(doc, args.date, str(input_path))

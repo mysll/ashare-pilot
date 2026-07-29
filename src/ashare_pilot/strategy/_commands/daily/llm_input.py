@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from ashare_pilot.market_data.runtime import workspace_path
+from ashare_pilot.mapping.daily_contract import theme_projection_errors
 
 from .trade_profile import compute_trade_profile
 
@@ -106,7 +107,7 @@ def derive_regime(indices: dict[str, Any], market_state: dict[str, Any], themes:
     sh_pct = index_percent(indices, "sh000001")
     kcb_pct = index_percent(indices, "sh000688")
     dominant_heat = max(
-        [number(item.get("heat")) or 0 for item in market_state.get("dominant_themes", []) if isinstance(item, dict)]
+        [number(item.get("final_heat")) or 0 for item in market_state.get("dominant_themes", []) if isinstance(item, dict)]
         + [number(item.get("final_heat")) or 0 for item in themes if isinstance(item, dict)]
         + [0]
     )
@@ -207,8 +208,31 @@ def candidate_news_id(candidate: dict[str, Any]) -> int | None:
 
 def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
                 news: dict[str, Any], indices: dict[str, Any]) -> dict[str, Any]:
-    if view.get("schema_version") != "daily_strategy_input.v1":
-        raise ValueError("strategy view schema_version must be daily_strategy_input.v1")
+    if view.get("schema_version") != "daily_strategy_input.v2":
+        raise ValueError("strategy view schema_version must be daily_strategy_input.v2")
+    if theme_stocks.get("schema_version") != "daily_theme_stocks.v2":
+        raise ValueError("theme_stocks schema_version must be daily_theme_stocks.v2")
+    projection_errors = [
+        error
+        for source, rows in (
+            ("strategy_view", view.get("themes")),
+            ("theme_stocks", theme_stocks.get("themes")),
+        )
+        if isinstance(rows, list)
+        for index, theme in enumerate(rows)
+        for error in theme_projection_errors(
+            theme, f"{source}.themes[{index}]"
+        )
+    ]
+    if not isinstance(view.get("themes"), list):
+        projection_errors.append("strategy_view.themes: must be list")
+    if not isinstance(theme_stocks.get("themes"), list):
+        projection_errors.append("theme_stocks.themes: must be list")
+    if projection_errors:
+        raise ValueError(
+            "invalid theme projection:\n"
+            + "\n".join(f"  - {error}" for error in projection_errors)
+        )
     if any(doc.get("date") != view.get("date") for doc in (theme_stocks, news)):
         raise ValueError("strategy view, theme_stocks, and news dates must match")
     themes = [item for item in view.get("themes", []) if isinstance(item, dict)]
@@ -218,9 +242,13 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
     pool_by_code = pool_index(pool)
     available_news = news_map(news)
     for theme in themes:
-        for raw_id in NEWS_ANY_RE.findall(str(theme.get("evidence") or "")):
-            if int(raw_id) not in available_news:
-                raise ValueError(f"unresolved theme news reference: news#{raw_id}")
+        refs = theme.get("evidence_refs")
+        if not isinstance(refs, list):
+            raise ValueError("theme evidence_refs must be a list")
+        for ref in refs:
+            match = NEWS_RE.fullmatch(ref) if isinstance(ref, str) else None
+            if not match or int(match.group(1)) not in available_news:
+                raise ValueError(f"unresolved theme news reference: {ref}")
     output_candidates: list[dict[str, Any]] = []
     evidence_ids: set[int] = set()
     seen: set[str] = set()
@@ -299,7 +327,7 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
         "schema_version": SCHEMA, "date": view.get("date"), "non_contract": True,
         "source": {"strategy_view_sha256": canonical_sha256(view)},
         "market_inputs": {"market_state": market_state, "indices": indices, "regime_hint": regime},
-        "themes": [{key: item.get(key) for key in ("name", "rank", "final_heat", "direction", "evidence")} for item in themes],
+        "themes": [{key: item.get(key) for key in ("name", "rank", "final_heat", "attention_direction", "evidence_refs")} for item in themes],
         "news_evidence": evidence, "candidates": output_candidates,
     }
 

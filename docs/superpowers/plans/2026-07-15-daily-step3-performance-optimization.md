@@ -7,6 +7,8 @@
 **Scope:** `daily-strategy` Step 3 preparation, LLM reasoning, strategy
 publication, validation, and HTML rendering.
 
+**Follow-up:** [2026-07-29 Step 3 Hot-Path Reduction Checklist](2026-07-29-daily-step3-hot-path-reduction.md)
+
 ---
 
 ## 1. Goal

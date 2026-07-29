@@ -21,6 +21,7 @@ from ashare_pilot.mapping.daily_contract import (
     read_json,
     scope_decision,
     technical_from_pool_entry,
+    theme_projection_errors,
     utc_now_iso,
     write_json,
 )
@@ -141,7 +142,7 @@ def universe_doc(
     generation_notes: list[str],
 ) -> dict[str, Any]:
     return {
-        "schema_version": "daily_theme_stocks_universe.v1",
+        "schema_version": "daily_theme_stocks_universe.v2",
         "date": date,
         "generated_at": utc_now_iso(),
         "themes": themes,
@@ -230,7 +231,7 @@ def iter_theme_library_stocks(
 
 
 def merge_theme_library_stock(target: dict[str, Any], theme: dict[str, Any], row: dict[str, Any]) -> None:
-    theme_score = parse_float(theme.get("heat")) or parse_float(row.get("score"))
+    theme_score = parse_float(theme.get("final_heat"))
     source_theme = {
         "name": theme["name"],
         "score": theme_score,
@@ -281,11 +282,11 @@ def build_doc_from_themes(
         resolved_theme = {
             "name": theme["name"],
             "rank": theme.get("rank"),
-            "heat": parse_float(theme.get("heat")),
-            "confidence": parse_float(theme.get("confidence")),
-            "direction": clean_text(theme.get("direction")),
-            "evidence": clean_text(theme.get("evidence")),
-            "stock_count": theme_data.get("qualified_stock_count") or theme_data.get("stock_count"),
+            "final_heat": parse_float(theme.get("final_heat")),
+            "attention_direction": clean_text(
+                theme.get("attention_direction")
+            ),
+            "evidence_refs": list(theme.get("evidence_refs") or []),
         }
         resolved_themes.append(resolved_theme)
 
@@ -320,8 +321,8 @@ def load_universe(path: Path, date: str) -> tuple[list[dict[str, Any]], dict[str
     data = read_json(path)
     if not isinstance(data, dict):
         raise ValueError(f"theme stock universe must be a JSON object: {path}")
-    if data.get("schema_version") != "daily_theme_stocks_universe.v1":
-        raise ValueError(f"theme stock universe schema_version must be daily_theme_stocks_universe.v1: {path}")
+    if data.get("schema_version") != "daily_theme_stocks_universe.v2":
+        raise ValueError(f"theme stock universe schema_version must be daily_theme_stocks_universe.v2: {path}")
     if data.get("date") != date:
         raise ValueError(f"theme stock universe date mismatch: expected {date}, got {data.get('date')}")
 
@@ -346,6 +347,16 @@ def load_universe(path: Path, date: str) -> tuple[list[dict[str, Any]], dict[str
         stocks_by_code[code] = stock
 
     themes = data.get("themes") if isinstance(data.get("themes"), list) else []
+    projection_errors = [
+        error
+        for index, theme in enumerate(themes)
+        for error in theme_projection_errors(theme, f"themes[{index}]")
+    ]
+    if projection_errors:
+        raise ValueError(
+            "invalid theme stock universe projection:\n"
+            + "\n".join(f"  - {error}" for error in projection_errors)
+        )
     board_excluded = data.get("board_excluded") if isinstance(data.get("board_excluded"), list) else []
     generation_notes = data.get("generation_notes") if isinstance(data.get("generation_notes"), list) else []
     return (
@@ -388,7 +399,7 @@ def build_filtered_doc(
         final_stocks.append(stock)
 
     return {
-        "schema_version": "daily_theme_stocks_base.v1",
+        "schema_version": "daily_theme_stocks_base.v2",
         "date": date,
         "generated_at": utc_now_iso(),
         "generation_mode": "theme_universe_filter",

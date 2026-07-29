@@ -174,7 +174,7 @@ def test_operation_runner_offline_commit_is_complete_and_idempotent(tmp_path: Pa
         }],
     }
     mapper = {
-        "schema_version": "daily_mapper.v1", "date": "2026-07-10",
+        "schema_version": "daily_mapper.v2", "date": "2026-07-10",
         "candidate_pool": [{"code": "sz000001", "strategy_inputs": {"price": 10, "price_source": "PrevClose", "ma20": 9.5, "ma5": 10, "atr": 0.5, "atr_pct": 5, "high20": 11, "low20": 8}}],
         "observation_pool": [],
     }

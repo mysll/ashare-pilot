@@ -444,6 +444,11 @@ def main(argv=None):
         help="Write both news.md and canonical news.json to this directory",
     )
     parser.add_argument(
+        "--record-step1-timing",
+        action="store_true",
+        help="Automatically record the news_fetch stage in step1_timing.json",
+    )
+    parser.add_argument(
         "-s", "--sources", nargs="*", choices=list(NEWS_SOURCES.keys()),
         help="Specify news sources (default: all)"
     )
@@ -456,6 +461,7 @@ def main(argv=None):
         except ValueError:
             parser.error("--date must be YYYY-MM-DD")
 
+    started_at = time.perf_counter()
     sources = {k: NEWS_SOURCES[k] for k in args.sources} if args.sources else NEWS_SOURCES
     news = {}
     for name, fn in sources.items():
@@ -477,6 +483,24 @@ def main(argv=None):
         )
         print(f"OK: wrote {output_dir / 'news.json'}")
         print(f"OK: wrote {output_dir / 'news.md'}")
+        if args.record_step1_timing:
+            from ashare_pilot.themes._commands.daily.timing import (
+                safe_record_stage,
+            )
+
+            safe_record_stage(
+                output_dir / "step1_timing.json",
+                str(doc["date"]),
+                "news_fetch",
+                time.perf_counter() - started_at,
+                [],
+                [output_dir / "news.json", output_dir / "news.md"],
+                {
+                    "news": len(doc.get("items", []))
+                    if isinstance(doc.get("items"), list)
+                    else 0
+                },
+            )
         return
 
     output = json.dumps(doc, ensure_ascii=False, indent=2) if args.json else format_brief(doc)

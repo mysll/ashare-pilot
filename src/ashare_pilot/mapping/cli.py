@@ -61,11 +61,9 @@ def register_cli(subparsers: argparse._SubParsersAction) -> None:
 
     daily = _context(contexts, "daily", "Pre-market mapping pipeline.")
     daily_commands = {
-        "build-theme-evidence": ("Build compact theme evidence.", "theme_evidence"),
         "build-theme-stock-universe": ("Build the theme-stock universe.", "theme_stock_universe"),
         "build-theme-stock-base": ("Build deterministic theme-stock base.", "theme_stock_base"),
         "build-theme-stocks": ("Publish theme_stocks.json.", "theme_stocks"),
-        "validate-themes": ("Validate themes.json.", "validate_themes"),
         "validate-theme-stocks": ("Validate theme_stocks.json.", "validate_theme_stocks"),
         "build-mapper-base": ("Build deterministic mapper base.", "mapper_base"),
         "validate-annotations": ("Validate mapper annotations.", "validate_annotations"),
