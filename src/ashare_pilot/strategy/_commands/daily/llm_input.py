@@ -307,7 +307,7 @@ def build_input(view: dict[str, Any], theme_stocks: dict[str, Any], pool: Any,
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Build compact Step 3 LLM input")
     parser.add_argument("--date")
-    parser.add_argument("--hash-only", help="Print canonical SHA-256 for an existing JSON artifact")
+    parser.add_argument("--hash-only", help="Diagnostic: print canonical SHA-256 for an existing JSON artifact")
     parser.add_argument("--strategy-view")
     parser.add_argument("--theme-stocks")
     parser.add_argument("--pool")
@@ -337,6 +337,10 @@ def main(argv=None) -> int:
         result = build_input(view, theme_stocks, pool, news, indices)
         output = Path(args.output) if args.output else pdir / ".strategy_llm_input.json"
         compact_write(output, result)
+        # Local import avoids a module cycle: draft_link uses canonical_sha256
+        # from this module.
+        from .draft_link import INPUT_HASH_FILENAME, write_input_hash
+        write_input_hash(output.with_name(INPUT_HASH_FILENAME), result)
         if output.stat().st_size > 90 * 1024:
             print(f"[WARN] compact input exceeds 90KB warning threshold: {output.stat().st_size} bytes", file=sys.stderr)
     except Exception as exc:

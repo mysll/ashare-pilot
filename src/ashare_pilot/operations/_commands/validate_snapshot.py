@@ -169,7 +169,7 @@ def validate(
             plan = controls["t1_exit_plan"]
             if plan.get("source") != "daily_strategy.v3":
                 add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.source", "must preserve v3 plan")
-            for key in ("overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action", "max_holding_days"):
+            for key in ("overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action"):
                 if plan.get(key) is None:
                     add(errors, f"{base}.decision_guardrails.t1_controls.t1_exit_plan.{key}", "missing v3 field")
         transition = stock.get("transition")

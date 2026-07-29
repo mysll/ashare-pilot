@@ -139,13 +139,17 @@ def validate(doc: dict[str, Any], candidate_codes: set[str] | None = None) -> li
         anomaly = stock.get("anomaly")
         if anomaly is not None and not isinstance(anomaly, str):
             add(errors, f"{base}.anomaly", "must be string or null")
-        if isinstance(anomaly, str) and len(anomaly) > 80:
-            add(errors, f"{base}.anomaly", "must be <= 80 chars")
+        if isinstance(anomaly, str) and len(anomaly) > 50:
+            add(errors, f"{base}.anomaly", "must be <= 50 chars")
 
     return errors
 
 
-def validate_candidate_coverage(doc: dict[str, Any], theme_stocks: dict[str, Any]) -> tuple[list[str], list[str]]:
+def validate_candidate_coverage(
+    doc: dict[str, Any],
+    theme_stocks: dict[str, Any],
+    annotation_input: dict[str, Any] | None = None,
+) -> tuple[list[str], list[str]]:
     errors: list[str] = []
     warnings: list[str] = []
     expected = [
@@ -162,6 +166,13 @@ def validate_candidate_coverage(doc: dict[str, Any], theme_stocks: dict[str, Any
     if extra:
         warnings.append("extra non-candidate annotations will be skipped: " + ",".join(str(code) for code in extra))
 
+    input_candidates = {
+        item.get("code"): item
+        for item in (annotation_input or {}).get("candidates", [])
+        if isinstance(annotation_input, dict)
+        and isinstance(item, dict)
+        and isinstance(item.get("code"), str)
+    }
     pairs = []
     for stock in doc.get("stocks", []):
         if not isinstance(stock, dict) or stock.get("code") not in expected_set:
@@ -169,8 +180,25 @@ def validate_candidate_coverage(doc: dict[str, Any], theme_stocks: dict[str, Any
         relevance = stock.get("news_relevance")
         if isinstance(relevance, dict):
             pairs.append((relevance.get("r"), relevance.get("p")))
+            evidence = input_candidates.get(stock.get("code"), {})
+            direct_refs = evidence.get("direct_news_refs", [])
+            role_tags = evidence.get("role_tags", [])
+            has_direct_evidence = (
+                isinstance(direct_refs, list) and bool(direct_refs)
+            ) or (
+                isinstance(role_tags, list) and "NewsDirect" in role_tags
+            )
+            if has_direct_evidence and relevance.get("r") == "R2":
+                add(
+                    errors,
+                    f"stocks[{stock.get('code')}].news_relevance.r",
+                    "NewsDirect/direct_news_refs evidence must not be downgraded to theme-level R2",
+                )
     if len(pairs) >= 5 and len(set(pairs)) == 1 and pairs[0] == ("R2", "P2"):
-        add(errors, "stocks.news_relevance", "suspicious blanket R2/P2 assignment across all candidates")
+        warnings.append(
+            "uniform R2/P2 accepted because output diversity is not a correctness condition; "
+            "direct evidence is validated per candidate"
+        )
     return errors, warnings
 
 
@@ -201,6 +229,10 @@ def main(argv=None) -> int:
     parser.add_argument("path", nargs="?", help="Path to mapper.annotations.json")
     parser.add_argument("--date", help="YYYY-MM-DD; used for default path")
     parser.add_argument("--theme-stocks", help="Path to theme_stocks.json; defaults beside annotations")
+    parser.add_argument(
+        "--annotation-input",
+        help="Path to .mapper_annotation_input.json; defaults beside annotations when present",
+    )
     args = parser.parse_args(argv)
 
     if sys.platform == "win32":
@@ -242,7 +274,17 @@ def main(argv=None) -> int:
                 ensure_doc_date(theme_stocks, args.date, str(theme_stocks_path))
             except ValueError as exc:
                 errors.append(str(exc))
-        coverage_errors, warnings = validate_candidate_coverage(doc, theme_stocks)
+        annotation_input_path = (
+            Path(args.annotation_input)
+            if args.annotation_input
+            else path.parent / ".mapper_annotation_input.json"
+        )
+        annotation_input = read_json(annotation_input_path) if annotation_input_path.exists() else None
+        coverage_errors, warnings = validate_candidate_coverage(
+            doc,
+            theme_stocks,
+            annotation_input if isinstance(annotation_input, dict) else None,
+        )
         errors.extend(coverage_errors)
     elif args.date or args.theme_stocks:
         errors.append(f"missing theme_stocks.json for candidate coverage: {theme_stocks_path}")

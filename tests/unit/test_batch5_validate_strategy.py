@@ -50,6 +50,13 @@ class StrategyValidationTests(unittest.TestCase):
     def test_v3_valid(self):
         self.assertEqual(validate(v3_doc()), [])
 
+    def test_v3_accepts_missing_or_legacy_max_holding_days(self):
+        doc = v3_doc()
+        doc["stocks"][0]["t1_risk_plan"].pop("max_holding_days")
+        self.assertEqual(validate(doc), [])
+        doc["stocks"][0]["t1_risk_plan"]["max_holding_days"] = 0
+        self.assertEqual(validate(doc), [])
+
     def test_v3_rejects_pre_0935_entry(self):
         doc = v3_doc()
         doc["stocks"][0]["preopen_plan"]["earliest_entry_time"] = "09:30:00"

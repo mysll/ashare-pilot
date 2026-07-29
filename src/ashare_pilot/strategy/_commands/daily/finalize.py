@@ -14,8 +14,9 @@ from typing import Any
 
 from ashare_pilot.market_data.runtime import workspace_path
 
+from .draft_link import INPUT_HASH_FILENAME, validate_draft_link
 from .timing import update_report
-from .llm_input import SCHEMA as INPUT_SCHEMA, canonical_sha256, index_percent
+from .llm_input import SCHEMA as INPUT_SCHEMA, index_percent
 from .trade_profile import compute_trade_profile
 from .render_report import render_report
 from .validate_strategy import (
@@ -172,10 +173,9 @@ def validate_draft(draft: dict[str, Any], compact: dict[str, Any], expected_date
         errors.append("date: draft, input, and requested date must match")
     if compact.get("schema_version") != INPUT_SCHEMA or compact.get("non_contract") is not True:
         errors.append(f"input: must be {INPUT_SCHEMA} non-contract artifact")
+    if "source" in draft:
+        errors.append("source: forbidden; input fingerprint is Python-owned")
     errors.extend(draft_contract_errors(draft))
-    expected_hash = canonical_sha256(compact)
-    if draft.get("source", {}).get("strategy_input_sha256") != expected_hash:
-        errors.append("source.strategy_input_sha256: does not match exact compact input content")
     _, candidates = candidate_index(compact)
     stocks = draft.get("stocks")
     if not isinstance(stocks, list) or not stocks:
@@ -280,6 +280,12 @@ def materialize(draft: dict[str, Any], compact: dict[str, Any]) -> dict[str, Any
     selected_codes: set[str] = set()
     for draft_stock in draft["stocks"]:
         stock = {key: value for key, value in draft_stock.items() if key != "profile_overrides"}
+        if isinstance(stock.get("t1_risk_plan"), dict):
+            stock["t1_risk_plan"] = {
+                key: value
+                for key, value in stock["t1_risk_plan"].items()
+                if key != "max_holding_days"
+            }
         profile = recompute_profile(candidates[stock["code"]], compact, regime)
         stock["profile"] = apply_overrides(profile, draft_stock.get("profile_overrides", {}))
         if stock["profile"].get("time_horizon") != stock.get("horizon"):
@@ -328,22 +334,39 @@ def main(argv=None) -> int:
     input_dir = Path(args.input_dir) if args.input_dir else workspace_path("predict", args.date)
     output_dir = Path(args.output_dir) if args.output_dir else input_dir
     compact_path = input_dir / ".strategy_llm_input.json"
+    input_hash_path = input_dir / INPUT_HASH_FILENAME
     draft_path = Path(args.draft) if args.draft else input_dir / "strategy.draft.json"
+    failure_recorded = False
     try:
         compact, draft = load(compact_path), load(draft_path)
         if not isinstance(compact, dict) or not isinstance(draft, dict):
             raise ValueError("compact input and draft roots must be objects")
-        errors = validate_draft(draft, compact, args.date)
-        if errors:
-            raise ValueError("draft validation failed:\n" + "\n".join(f"  - {item}" for item in errors))
         llm_duration = args.llm_duration if args.llm_duration is not None else max(0.0, draft_path.stat().st_mtime - compact_path.stat().st_mtime)
         llm_timing_method = "measured" if args.llm_duration is not None else "mtime_estimate"
+        candidate_count = len(compact.get("candidates", [])) if isinstance(compact.get("candidates"), list) else 0
+        selected_count = len(draft.get("stocks", [])) if isinstance(draft.get("stocks"), list) else 0
         update_report(output_dir / "step3_timing.json", args.date, "strategy_llm", llm_duration,
-                      [compact_path], [draft_path],
-                      {"candidate_count": len(compact["candidates"]), "selected_count": len(draft["stocks"]),
+                      [compact_path, input_hash_path], [draft_path],
+                      {"candidate_count": candidate_count, "selected_count": selected_count,
                        "observation_count": 0, "conditional_news_count": len(compact.get("news_evidence", [])),
                        "llm_input_bytes": compact_path.stat().st_size, "llm_output_bytes": draft_path.stat().st_size},
                       validation_retries=args.validation_retries, timing_method=llm_timing_method)
+        errors = validate_draft_link(compact, draft_path, input_hash_path)
+        errors.extend(validate_draft(draft, compact, args.date))
+        if errors:
+            update_report(
+                output_dir / "step3_timing.json",
+                args.date,
+                "finalize",
+                time.perf_counter() - started,
+                [compact_path, input_hash_path, draft_path],
+                [],
+                validation_retries=args.validation_retries,
+                validation_status="failed",
+                validation_errors=errors,
+            )
+            failure_recorded = True
+            raise ValueError("draft validation failed:\n" + "\n".join(f"  - {item}" for item in errors))
         strategy = materialize(draft, compact)
         validation_errors = validate_strategy(strategy)
         if validation_errors:
@@ -365,13 +388,26 @@ def main(argv=None) -> int:
         html_tmp.replace(html_path)
         duration = time.perf_counter() - started
         update_report(output_dir / "step3_timing.json", args.date, "finalize", duration,
-                      [compact_path, draft_path], [strategy_path, html_path],
+                      [compact_path, input_hash_path, draft_path], [strategy_path, html_path],
                       {"candidate_count": len(compact["candidates"]), "selected_count": len(strategy["stocks"]),
                        "observation_count": len(strategy["observation_pool"]),
                        "conditional_news_count": len(compact.get("news_evidence", [])),
                        "llm_input_bytes": compact_path.stat().st_size, "llm_output_bytes": draft_path.stat().st_size},
-                      validation_retries=args.validation_retries)
+                      validation_retries=args.validation_retries,
+                      validation_status="passed")
     except Exception as exc:
+        if not failure_recorded:
+            update_report(
+                output_dir / "step3_timing.json",
+                args.date,
+                "finalize",
+                time.perf_counter() - started,
+                [compact_path, input_hash_path, draft_path],
+                [],
+                validation_retries=args.validation_retries,
+                validation_status="failed",
+                validation_errors=str(exc).splitlines(),
+            )
         print(f"[ERROR] finalize_daily_strategy failed: {exc}", file=sys.stderr)
         return 1
     print(f"OK: published {strategy_path} and {html_path} in {duration:.3f}s")

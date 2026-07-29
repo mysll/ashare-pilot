@@ -24,6 +24,7 @@ from ashare_pilot.mapping.daily_contract import (
 from ashare_pilot.market_data import fetch_quotes
 from ashare_pilot.market_data.runtime import current_workspace, workspace_path
 
+from .draft_link import INPUT_HASH_FILENAME, write_input_hash
 from .llm_input import build_input, canonical_sha256, compact_write, index_percent, percent_number
 from .timing import update_report
 
@@ -85,6 +86,7 @@ def main(argv=None) -> int:
     view_input_path = input_dir / "mapper.strategy_view.json"
     view_output_path = output_dir / "mapper.strategy_view.json"
     output_path = output_dir / ".strategy_llm_input.json"
+    input_hash_path = output_dir / INPUT_HASH_FILENAME
     index_duration = 0.0
     index_failed = True
     try:
@@ -120,6 +122,7 @@ def main(argv=None) -> int:
         compact = build_input(view, theme_stocks, pool, news, indices)
         compact["market_inputs"]["index_fetch_failed"] = index_failed
         compact_write(output_path, compact)
+        write_input_hash(input_hash_path, compact)
         if output_path.stat().st_size > 80 * 1024:
             print(f"[WARN] compact input exceeds 70KB warning threshold: {output_path.stat().st_size} bytes", file=sys.stderr)
         duration = time.perf_counter() - started
@@ -133,7 +136,7 @@ def main(argv=None) -> int:
         }
         update_report(output_dir / "step3_timing.json", args.date, "prepare", duration,
                       [mapper_path, view_output_path, input_dir / "theme_stocks.json", pool_path, input_dir / "news.json"],
-                      [output_path], counts, validation_retries=0,
+                      [output_path, input_hash_path], counts, validation_retries=0,
                       index_fetch_duration=index_duration, index_fetch_failed=index_failed)
     except Exception as exc:
         print(f"[ERROR] prepare_daily_strategy failed: {exc}", file=sys.stderr)

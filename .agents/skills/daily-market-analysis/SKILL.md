@@ -156,7 +156,9 @@ This pipeline runs at any time. Data availability depends on market state — th
 
 All data fetching targets ONLY stocks in the pool (theme library candidates + news-mentioned), typically 30-50 stocks. Never fetch full market data.
 
-Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) must complete before 9:30 AM. Parallel bash calls are the primary optimization — each individual script call is fast (~3s), the bottleneck is sequential execution.
+Target wall-clock: Step 1 (news) + Step 2 (mapping) + Step 3 (strategy) should
+normally publish by 09:35. The workflow still starts at 09:20; do not move work
+before that boundary.
 
 ---
 
@@ -195,28 +197,9 @@ If this fails, rerun the Step 1 fetch command. Do not dispatch Step 2 with only
 
 **Agent:** `sector-analyst`
 
-**Action:** Load skill `daily-stock-mapping` (V5 Perception) and follow its workflow.
+**Action:** Execute the following one unambiguous `daily-stock-mapping` workflow.
 
-**V5 note:** Step 2 has two LLM semantic stages only: `themes.json` and candidate-complete sparse `mapper.annotations.json`. Scripts own membership, source flags, default Pattern, assembly, and validation. Step 2 NEVER produces Direction、RiskSeverity、or OverrideHint — these are solely Step 3 Reasoning territory.
-
-Before theme extraction, build the compact high-recall input. After `themes.json`, prepare deterministic inputs; after sparse annotations, finalize:
-
-```bash
-uv run --frozen ashare-pilot mapping daily build-theme-evidence --date {YYYY-MM-DD}
-# LLM writes themes.json from the compact input
-uv run --frozen ashare-pilot mapping daily validate-themes --date {YYYY-MM-DD}
-# If validation fails, the same LLM stage fixes only the reported fields and
-# reruns validate-themes once. Stop if the retry still fails.
-uv run --frozen ashare-pilot mapping daily prepare --date {YYYY-MM-DD}
-# LLM writes candidate-complete sparse mapper.annotations.json
-uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD}
-```
-
-`prepare` is forbidden until `validate-themes` passes. In particular,
-`themes[].status` accepts only `tradeable`, `watch`, or `discarded`; pool
-exclusion must never be serialized as `status = "excluded"`.
-
-**Prompt (exact format, MUST NOT deviate):**
+**sector-analyst prompt (exact format, MUST NOT deviate):**
 
 ```
 Load skill `daily-stock-mapping` and execute.
@@ -248,42 +231,26 @@ Outputs:
 
 **Agent:** `portfolio-manager`
 
-**Action:** Execute the following one unambiguous prepare → selected-only LLM draft → finalize sequence.
-
-```bash
-uv run --frozen ashare-pilot strategy daily prepare \
-  --date {YYYY-MM-DD}
-```
+**Action:** Execute the following one unambiguous `daily-strategy` workflow.
 
 **portfolio-manager prompt (exact format, MUST NOT deviate):**
 
 ```
+Load skill `daily-strategy` and execute.
+
 Date: {YYYY-MM-DD}
 
-Read only:
-- predict/{YYYY-MM-DD}/.strategy_llm_input.json
-- .agents/skills/daily-strategy/references/strategy-selection-rubric.md
-- .agents/skills/daily-strategy/references/strategy-output-contract.md
-- memory/RULES.md (when present)
-- memory/SHARED_RULES.md (when present)
+Input:
+- predict/{YYYY-MM-DD}/mapper.strategy_view.json
 
-In a zero-history project, missing memory files mean there are no learned
-rules yet. Continue from current-day evidence and do not invent rule history.
-
-Consider every compact candidate, deep-reason only the final regime-limited
-selection, and write:
-- predict/{YYYY-MM-DD}/strategy.draft.json
+Outputs:
+- predict/{YYYY-MM-DD}/strategy.json
+- predict/{YYYY-MM-DD}/daily_report.html
 ```
 
-The LLM must not open full `mapper.json`, `pool_indicators.json`, `news.json`, or any Markdown report. It retains final regime, code set/order, Direction, RiskSeverity application, rating, rule application, and selected execution-plan ownership.
-
-```bash
-uv run --frozen ashare-pilot strategy daily finalize \
-  --date {YYYY-MM-DD} \
-  --llm-duration {MEASURED_PORTFOLIO_MANAGER_SECONDS}
-```
-
-If draft validation fails, send only the reported draft errors back to portfolio-manager, rewrite `strategy.draft.json`, increment `--validation-retries`, and rerun finalize with the newly measured cumulative LLM duration. Do not hand-edit `strategy.json`. Runs without an explicit measured LLM duration are diagnostic only and must not enter Gate D P95 samples.
+**CRITICAL:** Do NOT inline any file content, scoring formulas, filter rules,
+validator errors, or analysis. The portfolio-manager owns prepare, compact
+input reads, draft generation, validation repair, finalize, and timing.
 
 **Output:** `predict/{YYYY}-{MM}-{DD}/strategy.json` (`daily_strategy.v3`) and `predict/{YYYY}-{MM}-{DD}/daily_report.html`
 
@@ -318,7 +285,9 @@ If draft validation fails, send only the reported draft errors back to portfolio
 | Perception | 2 | sector-analyst + daily-stock-mapping V5 | canonical news.json | compact input -> themes.json -> prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
 | Reasoning | 3 | portfolio-manager + daily-strategy V5 | compact all-candidate input + RULES/SHARED_RULES | selected-only draft -> strategy.json + daily_report.html | Final decisions remain LLM-owned; Python completes deterministic contracts |
 
-Phase 3 uses the exact prepare → portfolio-manager draft → finalize sequence above. Full source JSON remains outside the hot LLM context.
+Phase 3 is a black-box `portfolio-manager` dispatch. Its `daily-strategy` leaf
+skill owns prepare → compact draft → finalize; full source JSON remains outside
+the hot LLM context.
 
 ## Common Usage
 

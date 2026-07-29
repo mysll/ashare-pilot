@@ -7,7 +7,6 @@
   "schema_version": "daily_strategy_draft.tmp.v2",
   "date": "YYYY-MM-DD",
   "generated_at": "ISO-8601",
-  "source": {"strategy_input_sha256": "输入 source 要求的精确 canonical hash"},
   "market": {
     "regime_prior": "panic|weak|neutral|strong-sector",
     "requires_open_confirmation": true,
@@ -24,11 +23,9 @@
 }
 ```
 
-`source.strategy_input_sha256` 必须是紧凑输入按 UTF-8、`sort_keys=true`、`separators=(",", ":")` canonical serialization 的 SHA-256。写草稿前运行下列命令取得精确值；旧草稿不可复用：
-
-```bash
-uv run --frozen ashare-pilot strategy daily build-llm-input --hash-only predict/YYYY-MM-DD/.strategy_llm_input.json
-```
+输入 SHA-256 由 Python `prepare` 写入 `.strategy_llm_input.sha256`，并由
+`finalize` 校验。LLM 不得计算、复制或输出输入哈希，也不得在草稿中写
+`source`。每次 `prepare` 后必须重新生成草稿，旧草稿不可复用。
 
 ## Selected stock
 
@@ -61,8 +58,7 @@ uv run --frozen ashare-pilot strategy daily build-llm-input --hash-only predict/
     "overnight_risk": "非空",
     "gap_up_action": "非空",
     "flat_open_action": "非空",
-    "gap_down_action": "非空",
-    "max_holding_days": 2
+    "gap_down_action": "非空"
   },
   "rules_applied": ["Rxx"],
   "profile_trace": "非空",

@@ -276,8 +276,7 @@ T+1 verification.json / entry confirmation backtest
     "overnight_risk": "high",
     "gap_up_action": "次日高开后承接不足则分批兑现",
     "flat_open_action": "观察昨收与VWAP，反弹失败退出",
-    "gap_down_action": "禁止补仓，按竞价和首30分钟承接处理",
-    "max_holding_days": 2
+    "gap_down_action": "禁止补仓，按竞价和首30分钟承接处理"
   }
 }
 ```

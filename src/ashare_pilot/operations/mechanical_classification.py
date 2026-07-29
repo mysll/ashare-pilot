@@ -115,7 +115,6 @@ def compute_mechanical_decision(
             "gap_up_action": configured_t1.get("gap_up_action"),
             "flat_open_action": configured_t1.get("flat_open_action"),
             "gap_down_action": configured_t1.get("gap_down_action"),
-            "max_holding_days": configured_t1.get("max_holding_days"),
         }
     else:
         raise ValueError("daily_strategy.v3 requires t1_risk_plan")

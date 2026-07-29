@@ -34,6 +34,7 @@ from ashare_pilot.mapping.daily_contract import (
 )
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "mapping"
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def nested(value):
@@ -123,6 +124,92 @@ class OwnershipTests(unittest.TestCase):
         annotations = {"stocks": [{"code": "sz000001", "news_relevance": {
             "r": "R4", "p": "P3", "confidence": 90, "evidence": "news#99"}}]}
         self.assertTrue(any("news#99" in item for item in validate_news_refs(annotations, {"items": [{"id": 1}]})))
+
+    def test_anomaly_string_null_and_length_boundary(self):
+        base = {
+            "schema_version": "daily_mapper_annotations.v1",
+            "date": "2026-07-14",
+            "stocks": [{
+                "code": "sz000001",
+                "news_relevance": {
+                    "r": "R2", "p": "P2", "confidence": 90, "trace": "theme evidence"
+                },
+            }],
+        }
+        for value in (None, "异" * 50):
+            doc = json.loads(json.dumps(base))
+            doc["stocks"][0]["anomaly"] = value
+            self.assertEqual(validate(doc), [])
+        too_long = json.loads(json.dumps(base))
+        too_long["stocks"][0]["anomaly"] = "异" * 51
+        self.assertTrue(any("<= 50 chars" in item for item in validate(too_long)))
+        object_value = json.loads(json.dumps(base))
+        object_value["stocks"][0]["anomaly"] = {"type": "structural"}
+        self.assertTrue(any("string or null" in item for item in validate(object_value)))
+
+    def test_uniform_theme_level_r2_p2_warns_but_does_not_fail(self):
+        fixture = theme_stocks()
+        fixture["stocks"] = [
+            {
+                "code": f"sh{600000 + index:06d}",
+                "filter": {"status": "candidate"},
+            }
+            for index in range(5)
+        ]
+        doc = {
+            "stocks": [
+                {
+                    "code": stock["code"],
+                    "news_relevance": {
+                        "r": "R2", "p": "P2", "confidence": 80, "trace": "theme only"
+                    },
+                }
+                for stock in fixture["stocks"]
+            ]
+        }
+        compact = {
+            "candidates": [
+                {
+                    "code": stock["code"],
+                    "role_tags": ["ThemeLibrary"],
+                    "direct_news_refs": [],
+                }
+                for stock in fixture["stocks"]
+            ]
+        }
+        errors, warnings = validate_candidate_coverage(doc, fixture, compact)
+        self.assertEqual(errors, [])
+        self.assertTrue(any("uniform R2/P2 accepted" in item for item in warnings))
+
+    def test_direct_news_candidate_cannot_be_downgraded_to_r2(self):
+        doc = {
+            "stocks": [{
+                "code": "sz000001",
+                "news_relevance": {
+                    "r": "R2", "p": "P2", "confidence": 80, "evidence": "news#7"
+                },
+            }]
+        }
+        compact = {
+            "candidates": [{
+                "code": "sz000001",
+                "role_tags": ["ThemeLibrary", "NewsDirect"],
+                "direct_news_refs": ["news#7"],
+            }]
+        }
+        errors, _ = validate_candidate_coverage(doc, theme_stocks(), compact)
+        self.assertTrue(any("must not be downgraded" in item for item in errors))
+
+    def test_2026_07_29_uniform_theme_evidence_replay_has_no_r2_blocker(self):
+        predict = ROOT / "predict" / "2026-07-29"
+        if not predict.exists():
+            self.skipTest("2026-07-29 frozen replay is not available")
+        annotations = json.loads((predict / "mapper.annotations.json").read_text(encoding="utf-8"))
+        stocks = json.loads((predict / "theme_stocks.json").read_text(encoding="utf-8"))
+        compact = json.loads((predict / ".mapper_annotation_input.json").read_text(encoding="utf-8"))
+        self.assertTrue(all(not item.get("direct_news_refs") for item in compact["candidates"]))
+        errors, _ = validate_candidate_coverage(annotations, stocks, compact)
+        self.assertEqual(errors, [])
 
     def test_duplicate_theme_annotations_are_rejected(self):
         doc = {"schema_version": "daily_mapper_annotations.v1", "date": "2026-07-14",
@@ -241,16 +328,60 @@ class SourceTests(unittest.TestCase):
                 path.write_text("{}\n", encoding="utf-8")
             update_report(report, "2026-07-14", "theme_llm", 1, [news], [themes])
             update_report(report, "2026-07-14", "prepare", 2, [themes], [mapper_input])
-            update_report(report, "2026-07-14", "mapper_annotation_llm", 3, [mapper_input], [annotations])
-            update_report(report, "2026-07-14", "finalize", 4, [annotations], [mapper])
+            update_report(
+                report,
+                "2026-07-14",
+                "mapper_annotation_llm",
+                3,
+                [mapper_input],
+                [annotations],
+                validation_retries=1,
+            )
+            update_report(
+                report,
+                "2026-07-14",
+                "finalize",
+                4,
+                [annotations],
+                [mapper],
+                validation_retries=1,
+                validation_status="passed",
+            )
             complete = json.loads(report.read_text(encoding="utf-8"))
             self.assertTrue(complete["complete_same_run"])
             self.assertEqual(complete["total_recorded_seconds"], 10)
+            self.assertEqual(
+                complete["stages"]["mapper_annotation_llm"]["validation_retry_count"],
+                1,
+            )
+            self.assertEqual(complete["validation_attempts"][-1]["status"], "passed")
             update_report(report, "2026-07-14", "prepare", 2.5, [themes], [mapper_input])
             incomplete = json.loads(report.read_text(encoding="utf-8"))
             self.assertFalse(incomplete["complete_same_run"])
             self.assertIsNone(incomplete["total_recorded_seconds"])
             self.assertNotIn("finalize", incomplete["stages"])
+
+    def test_failed_finalize_attempt_is_audited_but_not_complete(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report = root / "timing.json"
+            annotations = root / "annotations.json"
+            annotations.write_text("{}\n", encoding="utf-8")
+            update_report(
+                report,
+                "2026-07-14",
+                "finalize",
+                1,
+                [annotations],
+                [],
+                validation_retries=0,
+                validation_status="failed",
+                validation_errors=["stocks[0].anomaly: must be string or null"],
+            )
+            doc = json.loads(report.read_text(encoding="utf-8"))
+            self.assertFalse(doc["complete_same_run"])
+            self.assertEqual(doc["validation_attempts"][0]["status"], "failed")
+            self.assertIn("anomaly", doc["validation_attempts"][0]["errors"][0])
 
 
 class FrozenGateTests(unittest.TestCase):

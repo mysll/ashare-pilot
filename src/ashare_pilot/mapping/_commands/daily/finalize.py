@@ -26,6 +26,7 @@ def main(argv=None) -> int:
     parser.add_argument("--theme-stocks")
     parser.add_argument("--pool")
     parser.add_argument("--output-dir", help="Debug/fixture output directory; defaults to predict/{date}")
+    parser.add_argument("--validation-retries", type=int, default=0)
     args = parser.parse_args(argv)
     started = time.perf_counter()
     predict = default_predict_dir(args.date)
@@ -36,6 +37,7 @@ def main(argv=None) -> int:
     mapper_base_path = output_dir / "mapper.base.json"
     mapper_path = output_dir / "mapper.json"
     view_path = output_dir / "mapper.strategy_view.json"
+    annotation_input_path = predict / ".mapper_annotation_input.json"
     try:
         annotations = read_json(annotations_path)
         theme_stocks = read_json(theme_stocks_path)
@@ -61,7 +63,12 @@ def main(argv=None) -> int:
             if isinstance(news_doc, dict):
                 ensure_doc_date(news_doc, args.date, str(news_path))
                 errors.extend(validate_news_refs(annotations, news_doc))
-        coverage_errors, warnings = validate_candidate_coverage(annotations, theme_stocks)
+        annotation_input = read_json(annotation_input_path) if annotation_input_path.exists() else None
+        coverage_errors, warnings = validate_candidate_coverage(
+            annotations,
+            theme_stocks,
+            annotation_input if isinstance(annotation_input, dict) else None,
+        )
         errors.extend(coverage_errors)
         for warning in warnings:
             print(f"[WARN] {warning}", file=sys.stderr)
@@ -79,8 +86,21 @@ def main(argv=None) -> int:
         update_report(output_dir / "step2_timing.json", args.date, "finalize", duration,
                       [annotations_path, theme_stocks_path, pool_path], [mapper_base_path, mapper_path, view_path],
                       {"candidate_count": len(base["candidate_pool"]), "annotation_count": len(annotations.get("stocks", [])),
-                       "final_count": len(mapper["candidate_pool"])})
+                       "final_count": len(mapper["candidate_pool"])},
+                      validation_retries=args.validation_retries,
+                      validation_status="passed")
     except Exception as exc:
+        update_report(
+            output_dir / "step2_timing.json",
+            args.date,
+            "finalize",
+            time.perf_counter() - started,
+            [annotations_path, theme_stocks_path, pool_path],
+            [],
+            validation_retries=args.validation_retries,
+            validation_status="failed",
+            validation_errors=str(exc).splitlines(),
+        )
         print(f"[ERROR] finalize_daily_mapping failed: {exc}", file=sys.stderr)
         return 1
     print(f"OK: finalized daily mapping for {args.date}")

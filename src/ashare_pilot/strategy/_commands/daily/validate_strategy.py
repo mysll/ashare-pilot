@@ -100,9 +100,6 @@ def validate_t1_plan(stock: dict[str, Any], i: int, errors: list[str]) -> None:
     for key in ("overnight_risk", "gap_up_action", "flat_open_action", "gap_down_action"):
         if not isinstance(plan.get(key), str) or not plan.get(key):
             err(errors, f"{base}.{key}", "must be non-empty string")
-    days = plan.get("max_holding_days")
-    if not isinstance(days, int) or isinstance(days, bool) or not 1 <= days <= 20:
-        err(errors, f"{base}.max_holding_days", "must be integer in [1, 20]")
 
 
 def validate_stock(stock: dict[str, Any], i: int, errors: list[str], schema: str) -> None:

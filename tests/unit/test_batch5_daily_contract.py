@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
 
 from ashare_pilot.strategy._commands.daily.timing import update_report
+from ashare_pilot.strategy._commands.daily.draft_link import (
+    INPUT_HASH_FILENAME, validate_draft_link, write_input_hash,
+)
 from ashare_pilot.strategy._commands.daily.llm_input import (
-    build_input, canonical_sha256, derive_regime, index_percent, reread_triggers,
+    build_input, derive_regime, index_percent, reread_triggers,
 )
 from ashare_pilot.strategy._commands.daily.finalize import materialize, validate_draft
 from ashare_pilot.strategy._commands.daily.prepare import fetch_indices, normalize_indices
@@ -72,7 +76,6 @@ def selected_stock(row: dict) -> dict:
 def draft_for(date: str, compact: dict, selected: list[dict], regime: str = "neutral") -> dict:
     return {
         "schema_version": "daily_strategy_draft.tmp.v2", "date": date, "generated_at": f"{date}T01:30:00+00:00",
-        "source": {"strategy_input_sha256": canonical_sha256(compact)},
         "market": {"regime_prior": regime, "requires_open_confirmation": True,
                    "stop_atr_multiplier": 1.5, "notes": "fixture"},
         "portfolio_limits": {"max_new_positions": 10, "max_theme_positions": 10,
@@ -218,17 +221,65 @@ class Step3BoundaryTests(unittest.TestCase):
         self.assertEqual(codes[1], strategy["observation_pool"][0]["code"])
         self.assertIn("完整候选比较后未入选", strategy["observation_pool"][0]["reason"])
 
-    def test_draft_hash_and_unsupported_sources_fail(self):
+    def test_unsupported_sources_fail(self):
         date = "2026-07-15"
         _, compact = small_inputs(date)
         stock = selected_stock(compact["candidates"][0])
         stock["reasoning"]["source_basis"] += " NewsDirect news#999"
         draft = draft_for(date, compact, [stock])
-        draft["source"]["strategy_input_sha256"] = "stale"
         errors = validate_draft(draft, compact, date)
-        self.assertTrue(any("strategy_input_sha256" in error for error in errors))
         self.assertTrue(any("unsupported news" in error for error in errors))
         self.assertTrue(any("unsupported role tags" in error for error in errors))
+
+    def test_llm_owned_input_hash_field_is_forbidden(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        draft = draft_for(date, compact, [selected_stock(compact["candidates"][0])])
+        draft["source"] = {"strategy_input_sha256": "0" * 64}
+        errors = validate_draft(draft, compact, date)
+        self.assertIn("source: forbidden; input fingerprint is Python-owned", errors)
+
+    def test_python_owned_input_fingerprint_accepts_current_draft(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hash_path = root / INPUT_HASH_FILENAME
+            draft_path = root / "strategy.draft.json"
+            write_input_hash(hash_path, compact)
+            draft_path.write_text("{}", encoding="utf-8")
+            hash_mtime = hash_path.stat().st_mtime_ns
+            os.utime(draft_path, ns=(hash_mtime + 1, hash_mtime + 1))
+            self.assertEqual([], validate_draft_link(compact, draft_path, hash_path))
+
+    def test_python_owned_input_fingerprint_rejects_stale_draft(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hash_path = root / INPUT_HASH_FILENAME
+            draft_path = root / "strategy.draft.json"
+            draft_path.write_text("{}", encoding="utf-8")
+            write_input_hash(hash_path, compact)
+            draft_mtime = draft_path.stat().st_mtime_ns
+            os.utime(hash_path, ns=(draft_mtime + 1, draft_mtime + 1))
+            errors = validate_draft_link(compact, draft_path, hash_path)
+            self.assertTrue(any("not written after current prepare" in error for error in errors))
+
+    def test_python_owned_input_fingerprint_rejects_changed_input(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            hash_path = root / INPUT_HASH_FILENAME
+            draft_path = root / "strategy.draft.json"
+            write_input_hash(hash_path, compact)
+            draft_path.write_text("{}", encoding="utf-8")
+            hash_mtime = hash_path.stat().st_mtime_ns
+            os.utime(draft_path, ns=(hash_mtime + 1, hash_mtime + 1))
+            compact["market_inputs"]["index_fetch_failed"] = True
+            errors = validate_draft_link(compact, draft_path, hash_path)
+            self.assertTrue(any("does not match current compact input" in error for error in errors))
 
     def test_timing_requires_exact_content_linkage_and_invalidates_downstream(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -240,16 +291,69 @@ class Step3BoundaryTests(unittest.TestCase):
             report = root / "step3_timing.json"
             update_report(report, "2026-07-15", "prepare", 1, [], [compact])
             update_report(report, "2026-07-15", "strategy_llm", 2, [compact], [draft], timing_method="measured")
-            update_report(report, "2026-07-15", "finalize", 3, [draft], [strategy])
+            update_report(
+                report,
+                "2026-07-15",
+                "finalize",
+                3,
+                [draft],
+                [strategy],
+                validation_retries=1,
+                validation_status="passed",
+            )
             doc = json.loads(report.read_text(encoding="utf-8"))
             self.assertTrue(doc["complete_same_run"])
             self.assertTrue(doc["gate_d_eligible"])
             self.assertEqual("measured", doc["stages"]["strategy_llm"]["timing_method"])
+            self.assertEqual(1, doc["stages"]["finalize"]["validation_retry_count"])
+            self.assertEqual("passed", doc["validation_attempts"][-1]["status"])
             compact.write_text('{"changed":true}', encoding="utf-8")
             update_report(report, "2026-07-15", "prepare", 1, [], [compact])
             doc = json.loads(report.read_text(encoding="utf-8"))
             self.assertFalse(doc["complete_same_run"])
             self.assertEqual({"prepare"}, set(doc["stages"]))
+
+    def test_failed_finalize_timing_is_not_gate_d_eligible(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            compact, draft = root / "input.json", root / "draft.json"
+            compact.write_text("{}", encoding="utf-8")
+            draft.write_text("{}", encoding="utf-8")
+            report = root / "step3_timing.json"
+            update_report(report, "2026-07-15", "prepare", 1, [], [compact])
+            update_report(
+                report,
+                "2026-07-15",
+                "strategy_llm",
+                2,
+                [compact],
+                [draft],
+                validation_retries=0,
+                timing_method="measured",
+            )
+            update_report(
+                report,
+                "2026-07-15",
+                "finalize",
+                1,
+                [compact, draft],
+                [],
+                validation_retries=0,
+                validation_status="failed",
+                validation_errors=["draft invalid"],
+            )
+            doc = json.loads(report.read_text(encoding="utf-8"))
+            self.assertFalse(doc["complete_same_run"])
+            self.assertFalse(doc["gate_d_eligible"])
+            self.assertEqual(["draft invalid"], doc["validation_attempts"][0]["errors"])
+
+    def test_materialize_drops_legacy_max_holding_days(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        stock = selected_stock(compact["candidates"][0])
+        draft = draft_for(date, compact, [stock])
+        strategy = materialize(draft, compact)
+        self.assertNotIn("max_holding_days", strategy["stocks"][0]["t1_risk_plan"])
 
 
 if __name__ == "__main__":

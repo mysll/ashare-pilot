@@ -53,21 +53,17 @@ Trading scope is config-driven — see `config/trading-scope.json`. Do not hard-
 
 **Objective:** Match news items to themes from Theme Library via retrieval, not generation.
 
-Run `uv run --frozen ashare-pilot mapping daily build-theme-evidence`, then load only [references/theme-evidence-rubric.md](references/theme-evidence-rubric.md) for this LLM phase.
-
-### Load Theme Universe
-
-```bash
-uv run --frozen ashare-pilot themes query list --json
-```
-
-Theme Library is the ONLY valid theme source.
+First run `uv run --frozen ashare-pilot mapping daily build-theme-evidence`.
+That deterministic command owns reads of canonical `news.json` and the Theme
+Library. For the LLM phase, read only `.theme_evidence_input.json` and
+[references/theme-evidence-rubric.md](references/theme-evidence-rubric.md).
+Do not reopen `news.json`/`news.md`, query the full theme list, or inspect any
+stock/mapper artifact.
 
 ### Match News to Themes
 
-Read every canonical news item in `news.json`. `news.md` may provide a reorganized
-market narrative, but it is not an evidence source. Match news items against
-available themes using, in priority order:
+Use every evidence row supplied by `.theme_evidence_input.json`. Match those
+retrieved rows using, in priority order:
 
 1. Theme name (exact)
 2. Aliases (exact)
@@ -731,7 +727,9 @@ Two-dimensional lookup. LLM selects ONE cell; may interpolate ±5 and explain in
 
 ### Anomaly Field (≤50 chars)
 
-Purpose: surface structural patterns that rubrics flatten. LLM natural language.
+Purpose: surface structural patterns that rubrics flatten. The contract is
+exactly `anomaly: string|null`; structured objects are forbidden. Omit the
+field or use `null` when no genuine anomaly exists.
 
 | Allowed | Forbidden |
 |---------|-----------|
@@ -739,7 +737,7 @@ Purpose: surface structural patterns that rubrics flatten. LLM natural language.
 | Cross-theme ("spans Semi + AI Compute") | Price targets |
 | Event shape ("limit-up open then re-seal") | >50 chars |
 
-**Mandatory** if: market_active cross_rank_highlights entry, LHB injection with net buy > 0, board_streak ≥ 2 but Composite < 70, or RiskType alone insufficient. Otherwise `—`.
+**Mandatory** if: market_active cross_rank_highlights entry, LHB injection with net buy > 0, board_streak ≥ 2 but Composite < 70, or RiskType alone insufficient. Otherwise omit it or use `null`; do not emit repetitive default prose.
 
 ### Deterministic Role Tags
 
@@ -793,12 +791,12 @@ Required shape:
 
 Do not write `mapper.json` by hand.
 
-Every deterministic candidate must appear exactly once and must include `news_relevance` with confidence plus canonical evidence or a concise trace. `major_event`, `anomaly`, and individual `pattern` dimensions are sparse: omit them unless they carry real semantics. Missing coverage blocks publication; extra non-candidate rows warn and skip. Blanket R2/P2 assignment fails review.
+Every deterministic candidate must appear exactly once and must include `news_relevance` with confidence plus canonical evidence or a concise trace. `major_event`, `anomaly`, and individual `pattern` dimensions are sparse: omit them unless they carry real semantics. Missing coverage blocks publication; extra non-candidate rows warn and skip. Uniform R2/P2 is allowed when compact candidate evidence is uniformly theme-level; a candidate with `direct_news_refs` or `NewsDirect` must not be downgraded to R2.
 
 After prepare and writing `mapper.annotations.json`, run:
 
 ```bash
-uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD}
+uv run --frozen ashare-pilot mapping daily finalize --date {YYYY-MM-DD} --validation-retries <0-or-1>
 ```
 
 `uv run --frozen ashare-pilot mapping daily prepare` owns deterministic membership, source flags, sequential indicators, filters, and compact annotation targets. `uv run --frozen ashare-pilot mapping daily finalize` gates candidate coverage, builds the deterministic mapper base, overlays sparse semantics, validates the mapper, and writes the Step 3 view. Both update report-only `step2_timing.json`; diagnostic write failure does not invalidate trading contracts. An upstream stage refresh invalidates recorded downstream stages, and `total_recorded_seconds` is populated only when all four timed stages are artifact-linked within the same run.
@@ -807,12 +805,19 @@ Market source flags use top-N `cross_rank_highlights` plus the full selected-the
 
 `uv run --frozen ashare-pilot mapping daily prepare` validates the in-memory `theme_stocks.json` contract before publishing it. `uv run --frozen ashare-pilot mapping daily finalize` revalidates its schema/date/technical projection, requires both input dates to equal `--date`, and treats extra non-candidate annotation rows as warning-and-skip rather than requiring candidate semantics.
 
-The workflow runner should also record both LLM stages so byte and wall-time changes remain visible:
+The sector-analyst must record both measured LLM stages so byte, wall time, and
+validation retry changes remain visible:
 
 ```bash
-uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage theme_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.theme_evidence_input.json --output predict/{YYYY-MM-DD}/themes.json
-uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage mapper_annotation_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.mapper_annotation_input.json --output predict/{YYYY-MM-DD}/mapper.annotations.json
+uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage theme_llm --duration <seconds> --input predict/{YYYY-MM-DD}/.theme_evidence_input.json --output predict/{YYYY-MM-DD}/themes.json --validation-retries <0-or-1>
+uv run --frozen ashare-pilot mapping daily build-timing --date {YYYY-MM-DD} --stage mapper_annotation_llm --duration <cumulative-seconds> --input predict/{YYYY-MM-DD}/.mapper_annotation_input.json --output predict/{YYYY-MM-DD}/mapper.annotations.json --validation-retries <0-or-1>
 ```
+
+On validation failure, collect the complete validator error set, fix all
+reported fields in the owning LLM artifact once, record one validation retry,
+and rerun the validator/finalize once. If the second attempt fails, stop and
+report the full remaining error set; never loop and never ask the general
+orchestrator to edit Step 2 artifacts.
 
 | Column | Source | Notes |
 |--------|--------|-------|

@@ -52,14 +52,21 @@ def linked(upstream: dict[str, Any], downstream: dict[str, Any]) -> bool:
 
 
 def complete_same_run(stages: dict[str, Any]) -> bool:
-    return all(name in stages for name in STAGES) and linked(stages["prepare"], stages["strategy_llm"]) and linked(stages["strategy_llm"], stages["finalize"])
+    return (
+        all(name in stages for name in STAGES)
+        and bool(stages["finalize"].get("outputs"))
+        and linked(stages["prepare"], stages["strategy_llm"])
+        and linked(stages["strategy_llm"], stages["finalize"])
+    )
 
 
 def update_report(path: Path, date: str, stage: str, duration: float | None = None,
                   inputs: list[Path] | None = None, outputs: list[Path] | None = None,
                   counts: dict[str, int] | None = None, validation_retries: int | None = None,
                   index_fetch_duration: float | None = None, index_fetch_failed: bool | None = None,
-                  timing_method: str | None = None) -> None:
+                  timing_method: str | None = None,
+                  validation_status: str | None = None,
+                  validation_errors: list[str] | None = None) -> None:
     try:
         if stage not in STAGES:
             raise ValueError(f"unsupported stage: {stage}")
@@ -70,6 +77,8 @@ def update_report(path: Path, date: str, stage: str, duration: float | None = No
         if not isinstance(doc, dict) or doc.get("schema_version") != "daily_step3_timing.v1" or doc.get("date") != date:
             doc = {"schema_version": "daily_step3_timing.v1", "date": date, "stages": {}}
         stages = doc.setdefault("stages", {})
+        if stage == "prepare":
+            doc["validation_attempts"] = []
         for name in DOWNSTREAM.get(stage, set()):
             stages.pop(name, None)
         entry: dict[str, Any] = {
@@ -89,6 +98,16 @@ def update_report(path: Path, date: str, stage: str, duration: float | None = No
                 "failed": bool(index_fetch_failed),
             }
         stages[stage] = entry
+        if validation_status is not None:
+            attempts = doc.setdefault("validation_attempts", [])
+            attempts.append({
+                "recorded_at": utc_now(),
+                "stage": stage,
+                "status": validation_status,
+                "retry_count": validation_retries or 0,
+                "errors": list(validation_errors or []),
+                "input_sha256": entry["inputs"][0].get("sha256") if entry["inputs"] else None,
+            })
         complete = complete_same_run(stages)
         doc["complete_same_run"] = complete
         doc["gate_d_eligible"] = bool(

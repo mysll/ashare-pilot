@@ -17,7 +17,7 @@ Step 3 是唯一的日策略 Reasoning 层。Python 负责验证、投影、提�
 - 每个入选股必须写非空 `reasoning.source_basis`，只能使用输入中真实的主题、role tag 与 canonical `news#id`。
 - A 股新仓必须是 T+1 条件计划，最早执行时间不得早于 `09:35:05`；保持人工确认，不做自动买入。
 - 仓位只允许 `WATCH_ONLY|LIGHT|STANDARD` 定性档位；不得生成百分比、金额、股数或手数。
-- `strategy.json`、`daily_report.html` 是正式产物；`.strategy_llm_input.json`、`strategy.draft.json`、`step3_timing.json` 是非合同工作流产物。
+- `strategy.json`、`daily_report.html` 是正式产物；`.strategy_llm_input.json`、`.strategy_llm_input.sha256`、`strategy.draft.json`、`step3_timing.json` 是非合同工作流产物。
 - Step 3 不直接写 `memory/daily/INDEX.md`；盘后 verification 工作流拥有记忆更新。
 
 ## 唯一执行序列
@@ -62,13 +62,17 @@ uv run --frozen ashare-pilot strategy daily finalize \
 
 未传时仅记录 `mtime_estimate`，该次 `step3_timing.json` 不具备 Gate D 统计资格。
 
-finalize 校验草稿的输入哈希、候选和证据归属，按最终 regime 重算 Trade Profile，应用带理由的白名单 overrides，补齐全部未选候选观察行，验证 `daily_strategy.v3`，再发布 JSON 与 HTML。
+finalize 校验 Python 维护的输入指纹、草稿时序、候选和证据归属，按最终 regime 重算 Trade Profile，应用带理由的白名单 overrides，补齐全部未选候选观察行，验证 `daily_strategy.v3`，再发布 JSON 与 HTML。
 
 ## 失败与重试
 
 - prepare 失败：修复源合同或重新执行 Step 2；不得手改紧凑输入绕过覆盖校验。
-- 草稿校验失败：portfolio-manager 只修正 `strategy.draft.json`，重新运行 finalize；修正会重录 `strategy_llm` 指纹和 retry count。
-- 哈希不匹配：重新读取当前 `.strategy_llm_input.json` 并完整重写草稿，不得沿用旧草稿。
+- 草稿校验失败：portfolio-manager 收集首次 validator 返回的完整错误集合，
+  一次性修正 `strategy.draft.json` 的全部错误，以累计实测 LLM 时长和
+  `--validation-retries 1` 重新运行 finalize。第二次仍失败则停止并报告
+  完整剩余错误；不得继续循环或交给主编排修复。
+- 输入指纹缺失或不匹配：重新运行 prepare，不得手改 `.strategy_llm_input.sha256`。
+- 草稿早于当前 prepare：重新读取当前 `.strategy_llm_input.json` 并完整重写草稿，不得沿用旧草稿。
 - profile override 非白名单、无理由或与 T+1 矛盾：删除或修正 override；finalize 不静默修复。
 - `step3_timing.json` 写入失败仅告警，不得使策略合同失效。
 
