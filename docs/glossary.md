@@ -46,3 +46,8 @@
 | 策略层 | 消费主题、资金、价格和执行数据，决定候选优先级、方向、仓位和 T+1 计划的能力。 |
 | 专家规则（Expert Rule） | 由领域专家明确授权生效的执行规则，使用 `E` 系列稳定编号。它不经过 learned rule 的证据准入生命周期；V1 不统计其有效性。 |
 | Learned Rule | 由复盘证据发现并按 `RULE_GOVERNANCE.md` 的候选、观察、有效、休眠和退役生命周期治理的规则。其生效依据是证据门槛，不是专家授权。 |
+| 风险预算（Risk Budget） | 单笔交易愿意亏损的组合净值比例，由仓位等级档定义；参见 [ADR-0006](adr/0006-risk-based-position-sizing.md)。 |
+| 有效止损距离（Effective Stop Distance） | 名义止损距离乘以 T+1 缺口系数后的值；用于反推仓位，承认隔夜最早 T+1 可卖导致的穿损放大。 |
+| 缺口系数（Gap Multiplier） | 补偿 T+1 竞价缺口穿透止损的放大系数，初值 1.5，分场景校准。 |
+| 组合热上限（Heat Cap） | 持仓风险预算之和的 regime 封顶值；超过时按等级与入场质量降序裁减。 |
+| 仓位等级（Position Tier） | `WATCH_ONLY / LIGHT / STANDARD` 三档，映射单笔风险预算而非分数；A 股 pilot 的仓位合同字段。 |
