@@ -3,6 +3,12 @@
 A-Share Pilot 项目的纪要、设计与决策文档归档处。
 新增文档时在下表登记一行。
 
+## 当前架构
+
+| 文档 | 摘要 |
+|------|------|
+| [当前架构文档集](architecture/README.md) | 基于当前代码、配置、Skills 和运行合同整理的模块化架构说明，覆盖核心运行时、Agent 编排、日线、盘中隔夜、开盘操作、数据主题平台、合同存储、自动化复盘与测试演进。 |
+
 ## 纪要 / 设计
 
 | 文档 | 摘要 |
@@ -34,6 +40,7 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 |------|------|
 | [superpowers/](superpowers/) | superpowers 框架文档(bug、plans、specs) |
 | [adr/](adr/) | 架构决策记录。 |
+| [architecture/](architecture/) | 当前实现架构与模块说明。 |
 
 ---
 
