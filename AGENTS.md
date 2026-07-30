@@ -52,6 +52,7 @@ update_cookie.bat    # Opens Chrome for login/captcha verification
 predict/{date}/          Daily V5 outputs (news/themes, stock pool, mapper, strategy.json, daily_report.html, timing files)
 intraday/{date}/         Intraday overnight outputs (mapper base/annotations/final, overnight_strategy.json, overnight_strategy.html)
 operation/{date}/        Intraday human-operation snapshots, decisions, run pointers, and operation_guide.html
+research/intraday-shadow/{date}/ Validation-only shadow rule contracts; never consumed by strategy
 .cache/intraday/{date}/  Intraday compute cache (market_breadth, indices, concept_dashboard, scan_pool, compute_pool_enriched, theme_ranking, opportunity_pool)
 memory/daily/{date}/     Morning verification (verification.json and verification.md)
 memory/intraday/{date}/  Intraday verification (intraday_verification.md)
@@ -84,6 +85,11 @@ uv run --frozen ashare-pilot operations guide run --date YYYY-MM-DD
 ```
 
 **Intraday Overnight Analysis (14:30 trading days):** Orchestrates `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md` plus applicable `EXPERT_RULES.md`; zero-history templates contain no rule rows. Canonical outputs are validated `intraday_mapper.v3` at `intraday/{date}/intraday_mapper.json` and `intraday_overnight_strategy.v3` at `overnight_strategy.json`; the human board is `overnight_strategy.html`.
+
+After the deterministic intraday compute/scoring phases succeed, the core pipeline refreshes
+`intraday_shadow_rule_validation.v1` non-blockingly. This contract is validation-only:
+it must never feed mapper/strategy generation, create recommendations, or update learned rules
+automatically.
 
 Reviews use the canonical JSON contracts and actual market results. Morning review writes under `memory/daily/{date}/`; intraday review writes under `memory/intraday/{date}/`. Rules are versioned with verification history and may only advance according to `memory/RULE_GOVERNANCE.md`.
 
@@ -128,6 +134,10 @@ uv run --frozen ashare-pilot themes query stock sz000977,sh601869 --roles --json
 # Validate published strategy contracts
 uv run --frozen ashare-pilot strategy daily validate predict/YYYY-MM-DD/strategy.json
 uv run --frozen ashare-pilot strategy overnight validate intraday/YYYY-MM-DD/overnight_strategy.json
+
+# Build and validate the isolated intraday shadow-rule contract
+uv run --frozen ashare-pilot review intraday shadow build --as-of YYYY-MM-DD --replace
+uv run --frozen ashare-pilot review intraday shadow validate research/intraday-shadow/YYYY-MM-DD/shadow_rule_validation.json
 
 # Expert Rules (prefer $manage-expert-rules for semantic/capability checks)
 uv run --frozen ashare-pilot automation rules expert list

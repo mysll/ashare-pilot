@@ -1,0 +1,53 @@
+{
+  "schema_version": "intraday_shadow_rule_config.v1",
+  "rule": {
+    "rule_id": "ISR-S001",
+    "version": 1,
+    "name": "温和上涨-VWAP强势-低换手次日冲高观察",
+    "frozen_on": "2026-07-30",
+    "hypothesis": "14:30温和上涨、价格稳定处于VWAP上方且换手不过热的股票，T+1盘中触及相对14:30快照价+1%的概率高于同池基线。",
+    "conditions": [
+      {
+        "field": "change_pct",
+        "min": 0.0,
+        "max": 5.0
+      },
+      {
+        "field": "vwap_gap_pct",
+        "min": 2.0,
+        "max": 6.0
+      },
+      {
+        "field": "close_location",
+        "min": 0.5
+      },
+      {
+        "field": "turnover_pct",
+        "max": 5.0
+      }
+    ]
+  },
+  "label": {
+    "entry": "T日14:30 compute_pool_enriched.price",
+    "primary": "T+1截至14:30最高价相对T日14:30快照价涨幅>=1%",
+    "primary_field": "t_plus_1_high_return_pct",
+    "primary_threshold_pct": 1.0,
+    "secondary_fields": [
+      "t_plus_1_open_return_pct",
+      "t_plus_1_mark_return_pct"
+    ],
+    "assumed_round_trip_cost_bps": 20.0,
+    "mark_warning": "T+1 mark为下一交易日缓存快照，不是正式收盘价；high命中不代表实际成交。"
+  },
+  "data_quality": {
+    "minimum_compute_pool_rows": 100,
+    "minimum_t_plus_1_market_rows": 5000,
+    "minimum_t_plus_1_match_ratio": 0.9
+  },
+  "prospective_gates": {
+    "minimum_prospective_market_days": 10,
+    "minimum_primary_success_rate": 0.75,
+    "minimum_success_rate_lift": 0.1,
+    "minimum_mean_mark_net_return_pct": 0.0
+  }
+}

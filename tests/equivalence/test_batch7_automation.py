@@ -143,13 +143,14 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
     monkeypatch.setattr(intraday, "run_cmd", fake_run)
     with use_workspace(Workspace(tmp_path)):
         assert intraday.main(["--date", "2026-07-22"]) == 0
-    assert len(commands) == 8
+    assert len(commands) == 9
     assert all(command[:3] == [sys.executable, "-m", "ashare_pilot"] for command in commands)
     assert all(".opencode" not in " ".join(command) for command in commands)
     actions = [tuple(command[5:8]) for command in commands]
     assert ("market-data", "breadth", "--json") in actions
     assert ("mapping", "intraday", "build-scan-pool") in actions
     assert ("strategy", "overnight", "score") in actions
+    assert ("review", "intraday", "shadow") in actions
     assert (tmp_path / ".cache" / "intraday" / "2026-07-22").is_dir()
     assert (tmp_path / "intraday" / "2026-07-22").is_dir()
 

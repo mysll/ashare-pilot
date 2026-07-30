@@ -145,6 +145,7 @@ mkdir -p \
   predict \
   intraday \
   operation \
+  research/intraday-shadow \
   logs \
   memory/daily \
   memory/intraday
@@ -161,6 +162,7 @@ $directories = @(
   "predict",
   "intraday",
   "operation",
+  "research/intraday-shadow",
   "logs",
   "memory/daily",
   "memory/intraday"
@@ -177,6 +179,7 @@ $directories | ForEach-Object { New-Item -ItemType Directory -Force $_ | Out-Nul
 | `predict/{date}/` | 盘前新闻、映射、策略和报告 | 日常流水线按日期生成 |
 | `intraday/{date}/` | 盘中 mapper 和隔夜策略 | 盘中流水线按日期生成 |
 | `operation/{date}/` | 盘中操作快照、决策和报告 | 操作指南命令生成 |
+| `research/intraday-shadow/{date}/` | 与正式策略隔离的尾盘影子规则验证合同 | Intraday 流水线非阻断生成，也可手动构建 |
 | `logs/` | 调度器及任务日志 | 调度器自动生成 |
 | `memory/` | 描述骨架，以及 Agent 在运行和复盘中逐步形成的规则、表现与历史 | 初始化命令创建描述文件和空规则模板 |
 
@@ -217,6 +220,26 @@ memory/intraday/
 
 不要复制示例规则，也不要创建占位规则。规则模板没有数据行表示“尚无历史经验”。Agent
 首次运行时依据当日事实、业务合同和 Skills 完成分析，不得声称存在历史验证过的规则。
+
+### 5.2 尾盘影子规则持续验证
+
+影子规则只验证 14:30 特征与精确 T+1 结果，不生成正式推荐，也不会更新
+`memory/INTRADAY_RULES.md`。Intraday 流水线会在正式 Compute/Score 成功后以非阻断方式
+刷新当日合同；手动运行和校验命令为：
+
+```bash
+uv run --frozen ashare-pilot review intraday shadow build \
+  --as-of YYYY-MM-DD --replace
+uv run --frozen ashare-pilot review intraday shadow validate \
+  research/intraday-shadow/YYYY-MM-DD/shadow_rule_validation.json
+```
+
+规则条件和前瞻门槛位于 `config/intraday-shadow-rules.json`。历史期间只算校准证据；
+规则冻结日之后的独立交易日才进入 prospective 统计。修改条件必须增加规则版本并重置
+前瞻证据，合同即使达到 `review_ready` 也不能自动进入生产策略。
+
+日常操作、补跑、复查周期和异常处理见
+[`docs/runbooks/intraday-shadow-rule-operations.md`](docs/runbooks/intraday-shadow-rule-operations.md)。
 
 memory 按真实运行结果自然生长：
 

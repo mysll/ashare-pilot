@@ -1,4 +1,4 @@
-"""CLI registration for daily review commands."""
+"""CLI registration for review and validation commands."""
 
 from __future__ import annotations
 
@@ -15,3 +15,21 @@ def register_cli(subparsers: argparse._SubParsersAction) -> None:
     _leaf(daily, "verify", "Generate verification JSON.", "verify", capability="review", context="daily")
     _leaf(daily, "backtest-entry-band", "Backtest entry bands.", "backtest_entry_band", capability="review", context="daily")
     _leaf(daily, "backtest-entry-quality", "Backtest entry quality.", "backtest_entry_quality", capability="review", context="daily")
+    intraday = _context(contexts, "intraday", "Intraday review and shadow validation.")
+    shadow = _context(intraday, "shadow", "Validation-only shadow rules.")
+    _leaf(
+        shadow,
+        "build",
+        "Build a validation-only shadow-rule contract.",
+        "intraday_shadow_build",
+        capability="review",
+        context="intraday shadow",
+    )
+    _leaf(
+        shadow,
+        "validate",
+        "Validate a shadow-rule contract.",
+        "intraday_shadow_validate",
+        capability="review",
+        context="intraday shadow",
+    )

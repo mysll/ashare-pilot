@@ -387,6 +387,25 @@ def main(argv=None):
     if not results["score"]["success"]:
         return _stop("overnight scoring failed")
 
+    # ── Phase 4.5: Validation-only Shadow Contract ──
+    # This output is deliberately non-blocking and is never consumed by the
+    # mapper or overnight strategy. A shadow failure must not change production
+    # strategy availability.
+    print("\n--- Phase 4.5: Shadow Rule Validation (non-blocking) ---")
+    shadow_cmd = [
+        *cli_command("review", "intraday", "shadow", "build"),
+        "--as-of",
+        args.date,
+        "--replace",
+    ]
+    results["shadow"] = run_cmd(shadow_cmd, "shadow")
+    if not results["shadow"]["success"]:
+        print(
+            "  [shadow] WARNING: validation-only contract was not refreshed; "
+            "production outputs are unaffected.",
+            flush=True,
+        )
+
     total = time.time() - total_start
 
     # ── Summary ──

@@ -1,0 +1,1104 @@
+{
+  "schema_version": "intraday_shadow_rule_validation.v1",
+  "contract_id": "ISR-S001.v1.2026-07-30",
+  "as_of_date": "2026-07-30",
+  "generated_at": "2026-07-30T09:37:02+00:00",
+  "mode": "VALIDATION_ONLY",
+  "integration_boundary": {
+    "strategy_consumption_allowed": false,
+    "formal_rule_update_allowed": false,
+    "recommendation_generation_allowed": false,
+    "order_generation_allowed": false,
+    "allowed_use": "prospective_validation_only"
+  },
+  "rule": {
+    "rule_id": "ISR-S001",
+    "version": 1,
+    "name": "温和上涨-VWAP强势-低换手次日冲高观察",
+    "frozen_on": "2026-07-30",
+    "hypothesis": "14:30温和上涨、价格稳定处于VWAP上方且换手不过热的股票，T+1盘中触及相对14:30快照价+1%的概率高于同池基线。",
+    "conditions": [
+      {
+        "field": "change_pct",
+        "min": 0.0,
+        "max": 5.0
+      },
+      {
+        "field": "vwap_gap_pct",
+        "min": 2.0,
+        "max": 6.0
+      },
+      {
+        "field": "close_location",
+        "min": 0.5
+      },
+      {
+        "field": "turnover_pct",
+        "max": 5.0
+      }
+    ]
+  },
+  "label": {
+    "entry": "T日14:30 compute_pool_enriched.price",
+    "primary": "T+1截至14:30最高价相对T日14:30快照价涨幅>=1%",
+    "primary_field": "t_plus_1_high_return_pct",
+    "primary_threshold_pct": 1.0,
+    "secondary_fields": [
+      "t_plus_1_open_return_pct",
+      "t_plus_1_mark_return_pct"
+    ],
+    "assumed_round_trip_cost_bps": 20.0,
+    "mark_warning": "T+1 mark为下一交易日缓存快照，不是正式收盘价；high命中不代表实际成交。"
+  },
+  "data_quality_policy": {
+    "minimum_compute_pool_rows": 100,
+    "minimum_t_plus_1_market_rows": 5000,
+    "minimum_t_plus_1_match_ratio": 0.9
+  },
+  "dataset": {
+    "since": "2026-07-02",
+    "source_cache": ".cache/intraday/{date}",
+    "pairing_policy": "exact_next_trading_day_only",
+    "pair_summaries": [
+      {
+        "source_date": "2026-07-02",
+        "t_plus_1_date": "2026-07-03",
+        "status": "verified",
+        "eligible_rows": 73,
+        "verified_rows": 73,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-03",
+        "t_plus_1_date": "2026-07-06",
+        "status": "verified",
+        "eligible_rows": 45,
+        "verified_rows": 45,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-06",
+        "t_plus_1_date": "2026-07-07",
+        "status": "verified",
+        "eligible_rows": 80,
+        "verified_rows": 79,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-07",
+        "t_plus_1_date": "2026-07-08",
+        "status": "verified",
+        "eligible_rows": 83,
+        "verified_rows": 83,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "status": "verified",
+        "eligible_rows": 76,
+        "verified_rows": 76,
+        "matched_rows": 13
+      },
+      {
+        "source_date": "2026-07-10",
+        "t_plus_1_date": "2026-07-13",
+        "status": "verified",
+        "eligible_rows": 70,
+        "verified_rows": 70,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-13",
+        "t_plus_1_date": "2026-07-14",
+        "status": "verified",
+        "eligible_rows": 82,
+        "verified_rows": 81,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-15",
+        "t_plus_1_date": "2026-07-16",
+        "status": "verified",
+        "eligible_rows": 71,
+        "verified_rows": 71,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-16",
+        "t_plus_1_date": "2026-07-17",
+        "status": "verified",
+        "eligible_rows": 76,
+        "verified_rows": 76,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-17",
+        "t_plus_1_date": "2026-07-20",
+        "status": "verified",
+        "eligible_rows": 76,
+        "verified_rows": 76,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-20",
+        "t_plus_1_date": "2026-07-21",
+        "status": "verified",
+        "eligible_rows": 82,
+        "verified_rows": 82,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-21",
+        "t_plus_1_date": "2026-07-22",
+        "status": "verified",
+        "eligible_rows": 45,
+        "verified_rows": 45,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-22",
+        "t_plus_1_date": "2026-07-23",
+        "status": "verified",
+        "eligible_rows": 91,
+        "verified_rows": 91,
+        "matched_rows": 0
+      },
+      {
+        "source_date": "2026-07-23",
+        "t_plus_1_date": "2026-07-24",
+        "status": "verified",
+        "eligible_rows": 60,
+        "verified_rows": 52,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-28",
+        "t_plus_1_date": "2026-07-29",
+        "status": "verified",
+        "eligible_rows": 94,
+        "verified_rows": 94,
+        "matched_rows": 1
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "status": "verified",
+        "eligible_rows": 83,
+        "verified_rows": 83,
+        "matched_rows": 8
+      },
+      {
+        "source_date": "2026-07-30",
+        "t_plus_1_date": "2026-07-31",
+        "status": "pending",
+        "eligible_rows": 94,
+        "matched_rows": 1
+      }
+    ],
+    "excluded_pairs": [
+      {
+        "source_date": "2026-07-08",
+        "t_plus_1_date": "2026-07-09",
+        "reason": "t_plus_1_market_cache_too_small",
+        "actual_rows": 999
+      },
+      {
+        "source_date": "2026-07-14",
+        "t_plus_1_date": "2026-07-15",
+        "reason": "t_plus_1_market_cache_too_small",
+        "actual_rows": 3400
+      },
+      {
+        "source_date": "2026-07-24",
+        "t_plus_1_date": "2026-07-27",
+        "reason": "exact_t_plus_1_cache_missing"
+      }
+    ],
+    "baseline_verified_rows": 1177,
+    "matched_verified_rows": 28,
+    "pending_matched_rows": 1
+  },
+  "evidence": {
+    "calibration_warning": "Historical thresholds were selected with visibility into this period; calibration metrics are not out-of-sample evidence.",
+    "phases": {
+      "calibration": {
+        "baseline": {
+          "sample_count": 1177,
+          "market_day_count": 16,
+          "primary_success_count": 793,
+          "primary_success_rate": 0.6737,
+          "market_day_equal_weight_success_rate": 0.6692,
+          "mean_t_plus_1_open_return_pct": -0.97,
+          "mean_t_plus_1_high_return_pct": 3.2669,
+          "mean_t_plus_1_mark_return_pct": -1.6502,
+          "mean_t_plus_1_mark_net_return_pct": -1.8502,
+          "worst_day_equal_weight_mark_return_pct": -6.2698,
+          "daily": [
+            {
+              "source_date": "2026-07-02",
+              "sample_count": 73,
+              "primary_success_rate": 0.6301,
+              "mean_t_plus_1_mark_return_pct": -0.3772
+            },
+            {
+              "source_date": "2026-07-03",
+              "sample_count": 45,
+              "primary_success_rate": 0.5778,
+              "mean_t_plus_1_mark_return_pct": -3.6319
+            },
+            {
+              "source_date": "2026-07-06",
+              "sample_count": 79,
+              "primary_success_rate": 0.6329,
+              "mean_t_plus_1_mark_return_pct": -2.7512
+            },
+            {
+              "source_date": "2026-07-07",
+              "sample_count": 83,
+              "primary_success_rate": 0.6265,
+              "mean_t_plus_1_mark_return_pct": -2.5104
+            },
+            {
+              "source_date": "2026-07-09",
+              "sample_count": 76,
+              "primary_success_rate": 0.9211,
+              "mean_t_plus_1_mark_return_pct": -0.6998
+            },
+            {
+              "source_date": "2026-07-10",
+              "sample_count": 70,
+              "primary_success_rate": 0.5,
+              "mean_t_plus_1_mark_return_pct": -6.2698
+            },
+            {
+              "source_date": "2026-07-13",
+              "sample_count": 81,
+              "primary_success_rate": 0.7531,
+              "mean_t_plus_1_mark_return_pct": 0.0102
+            },
+            {
+              "source_date": "2026-07-15",
+              "sample_count": 71,
+              "primary_success_rate": 0.6056,
+              "mean_t_plus_1_mark_return_pct": -1.7713
+            },
+            {
+              "source_date": "2026-07-16",
+              "sample_count": 76,
+              "primary_success_rate": 0.6184,
+              "mean_t_plus_1_mark_return_pct": -4.7493
+            },
+            {
+              "source_date": "2026-07-17",
+              "sample_count": 76,
+              "primary_success_rate": 0.7632,
+              "mean_t_plus_1_mark_return_pct": -1.31
+            },
+            {
+              "source_date": "2026-07-20",
+              "sample_count": 82,
+              "primary_success_rate": 0.6707,
+              "mean_t_plus_1_mark_return_pct": 1.3866
+            },
+            {
+              "source_date": "2026-07-21",
+              "sample_count": 45,
+              "primary_success_rate": 0.8667,
+              "mean_t_plus_1_mark_return_pct": 0.2474
+            },
+            {
+              "source_date": "2026-07-22",
+              "sample_count": 91,
+              "primary_success_rate": 0.7363,
+              "mean_t_plus_1_mark_return_pct": -0.4662
+            },
+            {
+              "source_date": "2026-07-23",
+              "sample_count": 52,
+              "primary_success_rate": 0.4231,
+              "mean_t_plus_1_mark_return_pct": -3.4537
+            },
+            {
+              "source_date": "2026-07-28",
+              "sample_count": 94,
+              "primary_success_rate": 0.6702,
+              "mean_t_plus_1_mark_return_pct": 0.0516
+            },
+            {
+              "source_date": "2026-07-29",
+              "sample_count": 83,
+              "primary_success_rate": 0.7108,
+              "mean_t_plus_1_mark_return_pct": -1.8761
+            }
+          ]
+        },
+        "rule": {
+          "sample_count": 28,
+          "market_day_count": 9,
+          "primary_success_count": 23,
+          "primary_success_rate": 0.8214,
+          "market_day_equal_weight_success_rate": 0.9359,
+          "mean_t_plus_1_open_return_pct": -0.3462,
+          "mean_t_plus_1_high_return_pct": 4.0166,
+          "mean_t_plus_1_mark_return_pct": -0.3617,
+          "mean_t_plus_1_mark_net_return_pct": -0.5617,
+          "worst_day_equal_weight_mark_return_pct": -3.3213,
+          "daily": [
+            {
+              "source_date": "2026-07-09",
+              "sample_count": 13,
+              "primary_success_rate": 0.9231,
+              "mean_t_plus_1_mark_return_pct": -0.5414
+            },
+            {
+              "source_date": "2026-07-13",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 8.9311
+            },
+            {
+              "source_date": "2026-07-15",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 0.0
+            },
+            {
+              "source_date": "2026-07-16",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": -3.3213
+            },
+            {
+              "source_date": "2026-07-17",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 3.7892
+            },
+            {
+              "source_date": "2026-07-21",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 5.404
+            },
+            {
+              "source_date": "2026-07-23",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 0.5164
+            },
+            {
+              "source_date": "2026-07-28",
+              "sample_count": 1,
+              "primary_success_rate": 1.0,
+              "mean_t_plus_1_mark_return_pct": 3.3582
+            },
+            {
+              "source_date": "2026-07-29",
+              "sample_count": 8,
+              "primary_success_rate": 0.5,
+              "mean_t_plus_1_mark_return_pct": -2.7209
+            }
+          ]
+        },
+        "lift": {
+          "primary_success_rate": 0.1477,
+          "market_day_equal_weight_success_rate": 0.2667,
+          "mean_t_plus_1_mark_net_return_pct": 1.2885
+        }
+      },
+      "prospective": {
+        "baseline": {
+          "sample_count": 0,
+          "market_day_count": 0,
+          "primary_success_count": 0,
+          "primary_success_rate": null,
+          "market_day_equal_weight_success_rate": null,
+          "mean_t_plus_1_open_return_pct": null,
+          "mean_t_plus_1_high_return_pct": null,
+          "mean_t_plus_1_mark_return_pct": null,
+          "mean_t_plus_1_mark_net_return_pct": null,
+          "worst_day_equal_weight_mark_return_pct": null,
+          "daily": []
+        },
+        "rule": {
+          "sample_count": 0,
+          "market_day_count": 0,
+          "primary_success_count": 0,
+          "primary_success_rate": null,
+          "market_day_equal_weight_success_rate": null,
+          "mean_t_plus_1_open_return_pct": null,
+          "mean_t_plus_1_high_return_pct": null,
+          "mean_t_plus_1_mark_return_pct": null,
+          "mean_t_plus_1_mark_net_return_pct": null,
+          "worst_day_equal_weight_mark_return_pct": null,
+          "daily": []
+        },
+        "lift": {
+          "primary_success_rate": null,
+          "market_day_equal_weight_success_rate": null,
+          "mean_t_plus_1_mark_net_return_pct": null
+        }
+      }
+    },
+    "verified_matches": [
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sz300857",
+        "name": "协创数据",
+        "features": {
+          "entry_price": 292.15,
+          "market_up_ratio": 38.83,
+          "change_pct": 3.97,
+          "vwap_gap_pct": 3.1968,
+          "close_location": 0.8901,
+          "turnover_pct": 3.81
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.0753,
+          "t_plus_1_high_return_pct": 5.9901,
+          "t_plus_1_mark_return_pct": -3.5906,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sz300408",
+        "name": "三环集团",
+        "features": {
+          "entry_price": 133.56,
+          "market_up_ratio": 38.83,
+          "change_pct": 2.4,
+          "vwap_gap_pct": 3.1869,
+          "close_location": 0.914,
+          "turnover_pct": 3.95
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 1.9093,
+          "t_plus_1_high_return_pct": 8.1836,
+          "t_plus_1_mark_return_pct": -3.1372,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sz002475",
+        "name": "立讯精密",
+        "features": {
+          "entry_price": 64.12,
+          "market_up_ratio": 38.83,
+          "change_pct": 2.64,
+          "vwap_gap_pct": 3.0686,
+          "close_location": 0.9485,
+          "turnover_pct": 2.27
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.4055,
+          "t_plus_1_high_return_pct": 2.4017,
+          "t_plus_1_mark_return_pct": -1.8715,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sz300750",
+        "name": "宁德时代",
+        "features": {
+          "entry_price": 374.5,
+          "market_up_ratio": 38.83,
+          "change_pct": 3.74,
+          "vwap_gap_pct": 2.0976,
+          "close_location": 1.0,
+          "turnover_pct": 0.77
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.1335,
+          "t_plus_1_high_return_pct": 0.1869,
+          "t_plus_1_mark_return_pct": -6.8999,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": false
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh601138",
+        "name": "工业富联",
+        "features": {
+          "entry_price": 69.24,
+          "market_up_ratio": 38.83,
+          "change_pct": 4.89,
+          "vwap_gap_pct": 2.5945,
+          "close_location": 0.968,
+          "turnover_pct": 0.76
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 2.5419,
+          "t_plus_1_high_return_pct": 2.5419,
+          "t_plus_1_mark_return_pct": -3.3795,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600343",
+        "name": "航天动力",
+        "features": {
+          "entry_price": 24.61,
+          "market_up_ratio": 38.83,
+          "change_pct": 4.01,
+          "vwap_gap_pct": 2.4307,
+          "close_location": 0.9301,
+          "turnover_pct": 4.51
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 1.9911,
+          "t_plus_1_high_return_pct": 12.6371,
+          "t_plus_1_mark_return_pct": 12.6371,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600459",
+        "name": "贵研铂业",
+        "features": {
+          "entry_price": 21.76,
+          "market_up_ratio": 38.83,
+          "change_pct": 2.26,
+          "vwap_gap_pct": 2.8647,
+          "close_location": 0.9252,
+          "turnover_pct": 4.29
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.1838,
+          "t_plus_1_high_return_pct": 6.3419,
+          "t_plus_1_mark_return_pct": -0.4136,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600184",
+        "name": "光电股份",
+        "features": {
+          "entry_price": 22.33,
+          "market_up_ratio": 38.83,
+          "change_pct": 4.88,
+          "vwap_gap_pct": 3.3174,
+          "close_location": 0.9529,
+          "turnover_pct": 4.24
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.1343,
+          "t_plus_1_high_return_pct": 4.0752,
+          "t_plus_1_mark_return_pct": -0.4926,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600531",
+        "name": "XD豫光金",
+        "features": {
+          "entry_price": 13.21,
+          "market_up_ratio": 38.83,
+          "change_pct": 2.33,
+          "vwap_gap_pct": 2.1892,
+          "close_location": 0.9103,
+          "turnover_pct": 4.02
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 2.0439,
+          "t_plus_1_high_return_pct": 7.57,
+          "t_plus_1_mark_return_pct": 2.4981,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600162",
+        "name": "香江控股",
+        "features": {
+          "entry_price": 2.38,
+          "market_up_ratio": 38.83,
+          "change_pct": 3.93,
+          "vwap_gap_pct": 2.0583,
+          "close_location": 0.8125,
+          "turnover_pct": 3.84
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.4202,
+          "t_plus_1_high_return_pct": 5.4622,
+          "t_plus_1_mark_return_pct": 2.521,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600171",
+        "name": "上海贝岭",
+        "features": {
+          "entry_price": 29.3,
+          "market_up_ratio": 38.83,
+          "change_pct": 4.64,
+          "vwap_gap_pct": 2.7529,
+          "close_location": 0.9489,
+          "turnover_pct": 3.79
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.273,
+          "t_plus_1_high_return_pct": 1.6382,
+          "t_plus_1_mark_return_pct": -2.116,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600114",
+        "name": "东睦股份",
+        "features": {
+          "entry_price": 33.75,
+          "market_up_ratio": 38.83,
+          "change_pct": 3.06,
+          "vwap_gap_pct": 2.9528,
+          "close_location": 0.9737,
+          "turnover_pct": 3.1
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 1.6296,
+          "t_plus_1_high_return_pct": 2.3704,
+          "t_plus_1_mark_return_pct": -2.4889,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-09",
+        "t_plus_1_date": "2026-07-10",
+        "phase": "calibration",
+        "code": "sh600500",
+        "name": "中化国际",
+        "features": {
+          "entry_price": 6.56,
+          "market_up_ratio": 38.83,
+          "change_pct": 2.66,
+          "vwap_gap_pct": 4.127,
+          "close_location": 0.9615,
+          "turnover_pct": 3.05
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.3049,
+          "t_plus_1_high_return_pct": 6.0976,
+          "t_plus_1_mark_return_pct": -0.3049,
+          "t_plus_1_mark_timestamp": "2026-07-10 14:31:22",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-13",
+        "t_plus_1_date": "2026-07-14",
+        "phase": "calibration",
+        "code": "sh603201",
+        "name": "常润股份",
+        "features": {
+          "entry_price": 14.22,
+          "market_up_ratio": 13.4,
+          "change_pct": 4.25,
+          "vwap_gap_pct": 2.6344,
+          "close_location": 0.773,
+          "turnover_pct": 3.55
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.8439,
+          "t_plus_1_high_return_pct": 9.6343,
+          "t_plus_1_mark_return_pct": 8.9311,
+          "t_plus_1_mark_timestamp": "2026-07-14 14:31:32",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-15",
+        "t_plus_1_date": "2026-07-16",
+        "phase": "calibration",
+        "code": "sh600180",
+        "name": "*ST瑞茂",
+        "features": {
+          "entry_price": 1.64,
+          "market_up_ratio": 57.52,
+          "change_pct": 4.46,
+          "vwap_gap_pct": 4.5918,
+          "close_location": 0.8235,
+          "turnover_pct": 4.25
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -1.8293,
+          "t_plus_1_high_return_pct": 7.3171,
+          "t_plus_1_mark_return_pct": 0.0,
+          "t_plus_1_mark_timestamp": "2026-07-16 14:31:38",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-16",
+        "t_plus_1_date": "2026-07-17",
+        "phase": "calibration",
+        "code": "sz002466",
+        "name": "天齐锂业",
+        "features": {
+          "entry_price": 49.68,
+          "market_up_ratio": 43.92,
+          "change_pct": 4.74,
+          "vwap_gap_pct": 4.2865,
+          "close_location": 0.777,
+          "turnover_pct": 4.98
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -2.4758,
+          "t_plus_1_high_return_pct": 1.087,
+          "t_plus_1_mark_return_pct": -3.3213,
+          "t_plus_1_mark_timestamp": "2026-07-17 14:31:31",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-17",
+        "t_plus_1_date": "2026-07-20",
+        "phase": "calibration",
+        "code": "sh603373",
+        "name": "安邦护卫",
+        "features": {
+          "entry_price": 33.78,
+          "market_up_ratio": 11.61,
+          "change_pct": 3.75,
+          "vwap_gap_pct": 2.1037,
+          "close_location": 0.7517,
+          "turnover_pct": 4.52
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -2.4275,
+          "t_plus_1_high_return_pct": 7.312,
+          "t_plus_1_mark_return_pct": 3.7892,
+          "t_plus_1_mark_timestamp": "2026-07-20 14:31:15",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-21",
+        "t_plus_1_date": "2026-07-22",
+        "phase": "calibration",
+        "code": "sh603993",
+        "name": "洛阳钼业",
+        "features": {
+          "entry_price": 18.69,
+          "market_up_ratio": 48.9,
+          "change_pct": 3.89,
+          "vwap_gap_pct": 2.484,
+          "close_location": 0.8641,
+          "turnover_pct": 1.7
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 1.6586,
+          "t_plus_1_high_return_pct": 8.7747,
+          "t_plus_1_mark_return_pct": 5.404,
+          "t_plus_1_mark_timestamp": "2026-07-22 14:31:13",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-23",
+        "t_plus_1_date": "2026-07-24",
+        "phase": "calibration",
+        "code": "sz300750",
+        "name": "宁德时代",
+        "features": {
+          "entry_price": 385.36,
+          "market_up_ratio": 73.96,
+          "change_pct": 3.52,
+          "vwap_gap_pct": 2.0448,
+          "close_location": 0.9714,
+          "turnover_pct": 0.73
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.5657,
+          "t_plus_1_high_return_pct": 1.4272,
+          "t_plus_1_mark_return_pct": 0.5164,
+          "t_plus_1_mark_timestamp": "2026-07-24 14:31:43",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-28",
+        "t_plus_1_date": "2026-07-29",
+        "phase": "calibration",
+        "code": "sz300477",
+        "name": "ST合纵",
+        "features": {
+          "entry_price": 2.68,
+          "market_up_ratio": 42.13,
+          "change_pct": 2.67,
+          "vwap_gap_pct": 2.3682,
+          "close_location": 0.7391,
+          "turnover_pct": 4.97
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -1.1194,
+          "t_plus_1_high_return_pct": 5.9701,
+          "t_plus_1_mark_return_pct": 3.3582,
+          "t_plus_1_mark_timestamp": "2026-07-29 14:32:10",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz300502",
+        "name": "新易盛",
+        "features": {
+          "entry_price": 421.97,
+          "market_up_ratio": 73.69,
+          "change_pct": 3.71,
+          "vwap_gap_pct": 2.0439,
+          "close_location": 0.797,
+          "turnover_pct": 4.87
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -2.7869,
+          "t_plus_1_high_return_pct": -1.884,
+          "t_plus_1_mark_return_pct": -8.1878,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": false
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz300308",
+        "name": "中际旭创",
+        "features": {
+          "entry_price": 948.89,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.41,
+          "vwap_gap_pct": 2.3914,
+          "close_location": 0.7866,
+          "turnover_pct": 3.95
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -3.1489,
+          "t_plus_1_high_return_pct": -1.6746,
+          "t_plus_1_mark_return_pct": -4.3114,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": false
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz300037",
+        "name": "新宙邦",
+        "features": {
+          "entry_price": 61.63,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.95,
+          "vwap_gap_pct": 2.355,
+          "close_location": 0.8028,
+          "turnover_pct": 4.83
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.1298,
+          "t_plus_1_high_return_pct": 1.3143,
+          "t_plus_1_mark_return_pct": 0.2921,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz300383",
+        "name": "光环新网",
+        "features": {
+          "entry_price": 13.23,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.75,
+          "vwap_gap_pct": 3.3594,
+          "close_location": 0.9528,
+          "turnover_pct": 4.74
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.9826,
+          "t_plus_1_high_return_pct": 0.907,
+          "t_plus_1_mark_return_pct": -0.4535,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": false
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sh603067",
+        "name": "振华股份",
+        "features": {
+          "entry_price": 31.53,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.75,
+          "vwap_gap_pct": 2.5499,
+          "close_location": 0.7799,
+          "turnover_pct": 4.66
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -4.8208,
+          "t_plus_1_high_return_pct": -1.4589,
+          "t_plus_1_mark_return_pct": -10.2125,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": false
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz002611",
+        "name": "东方精工",
+        "features": {
+          "entry_price": 15.88,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.89,
+          "vwap_gap_pct": 2.3592,
+          "close_location": 1.0,
+          "turnover_pct": 4.25
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -1.0076,
+          "t_plus_1_high_return_pct": 1.3224,
+          "t_plus_1_mark_return_pct": 0.3149,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sh603519",
+        "name": "立霸股份",
+        "features": {
+          "entry_price": 14.69,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.33,
+          "vwap_gap_pct": 3.0299,
+          "close_location": 0.808,
+          "turnover_pct": 3.84
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": 0.7488,
+          "t_plus_1_high_return_pct": 5.8543,
+          "t_plus_1_mark_return_pct": 0.1361,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": true
+        }
+      },
+      {
+        "source_date": "2026-07-29",
+        "t_plus_1_date": "2026-07-30",
+        "phase": "calibration",
+        "code": "sz002125",
+        "name": "湘潭电化",
+        "features": {
+          "entry_price": 12.22,
+          "market_up_ratio": 73.69,
+          "change_pct": 4.08,
+          "vwap_gap_pct": 2.0204,
+          "close_location": 0.8659,
+          "turnover_pct": 3.81
+        },
+        "outcome": {
+          "t_plus_1_open_return_pct": -0.9002,
+          "t_plus_1_high_return_pct": 1.0638,
+          "t_plus_1_mark_return_pct": 0.6547,
+          "t_plus_1_mark_timestamp": "2026-07-30 14:31:23",
+          "primary_success": true
+        }
+      }
+    ],
+    "pending_matches": [
+      {
+        "source_date": "2026-07-30",
+        "expected_t_plus_1_date": "2026-07-31",
+        "code": "sh603859",
+        "name": "能科科技",
+        "features": {
+          "entry_price": 37.64,
+          "market_up_ratio": 36.45,
+          "change_pct": 4.56,
+          "vwap_gap_pct": 2.5529,
+          "close_location": 0.8735,
+          "turnover_pct": 4.3
+        }
+      }
+    ]
+  },
+  "prospective_review": {
+    "evidence_status": "awaiting_prospective_evidence",
+    "automatic_promotion_allowed": false,
+    "gates": {
+      "minimum_prospective_market_days": 10,
+      "minimum_primary_success_rate": 0.75,
+      "minimum_success_rate_lift": 0.1,
+      "minimum_mean_mark_net_return_pct": 0.0
+    },
+    "gate_results": [
+      {
+        "name": "minimum_prospective_market_days",
+        "actual": 0,
+        "required": 10,
+        "passed": false
+      }
+    ]
+  },
+  "iteration_policy": {
+    "append_only_snapshots": true,
+    "rule_changes_require_new_version": true,
+    "condition_changes_reset_prospective_evidence": true,
+    "minimum_review_frequency": "every_5_new_prospective_market_days",
+    "next_action": "Continue collecting exact T+1 snapshots; do not modify the production strategy or learned-rule files."
+  }
+}

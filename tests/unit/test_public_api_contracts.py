@@ -31,7 +31,10 @@ PUBLIC_CONTRACTS = {
         "build_operation_decision", "build_stock_snapshot",
         "validate_operation_decision", "render_operation_guide",
     },
-    "review": {"build_verification", "load_rows", "summarize", "parse_file", "metrics"},
+    "review": {
+        "build_intraday_shadow_contract", "build_verification", "load_rows",
+        "summarize", "parse_file", "metrics", "validate_intraday_shadow_contract",
+    },
     "automation": {"check_rule_governance", "initialize_memory", "load_scheduler_config", "run_intraday_pipeline"},
 }
 

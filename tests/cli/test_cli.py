@@ -144,6 +144,8 @@ def test_removed_daily_theme_commands_are_not_public(
         ["review", "daily", "verify"],
         ["review", "daily", "backtest-entry-band"],
         ["review", "daily", "backtest-entry-quality"],
+        ["review", "intraday", "shadow", "build"],
+        ["review", "intraday", "shadow", "validate"],
         ["automation", "rules", "check"],
         ["automation", "rules", "expert"],
         ["automation", "memory", "init"],

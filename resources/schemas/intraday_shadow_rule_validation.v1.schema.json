@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "intraday_shadow_rule_validation.v1",
+  "title": "Intraday Shadow Rule Validation",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "contract_id",
+    "as_of_date",
+    "generated_at",
+    "mode",
+    "integration_boundary",
+    "rule",
+    "label",
+    "dataset",
+    "evidence",
+    "prospective_review",
+    "iteration_policy"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "intraday_shadow_rule_validation.v1"
+    },
+    "mode": {
+      "const": "VALIDATION_ONLY"
+    },
+    "integration_boundary": {
+      "type": "object",
+      "required": [
+        "strategy_consumption_allowed",
+        "formal_rule_update_allowed",
+        "recommendation_generation_allowed",
+        "order_generation_allowed"
+      ],
+      "properties": {
+        "strategy_consumption_allowed": {
+          "const": false
+        },
+        "formal_rule_update_allowed": {
+          "const": false
+        },
+        "recommendation_generation_allowed": {
+          "const": false
+        },
+        "order_generation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": [
+        "rule_id",
+        "version",
+        "frozen_on",
+        "conditions"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "required": [
+        "calibration_warning",
+        "phases",
+        "verified_matches",
+        "pending_matches"
+      ]
+    },
+    "prospective_review": {
+      "type": "object",
+      "required": [
+        "evidence_status",
+        "automatic_promotion_allowed",
+        "gates",
+        "gate_results"
+      ],
+      "properties": {
+        "automatic_promotion_allowed": {
+          "const": false
+        }
+      }
+    }
+  }
+}
