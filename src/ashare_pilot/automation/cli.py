@@ -14,6 +14,14 @@ def register_cli(subparsers: argparse._SubParsersAction) -> None:
 
     rules = _context(contexts, "rules", "Rule-governance checks.")
     _leaf(rules, "check", "Check the rule-governance contract.", "rules_check", capability="automation", context="rules")
+    _leaf(
+        rules,
+        "expert",
+        "Manage directly authorized expert rules.",
+        "expert_rules",
+        capability="automation",
+        context="rules",
+    )
 
     memory = _context(contexts, "memory", "Zero-history memory lifecycle.")
     _leaf(memory, "init", "Initialize memory files and empty rule templates.", "memory_init", capability="automation", context="memory")

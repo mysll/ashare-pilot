@@ -167,10 +167,13 @@ def test_observation_execution_field_is_rejected():
 def test_theme_shadow_is_rendered_but_rank_tier_is_hidden_from_html():
     mapper = actionable_mapper()
     strategy = build(mapper)
+    strategy["recommendations"][0]["rules_applied"].append("E002")
 
     rendered = render(strategy, mapper)
 
     assert "Theme Shadow" in rendered
+    assert "专家规则" in rendered
+    assert "E002" in rendered
     assert "Rank Tier" not in rendered
     assert "rank tier" not in rendered
     assert "rank_tier" not in rendered

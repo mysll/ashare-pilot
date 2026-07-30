@@ -151,7 +151,7 @@ input reads, draft generation, validation repair, finalize, and timing.
 |-------|------|-------|-------|--------|-------------------|
 | Perception | 1 | sector-analyst + daily-theme-extraction | — | news.json + news.md + themes.json | Step 1 subagent owns fetch and all validation |
 | Perception | 2 | equity-analyst + daily-stock-mapping V5 | validated news.json + themes.json | prepare -> mapper.annotations.json -> finalize -> mapper.strategy_view.json | **No Direction / RiskSeverity** (Invariant 1) |
-| Reasoning | 3 | portfolio-manager + daily-strategy V5 | compact all-candidate input + RULES/SHARED_RULES | selected-only draft -> strategy.json + daily_report.html | Final decisions remain LLM-owned; Python completes deterministic contracts |
+| Reasoning | 3 | portfolio-manager + daily-strategy V5 | compact all-candidate input + RULES/SHARED_RULES + applicable EXPERT_RULES | selected-only draft -> strategy.json + daily_report.html | Final decisions remain LLM-owned; Python completes deterministic contracts |
 
 Phase 3 is a black-box `portfolio-manager` dispatch. Its `daily-strategy` leaf
 skill owns prepare → compact draft → finalize; full source JSON remains outside

@@ -41,7 +41,7 @@ LLM 不得输出以下 Python-owned 字段：
   "anchor": "MA5|MA10|MA20|OPEN|VWAP|首根5min|FLEX|无|—",
   "position_tier": "WATCH_ONLY|LIGHT|STANDARD",
   "entry_setup": "LIMIT_UP_CONT|MOMENTUM|FIRST_BAR_OR_PULLBACK|PULLBACK|DEFENSIVE|WATCH_ONLY",
-  "rules_applied": ["Rxx"],
+  "rules_applied": ["Rxx", "E001"],
   "reasoning": {
     "source_basis": "真实主题/role/news依据",
     "direction_path": "最终 Direction 链路",

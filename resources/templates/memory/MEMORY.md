@@ -13,6 +13,7 @@ memory/
 ├── RULES.md                早盘规则；初始化为空模板
 ├── INTRADAY_RULES.md       尾盘/T+1 规则；初始化为空模板
 ├── SHARED_RULES.md         跨时段规则；初始化为空模板
+├── EXPERT_RULES.md         专家直接授权规则；初始化为空规则集
 ├── daily/
 │   ├── INDEX.md            早盘复盘索引
 │   └── YYYY-MM-DD/
@@ -26,7 +27,8 @@ memory/
 
 ## 零历史语义
 
-- 三个规则文件只有模板结构、没有规则行，表示对应作用域尚无已学习规则。
+- 三个 learned-rule 文件只有模板结构、没有规则行，表示对应作用域尚无已学习规则。
+- `EXPERT_RULES.md` 的空规则集表示尚无专家直接授权规则。
 - 不得创建占位规则、复制示例策略或声称存在历史验证。
 - 第一份记忆来自真实交易日的 verification，而不是初始化过程。
 - 单日发现只能记录为候选，不能直接成为可执行规则。
@@ -43,7 +45,7 @@ memory/
 
 - 按日期：`daily/YYYY-MM-DD/` 或 `intraday/YYYY-MM-DD/`
 - 按表现：`PERFORMANCE.md`
-- 按规则：`RULES.md`、`INTRADAY_RULES.md`、`SHARED_RULES.md`
+- 按规则：`RULES.md`、`INTRADAY_RULES.md`、`SHARED_RULES.md`、`EXPERT_RULES.md`
 - 按生命周期：`RULE_GOVERNANCE.md`
 
 ## 维护原则
@@ -52,3 +54,4 @@ memory/
 - 缺少样本不能算正向验证。
 - 不覆盖旧 verification；修订应保留审计说明。
 - 已有 memory 属于用户运行状态，初始化命令只能补缺失文件，不能覆盖。
+- 专家规则只能通过 `$manage-expert-rules` 或 `automation rules expert` 维护。

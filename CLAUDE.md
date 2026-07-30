@@ -53,6 +53,7 @@ memory/intraday/{date}/  Intraday verification (intraday_verification.md)
 memory/RULES.md          Learned morning rules; an empty template in a zero-history project
 memory/INTRADAY_RULES.md Learned intraday rules; an empty template in a zero-history project
 memory/SHARED_RULES.md   Learned shared rules; an empty template in a zero-history project
+memory/EXPERT_RULES.md   Expert-authorized Daily/Overnight rules; initialized empty
 memory/RULE_GOVERNANCE.md Initialized lifecycle/evidence policy; contains no strategy rules
 memory/PERFORMANCE.md    Initialized zero-sample ledger; updated from actual reviews
 memory/MEMORY.md         Initialized memory navigation and write-path description
@@ -64,9 +65,9 @@ data/theme-library/      Authoritative persistent theme data
 
 ## Two-Agent System
 
-**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Generates `predict/{date}/strategy.json` (HTML report optional).
+**Morning Agent (9:20 weekdays):** Reads `RULES.md` + `SHARED_RULES.md` plus applicable `EXPERT_RULES.md`; zero-history templates contain no rule rows. Generates `predict/{date}/strategy.json` (HTML report optional).
 
-**Intraday Agent (14:30 weekdays):** Orchestrates skill `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical outputs: `intraday/{date}/intraday_mapper.json` + `overnight_strategy.json`; human board: `overnight_strategy.html`. JSON is the only inter-step contract.
+**Intraday Agent (14:30 weekdays):** Orchestrates skill `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md` plus applicable `EXPERT_RULES.md`; zero-history templates contain no rule rows. Canonical outputs: `intraday/{date}/intraday_mapper.json` + `overnight_strategy.json`; human board: `overnight_strategy.html`. JSON is the only inter-step contract.
 
 Both agents write verification after market close: Morning → `memory/daily/{date}/verification.md`, Intraday → `memory/intraday/{date}/intraday_verification.md`. Rules are versioned with verification history.
 
@@ -124,7 +125,7 @@ uv run --frozen ashare-pilot themes library build         # 3. Build index files
 
 ## Memory & Rules System
 
-Initialize a new project with `uv run --frozen ashare-pilot automation memory init`. This creates navigation, zero-sample performance, governance, empty rule templates, and empty indexes, and never overwrites existing memory. Empty rule tables mean no learned rules and must not be filled with invented history. Before generating morning strategy, read `memory/RULES.md` + `memory/SHARED_RULES.md`. Before generating overnight strategy, read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, and Intraday writes to `memory/intraday/{date}/intraday_verification.md`. `memory/RULE_GOVERNANCE.md` MUST be read before changing any rule lifecycle; single-day discoveries are never executable rules.
+Initialize a new project with `uv run --frozen ashare-pilot automation memory init`. This creates navigation, zero-sample performance, governance, empty learned-rule templates, an empty `EXPERT_RULES.md`, and empty indexes, and never overwrites existing memory. Empty rule tables mean no learned rules and must not be filled with invented history. Before generating morning strategy, read applicable learned and Expert Rules. Expert Rules are maintained through `$manage-expert-rules` or the trusted CLI bypass and do not apply to Operation Guide. After market close, Morning writes to `memory/daily/{date}/verification.md`, and Intraday writes to `memory/intraday/{date}/intraday_verification.md`. `memory/RULE_GOVERNANCE.md` MUST be read before changing any learned-rule lifecycle; single-day discoveries are never executable learned rules.
 
 ## Automation
 

@@ -131,6 +131,21 @@ def plan_of(item: dict[str, Any]) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
 
 
+def expert_rule_text(item: dict[str, Any]) -> str:
+    rules = item.get("rules_applied")
+    if not isinstance(rules, list):
+        return "—"
+    expert_ids = [
+        value
+        for value in rules
+        if isinstance(value, str)
+        and value.startswith("E")
+        and value[1:].isdigit()
+        and len(value[1:]) >= 3
+    ]
+    return " / ".join(expert_ids) or "—"
+
+
 def shadow_text(item: dict[str, Any]) -> str:
     shadow = item.get("theme_support_shadow")
     if not isinstance(shadow, dict) or shadow.get("available") is not True:
@@ -273,6 +288,7 @@ def execution_cards(items: list[dict[str, Any]]) -> str:
                 <div><dt>止损纪律</dt><dd>{esc(plan.get('stop_loss'))}</dd></div>
                 <div><dt>止盈计划</dt><dd>{esc(plan.get('take_profit'))}</dd></div>
                 <div><dt>Theme Shadow</dt><dd>{esc(shadow_text(item))}</dd></div>
+                <div><dt>专家规则</dt><dd>{esc(expert_rule_text(item))}</dd></div>
               </dl>
               <footer><b>核心理由</b><span>{esc(item.get('key_reason'))}</span></footer>
             </article>"""
@@ -312,13 +328,15 @@ def watch_group(item: dict[str, Any]) -> tuple[str, str]:
 
 
 def watch_reason(item: dict[str, Any]) -> str:
-    return str(
+    reason = str(
         item.get("execution_condition")
         or item.get("observation_summary")
         or item.get("key_reason")
         or item.get("primary_observation_reason")
         or "等待条件确认"
     )
+    rules = expert_rule_text(item)
+    return reason if rules == "—" else f"{reason} · 专家规则 {rules}"
 
 
 def watch_groups(items: list[dict[str, Any]]) -> str:

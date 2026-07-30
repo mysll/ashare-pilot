@@ -1,0 +1,4 @@
+interface:
+  display_name: "管理专家规则"
+  short_description: "Safely interview, validate, add, and remove Expert Rules"
+  default_prompt: "Use $manage-expert-rules to clarify and safely add or remove an expert trading rule."

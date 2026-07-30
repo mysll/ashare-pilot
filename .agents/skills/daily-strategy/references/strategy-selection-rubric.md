@@ -1,6 +1,10 @@
 # Step 3 Selection Rubric
 
-只读取当日 `.strategy_llm_input.json`、本 rubric、输出合同，以及实际存在的 `memory/RULES.md` 与 `memory/SHARED_RULES.md`。零历史项目中 memory 文件缺失表示没有已学习规则，不得创建占位内容。不得打开完整 mapper、pool、news 或 Markdown 报告。
+只读取当日 `.strategy_llm_input.json`、本 rubric、输出合同，以及实际存在的
+`memory/RULES.md`、`memory/SHARED_RULES.md` 与
+`memory/EXPERT_RULES.md`。零历史项目中 learned-rule 文件缺失表示没有已学习
+规则，专家规则文件缺失表示没有专家规则；不得创建占位内容。不得打开完整
+mapper、pool、news 或 Markdown 报告。
 
 ## 1. 全候选浅扫描
 
@@ -28,11 +32,18 @@
 1. 从 composite advisory 得到 Direction 起点：`>=70 看多`、`55-69 偏多`、`45-54 中性`、`<45 看空`。
 2. 检查 confidence exceptions、Pattern、major event 和 anomaly；有条件新闻时只使用顶层 `news_evidence` 对应项。
 3. 对每个 risk_type 独立判断 severity，取最大值；非 strong-sector 下 severity 3 将 Direction 上限压到偏多。severity 只写进 `reasoning.risk`，不要新增字段。
-4. 阅读完整 RULES/SHARED_RULES，匹配规则并写 `rules_applied`；规则 override 必须有可追溯理由。
+4. 阅读完整 RULES/SHARED_RULES，并从 EXPERT_RULES 中只选择
+   `applies_to` 包含 `DAILY_STRATEGY` 的规则。按决策层级处理冲突，同层专家规则
+   优先于 learned rule；只把实际命中的 ID 写入 `rules_applied`，override
+   必须有可追溯理由。
 5. 确定 rating、entry profile、anchor、position tier 与 entry setup；标准
    trigger/no-buy、pre-open 与 T+1 plan 由 Python 生成。
 6. 对 Python `profile_base` 只提交必要的白名单 `profile_overrides`；执行
    计划确有例外时才提交稀疏 `plan_overrides`，每项必须说明理由。
+
+专家规则若改变全局 regime，在 `market.notes` 中写命中的 `E` ID；若直接排除
+候选，在 `exclusion_overrides[].reason` 中写命中的 `E` ID。不要为未命中规则
+留下记录。
 
 ## 4. 证据边界
 

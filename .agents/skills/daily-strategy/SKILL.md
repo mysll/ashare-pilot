@@ -35,6 +35,7 @@ portfolio-manager 的热阶段只读取：
 - `.agents/skills/daily-strategy/references/strategy-output-contract.md`
 - `memory/RULES.md`（存在时）
 - `memory/SHARED_RULES.md`（存在时）
+- `memory/EXPERT_RULES.md`（存在时；只读取 `DAILY_STRATEGY`）
 
 紧凑输入 `strategy_llm_input.tmp.v3` 必须按当前结构读取：
 
@@ -51,8 +52,14 @@ portfolio-manager 的热阶段只读取：
 
 禁止通过临时脚本猜测或展开结构。
 
-零历史项目中缺少这两个文件表示尚无已学习规则；继续基于当日合同推理，不得预先生成或
-虚构历史规则。
+零历史项目中缺少 learned-rule 文件表示尚无已学习规则；缺少
+`EXPERT_RULES.md` 表示尚无专家规则。继续基于当日合同推理，不得预先生成或
+虚构规则。
+
+专家规则存在即生效，不进入 learned-rule 生命周期。同一决策层级内专家规则
+优先于 learned rule，但不得越级绕过数据质量、交易可行性或硬风控。只把实际
+命中的 `E` 系列 ID 写入 `rules_applied`；未命中的专家规则不记录。策略生成
+期间不得新增或删除专家规则。
 
 按 rubric 扫描全部候选，只对最终入选股做深推理，并写：
 

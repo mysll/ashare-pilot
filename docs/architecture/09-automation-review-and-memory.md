@@ -75,6 +75,7 @@ memory/
 ├── RULES.md
 ├── INTRADAY_RULES.md
 ├── SHARED_RULES.md
+├── EXPERT_RULES.md
 ├── daily/INDEX.md
 ├── daily/{date}/...
 ├── intraday/INDEX.md
@@ -84,6 +85,7 @@ memory/
 - `RULES.md`：日线规则；
 - `INTRADAY_RULES.md`：隔夜规则；
 - `SHARED_RULES.md`：跨流程规则；
+- `EXPERT_RULES.md`：专家直接授权、立即生效的 Daily/Overnight 自然语言规则；
 - `PERFORMANCE.md`：真实样本累计表现；
 - 两个 INDEX：复盘导航。
 
@@ -96,6 +98,10 @@ uv run --frozen ashare-pilot automation rules check
 
 初始化幂等，只补缺失模板，不覆盖已有 memory。空规则表表示没有已学习规则，不是
 异常；不得填充示例规则、虚构胜率或占位历史。
+
+专家规则由 `$manage-expert-rules` 访谈和能力检查后通过 CLI 写入；直接 CLI
+是绕过语义检查的可信旁路。它们不进入 learned-rule 生命周期、不统计有效性，也
+不作用于 Operation Guide。
 
 ## 7. 规则治理
 

@@ -164,7 +164,10 @@ Downstream consumers and review skills read `intraday_mapper.json` and
   `eligible_watchlist` and are not simultaneous execution instructions.
 - Do not publish account-independent position percentages, amounts, shares, or
   lots.
-- Apply `memory/INTRADAY_RULES.md` and `memory/SHARED_RULES.md` in Reasoning when they exist. In a zero-history project, absence means no learned rules and is not an error.
+- Apply `memory/INTRADAY_RULES.md`, `memory/SHARED_RULES.md`, and only
+  `OVERNIGHT_STRATEGY` entries from `memory/EXPERT_RULES.md` in Reasoning when
+  they exist. In a zero-history project, absence means no corresponding rules
+  and is not an error.
 - All scores come from `uv run --frozen ashare-pilot strategy overnight score`; the LLM never recalculates them.
 - Themes are detected bottom-up from stocks, not from news.
 - Run the compute phase once and keep all stages on the same dated snapshot.

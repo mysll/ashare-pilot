@@ -150,6 +150,7 @@ class Step3RealFrozenGateTests(unittest.TestCase):
         _, compact = small_inputs(date)
         draft = draft_for(date, compact, [selected_stock(compact["candidates"][0])])
         strategy = materialize(draft, compact)
+        strategy["stocks"][0]["rules_applied"].append("E001")
         self.assertEqual([], validate(strategy))
         with tempfile.TemporaryDirectory() as tmp:
             news_path = Path(tmp) / "news.json"
@@ -165,6 +166,8 @@ class Step3RealFrozenGateTests(unittest.TestCase):
             )
         self.assertIn("标准仓", html)
         self.assertIn("不代表账户百分比或具体手数", html)
+        self.assertIn("专家规则", html)
+        self.assertIn("E001", html)
 
 
 class Step3BoundaryTests(unittest.TestCase):

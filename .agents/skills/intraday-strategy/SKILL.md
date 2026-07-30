@@ -33,6 +33,7 @@ Read these complete inputs:
 intraday/{date}/intraday_mapper.base.json
 memory/INTRADAY_RULES.md
 memory/SHARED_RULES.md
+memory/EXPERT_RULES.md
 ```
 
 Missing memory files in a zero-history project mean no learned rules. Do not
@@ -55,8 +56,9 @@ decide executable membership.
 
 Perform Reasoning in this order:
 
-1. Read the complete mapper base and both rule files. Compute fields and pool
-   membership are read-only.
+1. Read the complete mapper base and all applicable rule files. From
+   `EXPERT_RULES.md`, use only rules whose `applies_to` contains
+   `OVERNIGHT_STRATEGY`. Compute fields and pool membership are read-only.
 2. Judge each executable stock independently: Tradeability, preliminary
    Direction, Expected Premium, RiskSeverity, T+1 risk, stop-loss basis, and
    actually applied formal rules.
@@ -147,9 +149,20 @@ stop-loss, T+1 plan, rules, or other execution field.
 Apply formal rules semantically, resolve conflicts in the LLM, and record only
 actually applied formal rule IDs. Candidate rules must not affect Direction,
 execution role, execution condition, or the T+1 plan. `rules_applied` is an
-audit string array; Python must not parse or apply its meaning.
+explanation string array; Python must not parse or apply its meaning.
 
-Do not add, upgrade, retire, or change rule thresholds during strategy
+Expert Rules are immediately active and do not use the learned-rule lifecycle.
+Within the same decision layer they outrank learned rules, but they never
+override higher-layer data quality, feasibility, or hard-risk constraints.
+Record only actually applied `E` IDs. Do not add or remove Expert Rules during
+strategy generation.
+
+If an Expert Rule changes only the market assessment or portfolio risk
+posture, include its `E` ID in `market_assessment.reasoning_trace` or the
+matching `strategy.risk_control` entry. Stock-level applications belong in
+that stock's `rules_applied`.
+
+Do not add, upgrade, retire, or change learned-rule thresholds during strategy
 generation.
 
 ## Publish checklist

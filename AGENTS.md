@@ -58,6 +58,7 @@ memory/intraday/{date}/  Intraday verification (intraday_verification.md)
 memory/RULES.md          Learned morning rules; an empty template in a zero-history project
 memory/INTRADAY_RULES.md Learned intraday rules; an empty template in a zero-history project
 memory/SHARED_RULES.md   Learned shared rules; an empty template in a zero-history project
+memory/EXPERT_RULES.md   Expert-authorized Daily/Overnight rules; initialized empty
 memory/RULE_GOVERNANCE.md Initialized lifecycle/evidence policy; contains no strategy rules
 memory/PERFORMANCE.md    Initialized zero-sample ledger; updated from actual reviews
 memory/MEMORY.md         Initialized memory navigation and write-path description
@@ -74,7 +75,7 @@ logs/                    Scheduler and task logs
 
 ## Analysis and Execution Workflows
 
-**Morning Analysis (09:20 trading days):** Orchestrates `daily-market-analysis` and its designated specialist agents. Reads `RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical strategy output is validated `daily_strategy.v3` at `predict/{date}/strategy.json`; the human board is `daily_report.html`.
+**Morning Analysis (09:20 trading days):** Orchestrates `daily-market-analysis` and its designated specialist agents. Reads `RULES.md` + `SHARED_RULES.md` plus applicable `EXPERT_RULES.md`; zero-history templates contain no rule rows. Canonical strategy output is validated `daily_strategy.v3` at `predict/{date}/strategy.json`; the human board is `daily_report.html`.
 
 **Opening Operation Guide (on demand after 09:35):** Orchestrates `intraday-operation-guide`. It discovers the valid 09:35/09:40 confirmation state, may perform a later recheck, and publishes immutable snapshots/decisions plus `operation_run.latest.json` and `operation_guide.html`. This is human guidance only and never places orders. Run the state-aware lifecycle instead of manually choosing a confirmation stage:
 
@@ -82,7 +83,7 @@ logs/                    Scheduler and task logs
 uv run --frozen ashare-pilot operations guide run --date YYYY-MM-DD
 ```
 
-**Intraday Overnight Analysis (14:30 trading days):** Orchestrates `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md`; zero-history templates contain no rule rows. Canonical outputs are validated `intraday_mapper.v3` at `intraday/{date}/intraday_mapper.json` and `intraday_overnight_strategy.v3` at `overnight_strategy.json`; the human board is `overnight_strategy.html`.
+**Intraday Overnight Analysis (14:30 trading days):** Orchestrates `intraday-market-analysis`. Reads `INTRADAY_RULES.md` + `SHARED_RULES.md` plus applicable `EXPERT_RULES.md`; zero-history templates contain no rule rows. Canonical outputs are validated `intraday_mapper.v3` at `intraday/{date}/intraday_mapper.json` and `intraday_overnight_strategy.v3` at `overnight_strategy.json`; the human board is `overnight_strategy.html`.
 
 Reviews use the canonical JSON contracts and actual market results. Morning review writes under `memory/daily/{date}/`; intraday review writes under `memory/intraday/{date}/`. Rules are versioned with verification history and may only advance according to `memory/RULE_GOVERNANCE.md`.
 
@@ -128,6 +129,10 @@ uv run --frozen ashare-pilot themes query stock sz000977,sh601869 --roles --json
 uv run --frozen ashare-pilot strategy daily validate predict/YYYY-MM-DD/strategy.json
 uv run --frozen ashare-pilot strategy overnight validate intraday/YYYY-MM-DD/overnight_strategy.json
 
+# Expert Rules (prefer $manage-expert-rules for semantic/capability checks)
+uv run --frozen ashare-pilot automation rules expert list
+uv run --frozen ashare-pilot automation rules expert --help
+
 # State-aware opening confirmation and human operation board (never places orders)
 uv run --frozen ashare-pilot operations guide run --date YYYY-MM-DD
 
@@ -167,7 +172,7 @@ uv run --frozen ashare-pilot themes library build         # 3. Build index files
 
 ## Memory & Rules System
 
-Initialize a new project with `uv run --frozen ashare-pilot automation memory init`. This creates navigation, zero-sample performance, governance, empty rule templates, and empty indexes, and never overwrites existing memory. Empty rule tables mean no learned rules and must not be filled with invented history. Before generating morning strategy, read `memory/RULES.md` + `memory/SHARED_RULES.md`. Before generating overnight strategy, read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md`. After market close, Morning writes to `memory/daily/{date}/verification.md`, and Intraday writes to `memory/intraday/{date}/intraday_verification.md`. `memory/RULE_GOVERNANCE.md` MUST be read before changing any rule lifecycle; single-day discoveries are never executable rules.
+Initialize a new project with `uv run --frozen ashare-pilot automation memory init`. This creates navigation, zero-sample performance, governance, empty learned-rule templates, an empty `EXPERT_RULES.md`, and empty indexes, and never overwrites existing memory. Empty rule tables mean no learned rules and must not be filled with invented history. Before generating morning strategy, read `memory/RULES.md` + `memory/SHARED_RULES.md` + applicable `memory/EXPERT_RULES.md`. Before generating overnight strategy, read `memory/INTRADAY_RULES.md` + `memory/SHARED_RULES.md` + applicable `memory/EXPERT_RULES.md`. Expert Rules exist immediately, are limited to Daily/Overnight, and are maintained through `$manage-expert-rules` or the trusted CLI bypass. After market close, Morning writes to `memory/daily/{date}/verification.md`, and Intraday writes to `memory/intraday/{date}/intraday_verification.md`. `memory/RULE_GOVERNANCE.md` MUST be read before changing any learned-rule lifecycle; single-day discoveries are never executable learned rules.
 
 ## Automation
 

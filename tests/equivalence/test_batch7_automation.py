@@ -57,7 +57,14 @@ def test_rule_governance_matches_legacy_and_detects_contract_failures(tmp_path: 
 
     memory = tmp_path / "memory"
     memory.mkdir()
-    for name in ("RULES.md", "SHARED_RULES.md", "INTRADAY_RULES.md", "RULE_GOVERNANCE.md", "MEMORY.md"):
+    for name in (
+        "RULES.md",
+        "SHARED_RULES.md",
+        "INTRADAY_RULES.md",
+        "EXPERT_RULES.md",
+        "RULE_GOVERNANCE.md",
+        "MEMORY.md",
+    ):
         shutil.copyfile(ROOT / "memory" / name, memory / name)
     for name in ("AGENTS.md", "CLAUDE.md"):
         shutil.copyfile(ROOT / name, tmp_path / name)

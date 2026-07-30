@@ -23,6 +23,7 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 | [盘中主题证据链 ADR](adr/0003-intraday-theme-evidence-contract.md) | 概念成员分页、core/qualified/edge、双领涨、双热度、主题时点与 mapper 确定性主题合同。 |
 | [盘中主题证据链实施清单](intraday-theme-evidence-implementation.md) | ADR-0003 的逐阶段代码任务、测试范围、全量重建和验收步骤。 |
 | [Intraday 双池选股 ADR](adr/0004-intraday-selection-pools-contract.md) | Scoreability、Executability、双池、Theme shadow 与 v2 Schema 的权威合同。 |
+| [Memory 专家规则系统 ADR](adr/0005-expert-rule-system.md) | 专家规则的即时生效、CLI/Skill 分工、封闭能力说明书、冲突优先级与 Daily/Overnight 接入合同。 |
 | [Intraday 双池选股最终开发计划](intraday-stock-selection-final-development-plan.md) | ADR-0004 的分阶段实施、测试矩阵、六日冻结回放和最终验收结果。 |
 | [Intraday 策略组合收敛开发计划](intraday-strategy-convergence-development-plan.md) | 在不代码化外置规则、不输出账户无关仓位的前提下，以主选/备选/观察完成 Reasoning 组合收敛并升级最终策略合同。 |
 | [Intraday 六日冻结回放](intraday-selection-frozen-replay.v1.json) | 2026-07-20 至 2026-07-27 六个交易日的双池数量、旧不可交易候选迁移与 v2 重建审计。 |
@@ -32,7 +33,7 @@ A-Share Pilot 项目的纪要、设计与决策文档归档处。
 | [Python 核心工程实施计划](core-refactor-plan.md) | 已完成的七批旁路建设、验收门槛和第二阶段统一 CLI 切换。 |
 | [Python 核心工程迁移映射](core-refactor-migration-map.md) | 旧 Python 入口到 `ashare-pilot` 新功能模块和 CLI 的完整映射。 |
 | [Python 核心工程最终验收矩阵](core-refactor-acceptance-matrix.md) | 68 个旧入口的正常、边界、失败、统一 CLI 和公共 API 验收状态。 |
-| [术语表](glossary.md) | 自动调度中的 T0、TP1、T+1、交易日、排队和漏跑等统一定义。 |
+| [术语表](glossary.md) | 调度、交易日期、Agent 架构、主题证据链与专家规则等统一定义。 |
 
 ## 子目录
 

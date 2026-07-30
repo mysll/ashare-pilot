@@ -197,6 +197,7 @@ memory/PERFORMANCE.md
 memory/RULES.md
 memory/SHARED_RULES.md
 memory/INTRADAY_RULES.md
+memory/EXPERT_RULES.md
 memory/daily/INDEX.md
 memory/intraday/INDEX.md
 memory/daily/
@@ -208,7 +209,8 @@ memory/intraday/
 - `MEMORY.md` 描述 memory 目录、复盘流程和查询入口；
 - `RULE_GOVERNANCE.md` 描述未来规则如何从证据产生，但不包含策略规则；
 - `PERFORMANCE.md` 提供零样本统计说明，不填写虚构胜率；
-- 三个规则文件只包含标题、治理链接和空表头，不包含规则 ID、交易条件或历史结论；
+- 三个 learned-rule 文件只包含标题、治理链接和空表头，不包含规则 ID、交易条件或历史结论；
+- `EXPERT_RULES.md` 初始化为空规则集，通过 `$manage-expert-rules` 为主、CLI 为可信旁路维护；
 - 两个 `INDEX.md` 只包含空表头，等待首个真实复盘追加。
 
 命令绝不覆盖任何已经存在的 memory 文件。重复执行时已有文件显示为 `KEPT`。
@@ -227,10 +229,18 @@ memory 按真实运行结果自然生长：
 如果不是全新项目，而是继续已有项目，则保留并读取现有 `memory/`。初始化流程不得覆盖、
 回滚或自动重建其中内容。
 
-初始化后即可执行治理检查，确认三个空模板符合结构和容量约束：
+初始化后即可执行治理检查，确认 learned-rule 模板与专家规则集符合结构和容量约束：
 
 ```bash
 uv run --frozen ashare-pilot automation rules check
+```
+
+专家规则只用于日策略和隔夜策略，不用于开盘 Operation Guide。推荐通过
+`$manage-expert-rules` 访谈、检查系统能力并确认后写入；直接 CLI 会绕过语义与能力检查：
+
+```bash
+uv run --frozen ashare-pilot automation rules expert list
+uv run --frozen ashare-pilot automation rules expert --help
 ```
 
 ## 6. 首次构建主题库

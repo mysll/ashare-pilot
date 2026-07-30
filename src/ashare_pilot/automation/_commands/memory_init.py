@@ -16,6 +16,7 @@ TEMPLATE_FILES = (
     "RULES.md",
     "SHARED_RULES.md",
     "INTRADAY_RULES.md",
+    "EXPERT_RULES.md",
     "daily/INDEX.md",
     "intraday/INDEX.md",
 )
@@ -58,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"KEPT {path.relative_to(root).as_posix()}")
     print(
         f"Memory initialized: created={len(created)}, kept={len(existing)}, "
-        "rule_templates=3, executable_rules=0"
+        "learned_rule_templates=3, expert_rules=0, executable_rules=0"
     )
     return 0
 

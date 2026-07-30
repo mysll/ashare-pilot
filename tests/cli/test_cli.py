@@ -145,6 +145,7 @@ def test_removed_daily_theme_commands_are_not_public(
         ["review", "daily", "backtest-entry-band"],
         ["review", "daily", "backtest-entry-quality"],
         ["automation", "rules", "check"],
+        ["automation", "rules", "expert"],
         ["automation", "memory", "init"],
         ["automation", "scheduler", "run"],
         ["automation", "intraday", "run"],
@@ -183,3 +184,59 @@ def test_leaf_help_does_not_require_workspace(
 
     assert raised.value.code == 0
     assert "ashare-pilot market-data quote" in capsys.readouterr().out
+
+
+def test_expert_rule_cli_add_preview_remove_and_never_reuse_id(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    workspace = make_workspace(tmp_path / "workspace")
+    memory = workspace / "memory"
+    memory.mkdir()
+    template = (
+        Path(__file__).resolve().parents[2]
+        / "resources"
+        / "templates"
+        / "memory"
+        / "EXPERT_RULES.md"
+    )
+    (memory / "EXPERT_RULES.md").write_text(
+        template.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+    base = [
+        "--workspace",
+        str(workspace),
+        "automation",
+        "rules",
+        "expert",
+    ]
+    fields = [
+        "--name",
+        "弱市降低趋势接力",
+        "--applies-to",
+        "DAILY_STRATEGY",
+        "--decision-layer",
+        "ENTRY_POSITION",
+        "--condition",
+        "市场状态为 weak。",
+        "--action",
+        "仓位最多为 LIGHT。",
+    ]
+
+    assert main([*base, "add", *fields, "--dry-run"]) == 0
+    assert '"id": "E001"' in capsys.readouterr().out
+    assert '"rules": []' in (memory / "EXPERT_RULES.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert main([*base, "add", *fields]) == 0
+    assert '"id": "E001"' in capsys.readouterr().out
+
+    assert main([*base, "remove", "E001"]) == 0
+    assert "Preview only" in capsys.readouterr().out
+    assert "E001" in (memory / "EXPERT_RULES.md").read_text(encoding="utf-8")
+
+    assert main([*base, "remove", "E001", "--yes"]) == 0
+    assert "Removed E001" in capsys.readouterr().out
+
+    assert main([*base, "add", *fields]) == 0
+    assert '"id": "E002"' in capsys.readouterr().out

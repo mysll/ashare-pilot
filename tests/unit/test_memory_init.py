@@ -39,6 +39,7 @@ def test_initialize_memory_creates_empty_rule_templates(tmp_path: Path) -> None:
         "memory/RULES.md",
         "memory/SHARED_RULES.md",
         "memory/INTRADAY_RULES.md",
+        "memory/EXPERT_RULES.md",
         "memory/daily/INDEX.md",
         "memory/intraday/INDEX.md",
     }
@@ -48,6 +49,12 @@ def test_initialize_memory_creates_empty_rule_templates(tmp_path: Path) -> None:
         assert "## 候选规则（不执行、不计容量）" in text
         assert "RULE_GOVERNANCE.md" in text
         assert not any(re.match(r"\| [RI]\d+", line) for line in text.splitlines())
+    expert_text = (workspace.root / "memory" / "EXPERT_RULES.md").read_text(
+        encoding="utf-8"
+    )
+    assert '"schema_version": "expert_rules.v1"' in expert_text
+    assert '"next_id": 1' in expert_text
+    assert '"rules": []' in expert_text
     assert "空规则模板" in (workspace.root / "memory" / "MEMORY.md").read_text(encoding="utf-8")
     assert check_rule_governance(workspace=workspace) == []
 
@@ -61,5 +68,5 @@ def test_initialize_memory_is_idempotent_and_never_overwrites(tmp_path: Path) ->
     created, existing = initialize_memory(workspace=workspace)
 
     assert created == []
-    assert len(existing) == 8
+    assert len(existing) == 9
     assert memory_path.read_text(encoding="utf-8") == "user-owned memory\n"

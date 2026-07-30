@@ -8,6 +8,11 @@ import re
 import sys
 from pathlib import Path
 
+from ashare_pilot.automation.expert_rules import (
+    MAX_RULES,
+    ExpertRuleError,
+    load_store,
+)
 from ashare_pilot.market_data.runtime import workspace_path
 
 
@@ -83,10 +88,17 @@ def check_rule_governance(root: Path) -> list[str]:
             "NO_TRADE_CONFLICT",
             "not_triggered",
             "memory/intraday/{date}/intraday_verification.md",
+            "EXPERT_RULES.md",
         ]
         for token in required:
             if token not in governance_text:
                 fail(errors, f"governance: missing required token {token!r}")
+
+    expert_path = memory / "EXPERT_RULES.md"
+    try:
+        load_store(expert_path)
+    except ExpertRuleError as exc:
+        fail(errors, f"expert: {exc}")
 
     intraday_path = memory / "INTRADAY_RULES.md"
     intraday_text = intraday_path.read_text(encoding="utf-8") if intraday_path.exists() else ""
@@ -127,6 +139,8 @@ def main(argv=None) -> int:
     for scope, (path, cap, prefix) in files.items():
         count = len(executable_ids(path.read_text(encoding="utf-8"), prefix))
         counts.append(f"{scope}={count}/{cap}")
+    expert_count = len(load_store(root / "memory" / "EXPERT_RULES.md").rules)
+    counts.append(f"expert={expert_count}/{MAX_RULES}")
     print("Rule governance OK: " + ", ".join(counts))
     return 0
 

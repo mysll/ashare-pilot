@@ -16,6 +16,7 @@ def test_rule_governance_allows_organic_rule_growth(tmp_path: Path) -> None:
         "RULES.md",
         "SHARED_RULES.md",
         "INTRADAY_RULES.md",
+        "EXPERT_RULES.md",
         "RULE_GOVERNANCE.md",
         "MEMORY.md",
     ):
@@ -37,3 +38,25 @@ def test_rule_governance_allows_organic_rule_growth(tmp_path: Path) -> None:
 
     assert check_rule_governance(tmp_path) == []
 
+    expert_path = memory / "EXPERT_RULES.md"
+    expert_text = expert_path.read_text(encoding="utf-8")
+    invalid_rule = """[
+    {
+      "id": "E001",
+      "name": "unsupported operation rule",
+      "applies_to": ["OPERATION_GUIDE"],
+      "decision_layer": "ENTRY_POSITION",
+      "condition": "always",
+      "exclusions": [],
+      "action": "upgrade class"
+    }
+  ]"""
+    expert_path.write_text(
+        expert_text.replace('"next_id": 1', '"next_id": 2').replace(
+            '"rules": []', f'"rules": {invalid_rule}'
+        ),
+        encoding="utf-8",
+    )
+
+    errors = check_rule_governance(tmp_path)
+    assert any("expert:" in error and "OPERATION_GUIDE" in error for error in errors)

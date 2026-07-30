@@ -81,3 +81,18 @@ notes
 
 规则文件首次创建后应包含“可执行规则族”“候选规则（不执行、不计容量）”和退役审计区，
 并链接回本文件。规则编号必须稳定且不能在多个文件中重复定义 canonical 正文。
+
+## 7. 专家规则
+
+`memory/EXPERT_RULES.md` 保存专家直接授权的自然语言规则。它独立于上述从复盘
+产生的 learned-rule 生命周期：
+
+- 存在即生效，人工删除即物理消失；
+- 最多 20 条，不占 learned-rule 容量；
+- 使用永不复用的 `E` 系列编号；
+- 仅适用于 `DAILY_STRATEGY` 与 `OVERNIGHT_STRATEGY`；
+- 同决策层级内优先于 learned rule，但不能越级绕过数据质量、交易可行性或硬风控；
+- V1 不统计有效性，命中的 ID 仅用于解释当前决策；
+- 通过 `$manage-expert-rules` 为主、`automation rules expert` 为可信旁路维护。
+
+完整产品语义见 [ADR-0005](../docs/adr/0005-expert-rule-system.md)。

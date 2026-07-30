@@ -1,9 +1,9 @@
 # A-Share Pilot 术语表
 
-- 版本：1.2
-- 日期：2026-07-23
-- 范围：自动调度、交易日期语义、Agent 无关架构与盘中主题证据链
-- 关联：[ADR-0001](adr/0001-multi-task-trading-day-scheduler.md)、[ADR-0002](adr/0002-agent-neutral-core-library.md)、[ADR-0003](adr/0003-intraday-theme-evidence-contract.md)
+- 版本：1.3
+- 日期：2026-07-30
+- 范围：自动调度、交易日期语义、Agent 无关架构、盘中主题证据链与专家规则
+- 关联：[ADR-0001](adr/0001-multi-task-trading-day-scheduler.md)、[ADR-0002](adr/0002-agent-neutral-core-library.md)、[ADR-0003](adr/0003-intraday-theme-evidence-contract.md)、[ADR-0005](adr/0005-expert-rule-system.md)
 
 | 术语 | 定义 |
 |------|------|
@@ -44,3 +44,5 @@
 | `sector` | 盘中合同的过渡兼容字段，由构建器令其等于 `primary_theme`；LLM 不得编写。 |
 | 主题感知层 | 使用已发布主题关系和今日行情生成主题观察数据的确定性能力；不负责最终选股、方向和仓位。 |
 | 策略层 | 消费主题、资金、价格和执行数据，决定候选优先级、方向、仓位和 T+1 计划的能力。 |
+| 专家规则（Expert Rule） | 由领域专家明确授权生效的执行规则，使用 `E` 系列稳定编号。它不经过 learned rule 的证据准入生命周期；V1 不统计其有效性。 |
+| Learned Rule | 由复盘证据发现并按 `RULE_GOVERNANCE.md` 的候选、观察、有效、休眠和退役生命周期治理的规则。其生效依据是证据门槛，不是专家授权。 |
