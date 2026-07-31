@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Stock Discovery"
+  short_description: "Discover intraday candidates from computed data"
+  default_prompt: "Use $intraday-stock-discovery to identify overnight candidates from the enriched compute pool and theme ranking."

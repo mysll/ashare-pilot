@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Trading Review"
+  short_description: "Review overnight strategy results and lessons"
+  default_prompt: "Use $intraday-trading-review to verify the prior overnight strategy against T+1 results and update memory."

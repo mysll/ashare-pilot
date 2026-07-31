@@ -1,0 +1,4 @@
+interface:
+  display_name: "Theme Library"
+  short_description: "Build and query the market theme knowledge base"
+  default_prompt: "Use $theme-library to query or rebuild the offline theme, concept, and stock knowledge base."

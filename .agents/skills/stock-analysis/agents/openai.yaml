@@ -1,0 +1,4 @@
+interface:
+  display_name: "Stock Analysis"
+  short_description: "Analyze stock quotes, history, and indicators"
+  default_prompt: "Use $stock-analysis to retrieve and analyze market data for the requested stock codes."

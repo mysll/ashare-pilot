@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Trading Review"
+  short_description: "Review daily strategy results and update memory"
+  default_prompt: "Use $daily-trading-review to verify the selected daily strategy after market close and update trading memory."

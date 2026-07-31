@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Market Scan"
+  short_description: "Scan intraday market breadth and active concepts"
+  default_prompt: "Use $intraday-market-scan to assess current breadth, indices, capital direction, and active concepts."

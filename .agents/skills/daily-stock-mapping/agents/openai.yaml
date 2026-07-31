@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Stock Mapping"
+  short_description: "Map daily themes to a validated stock pool"
+  default_prompt: "Use $daily-stock-mapping to map the validated daily themes to an evidence-backed stock pool."

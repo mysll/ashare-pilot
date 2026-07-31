@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Strategy"
+  short_description: "Publish the validated daily trading strategy"
+  default_prompt: "Use $daily-strategy to produce and validate today’s selected-only daily trading strategy."

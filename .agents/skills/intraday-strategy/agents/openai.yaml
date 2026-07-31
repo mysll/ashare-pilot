@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Strategy"
+  short_description: "Publish the validated overnight trading strategy"
+  default_prompt: "Use $intraday-strategy to converge the executable pool and publish the validated overnight strategy."

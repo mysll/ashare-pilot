@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Theme Extraction"
+  short_description: "Extract validated market themes from daily news"
+  default_prompt: "Use $daily-theme-extraction to fetch today’s news and publish the validated news-to-theme contract."

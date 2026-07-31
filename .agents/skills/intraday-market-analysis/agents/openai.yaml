@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Market Analysis"
+  short_description: "Run the complete intraday overnight workflow"
+  default_prompt: "Use $intraday-market-analysis to run the 14:30 overnight analysis and publish validated strategy contracts."

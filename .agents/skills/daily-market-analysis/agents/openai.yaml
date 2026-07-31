@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily Market Analysis"
+  short_description: "Run the complete daily market analysis workflow"
+  default_prompt: "Use $daily-market-analysis to run today’s full market analysis workflow and publish the validated strategy."

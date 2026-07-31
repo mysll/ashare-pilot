@@ -1,0 +1,4 @@
+interface:
+  display_name: "Daily News Brief"
+  short_description: "Create a concise daily financial news briefing"
+  default_prompt: "Use $daily-news-brief to gather today’s financial news and produce a concise market briefing."

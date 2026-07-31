@@ -1,0 +1,4 @@
+interface:
+  display_name: "Intraday Operation Guide"
+  short_description: "Generate live human intraday trading guidance"
+  default_prompt: "Use $intraday-operation-guide to generate the current state-aware human operation guide for today."
