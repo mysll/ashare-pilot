@@ -72,3 +72,4 @@ def test_shanghai_and_shenzhen_prefixes_are_unchanged():
     assert source._to_full_code("000001", 0) == "sz000001"
     assert source._classify_stock("688981", 1) == "科创板"
     assert source._classify_stock("300750", 0) == "创业板"
+    assert source._classify_stock("301171", 0) == "创业板"

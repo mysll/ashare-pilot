@@ -71,7 +71,7 @@ def limit_ratio(code: str, name: str) -> Decimal:
     normalized_name = str(name or "").upper().replace(" ", "")
     if "ST" in normalized_name:
         return Decimal("0.05")
-    if str(code or "").startswith(("sz300", "sh688")):
+    if str(code or "").startswith(("sz30", "sh688")):
         return Decimal("0.20")
     if str(code or "").startswith("bj"):
         return Decimal("0.30")

@@ -101,6 +101,35 @@ def test_empty_executable_pool_is_successful_contract():
     assert document["scored_pool_summary"]["scoreable_count"] > 0
 
 
+def test_sealed_chinext_301_routes_to_observation_pool():
+    stock = frozen_stock("sealed_limit_up")
+    stock["code"] = "sz301171"
+    stock["name"] = "易点天下"
+    stock["change_pct"] = "+19.99%"
+    stock["enriched"]["real_time"].update(
+        {
+            "price": "30.49",
+            "high": "30.49",
+            "low": "25.98",
+            "yestclose": "25.41",
+            "vwap": 28.854,
+        }
+    )
+
+    document = build_selection_pools(
+        [stock],
+        configured_min_inflow_yuan=5_000_000,
+        regime={"i14_active": False},
+    )
+
+    assert document["executable_pool"] == []
+    observed = document["observation_pool"][0]
+    assert observed["code"] == "sz301171"
+    assert observed["execution_state"]["limit_up_price"] == 30.49
+    assert observed["execution_state"]["is_sealed"] is True
+    assert observed["primary_observation_reason"] == "sealed_limit_up"
+
+
 def test_tier_never_filters_execution_and_d_tier_can_fill():
     eligible = frozen_stock("i14_cautious_hold")
     eligible["enriched"]["real_time"]["price"] = 31.3

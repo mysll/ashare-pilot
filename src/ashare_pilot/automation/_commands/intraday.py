@@ -30,6 +30,10 @@ from ashare_pilot.market_data.runtime import workspace_path
 _cache_ds = EastMoneyIntradayDataSource()
 
 
+def _number_value(value) -> float:
+    return float(str(value).replace("%", "").replace("+", "").replace(",", ""))
+
+
 def _finite_number(value) -> bool:
     if (
         isinstance(value, bool)
@@ -38,11 +42,59 @@ def _finite_number(value) -> bool:
     ):
         return False
     try:
-        return math.isfinite(
-            float(str(value).replace("%", "").replace("+", "").replace(",", ""))
-        )
+        return math.isfinite(_number_value(value))
     except (TypeError, ValueError):
         return False
+
+
+def validate_market_breadth(document) -> list[str]:
+    if not isinstance(document, dict):
+        return ["market breadth output must be an object"]
+    if document.get("error"):
+        return [f"market breadth unavailable: {document['error']}"]
+    if document.get("partial") is not False:
+        return ["market breadth snapshot is partial or missing quality status"]
+
+    errors: list[str] = []
+    count_fields = (
+        "total",
+        "up_count",
+        "down_count",
+        "flat_count",
+        "limit_up_count",
+        "limit_down_count",
+    )
+    for field in (*count_fields, "up_ratio"):
+        if not _finite_number(document.get(field)):
+            errors.append(f"market breadth field invalid: {field}")
+    if errors:
+        return errors
+
+    counts = {field: _number_value(document[field]) for field in count_fields}
+    for field, value in counts.items():
+        if value < 0:
+            errors.append(f"market breadth count must be non-negative: {field}")
+    if counts["total"] <= 0:
+        errors.append("market breadth total must be positive")
+    component_total = (
+        counts["up_count"] + counts["down_count"] + counts["flat_count"]
+    )
+    if component_total != counts["total"]:
+        errors.append("market breadth counts do not add up to total")
+
+    up_ratio = _number_value(document["up_ratio"])
+    if not 0 <= up_ratio <= 100:
+        errors.append("market breadth up_ratio must be between 0 and 100")
+    return errors
+
+
+def validate_market_breadth_file(path: Path) -> list[str]:
+    try:
+        return validate_market_breadth(
+            json.loads(path.read_text(encoding="utf-8-sig"))
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"market breadth output unreadable: {type(exc).__name__}"]
 
 
 def validate_required_indices(document) -> list[str]:
@@ -118,6 +170,47 @@ def validate_indices_file(path: Path) -> list[str]:
         )
     except (OSError, json.JSONDecodeError) as exc:
         return [f"indices output unreadable: {type(exc).__name__}"]
+
+
+def validate_money_flow_pagination(document) -> list[str]:
+    if not isinstance(document, dict):
+        return ["enriched compute pool output must be an object"]
+    data_quality = document.get("data_quality")
+    if not isinstance(data_quality, dict):
+        return ["enriched compute pool data_quality is missing"]
+    money_flow = data_quality.get("money_flow")
+    if not isinstance(money_flow, dict):
+        return ["money-flow quality contract is missing"]
+
+    fetch_status = money_flow.get("fetch_status")
+    stop_reason = money_flow.get("stop_reason")
+    normal_threshold_cutoff = (
+        fetch_status == "threshold_reached"
+        and stop_reason == "main_inflow_below_threshold"
+    )
+    pages_fetched = money_flow.get("pages_fetched")
+    valid_pages = (
+        isinstance(pages_fetched, int)
+        and not isinstance(pages_fetched, bool)
+        and pages_fetched >= 0
+    )
+    if not normal_threshold_cutoff and (not valid_pages or pages_fetched < 5):
+        return [
+            "money-flow pagination did not reach the 5-page minimum and was not "
+            "a normal threshold cutoff: "
+            f"fetch_status={fetch_status}, pages_fetched={pages_fetched}, "
+            f"stop_reason={stop_reason}"
+        ]
+    return []
+
+
+def validate_money_flow_pagination_file(path: Path) -> list[str]:
+    try:
+        return validate_money_flow_pagination(
+            json.loads(path.read_text(encoding="utf-8-sig"))
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        return [f"enriched compute pool output unreadable: {type(exc).__name__}"]
 
 
 def write_unavailable_contract(path: Path, schema_version: str, error: str) -> None:
@@ -268,6 +361,11 @@ def main(argv=None):
     results["breadth"] = run_cmd(breadth_cmd, "breadth")
     if not results["breadth"]["success"]:
         return _stop("market breadth command failed")
+    breadth_errors = validate_market_breadth_file(
+        out_dir / "market_breadth.json"
+    )
+    if breadth_errors:
+        return _stop(breadth_errors)
 
     indices_cmd = cli_command(
         "market-data", "quote",
@@ -344,6 +442,11 @@ def main(argv=None):
     results["enrich"] = run_cmd(enrich_cmd, "enrich")
     if not results["enrich"]["success"]:
         return _stop("Compute Pool quote/money-flow enrichment failed")
+    money_flow_errors = validate_money_flow_pagination_file(
+        out_dir / "compute_pool_enriched.json"
+    )
+    if money_flow_errors:
+        return _stop(money_flow_errors)
 
     # ── Phase 3.5: Technical Indicators ──
     print("\n--- Phase 3.5: Technical Indicators ---")

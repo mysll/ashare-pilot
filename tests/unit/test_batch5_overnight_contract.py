@@ -409,6 +409,26 @@ def test_994_percent_limit_up_is_deterministically_sealed():
     assert state["exclusion_reason"] == "sealed_limit_up"
 
 
+def test_chinext_301_uses_20_percent_limit_and_is_sealed():
+    mod = load_script_mod("intraday_mapper_json_lib")
+    stock = execution_base_stock(
+        code="sz301171",
+        name="易点天下",
+        price=30.49,
+        high=30.49,
+        low=25.98,
+        yestclose=25.41,
+    )
+
+    state = mod.execution_state(stock)
+
+    assert state["limit_up_price"] == 30.49
+    assert state["is_limit_up"] is True
+    assert state["is_sealed"] is True
+    assert state["eligible"] is False
+    assert state["exclusion_reason"] == "sealed_limit_up"
+
+
 def test_sealed_detection_uses_quote_not_source_pool_tag():
     mod = load_script_mod("intraday_mapper_json_lib")
     stock = execution_base_stock(source_pool="turnover")

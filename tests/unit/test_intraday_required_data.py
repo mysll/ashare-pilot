@@ -23,6 +23,37 @@ def valid_indices() -> list[dict]:
     ]
 
 
+def valid_breadth() -> dict:
+    return {
+        "total": 100,
+        "up_count": 60,
+        "down_count": 30,
+        "flat_count": 10,
+        "up_ratio": 60.0,
+        "limit_up_count": 5,
+        "limit_down_count": 1,
+        "partial": False,
+    }
+
+
+@pytest.mark.parametrize(
+    ("document", "error"),
+    [
+        (valid_breadth(), None),
+        ({"error": "both index snapshots failed"}, "market breadth unavailable"),
+        ({**valid_breadth(), "partial": True}, "snapshot is partial"),
+        ({**valid_breadth(), "total": 99}, "do not add up"),
+        ({**valid_breadth(), "up_ratio": 101}, "between 0 and 100"),
+    ],
+)
+def test_market_breadth_validation_fails_closed(document, error):
+    errors = intraday.validate_market_breadth(document)
+    if error is None:
+        assert errors == []
+    else:
+        assert any(error in message for message in errors)
+
+
 @pytest.mark.parametrize(
     ("document", "error"),
     [
@@ -119,6 +150,11 @@ def test_optional_concept_failure_overwrites_old_file_then_pipeline_can_continue
 
     def fake_run(_command: list[str], label: str = "") -> dict:
         labels.append(label)
+        if label == "breadth":
+            (out_dir / "market_breadth.json").write_text(
+                json.dumps(valid_breadth()),
+                encoding="utf-8",
+            )
         if label == "indices":
             (out_dir / "indices.json").write_text(
                 json.dumps(valid_indices()),
@@ -136,6 +172,156 @@ def test_optional_concept_failure_overwrites_old_file_then_pipeline_can_continue
     assert payload["status"] == "unavailable"
     assert payload["themes"] == {}
     assert payload["error"] == "concept_dashboard_command_failed"
+
+
+def test_breadth_error_contract_stops_before_indices(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='fixture'\nversion='0'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        intraday._cache_ds,
+        "fetch_all_astocks",
+        lambda **_kwargs: [{"code": "600000"}],
+    )
+    intraday._cache_ds.last_all_stocks_quality = {"status": "complete"}
+    out_dir = tmp_path / ".cache" / "intraday" / "2026-07-27"
+    labels: list[str] = []
+
+    def fake_run(_command: list[str], label: str = "") -> dict:
+        labels.append(label)
+        (out_dir / "market_breadth.json").write_text(
+            json.dumps({"error": "both index snapshots failed"}),
+            encoding="utf-8",
+        )
+        return {"success": True, "stdout": "", "stderr": "", "elapsed": 0.0}
+
+    monkeypatch.setattr(intraday, "run_cmd", fake_run)
+    with use_workspace(Workspace(tmp_path)):
+        assert intraday.main(["--date", "2026-07-27"]) == 1
+
+    assert labels == ["breadth"]
+
+
+@pytest.mark.parametrize(
+    ("quality", "should_stop"),
+    [
+        (
+            {
+                "fetch_status": "threshold_reached",
+                "stop_reason": "main_inflow_below_threshold",
+                "pages_fetched": 2,
+            },
+            False,
+        ),
+        (
+            {
+                "fetch_status": "partial",
+                "stop_reason": None,
+                "pages_fetched": 4,
+            },
+            True,
+        ),
+        (
+            {
+                "fetch_status": "complete",
+                "stop_reason": None,
+                "pages_fetched": 4,
+            },
+            True,
+        ),
+        (
+            {
+                "fetch_status": "partial",
+                "stop_reason": None,
+                "pages_fetched": 5,
+            },
+            False,
+        ),
+        (
+            {
+                "fetch_status": "threshold_reached",
+                "stop_reason": "unexpected_reason",
+                "pages_fetched": 2,
+            },
+            True,
+        ),
+        (
+            {
+                "fetch_status": "partial",
+                "stop_reason": None,
+            },
+            True,
+        ),
+    ],
+)
+def test_money_flow_pagination_gate(quality, should_stop):
+    document = {"data_quality": {"money_flow": quality}}
+
+    errors = intraday.validate_money_flow_pagination(document)
+
+    assert bool(errors) is should_stop
+
+
+def test_short_non_threshold_money_flow_stops_before_technicals(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+):
+    (tmp_path / "pyproject.toml").write_text(
+        "[project]\nname='fixture'\nversion='0'\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        intraday._cache_ds,
+        "fetch_all_astocks",
+        lambda **_kwargs: [{"code": "600000"}],
+    )
+    intraday._cache_ds.last_all_stocks_quality = {"status": "complete"}
+    out_dir = tmp_path / ".cache" / "intraday" / "2026-07-27"
+    labels: list[str] = []
+
+    def fake_run(_command: list[str], label: str = "") -> dict:
+        labels.append(label)
+        if label == "breadth":
+            (out_dir / "market_breadth.json").write_text(
+                json.dumps(valid_breadth()),
+                encoding="utf-8",
+            )
+        elif label == "indices":
+            (out_dir / "indices.json").write_text(
+                json.dumps(valid_indices()),
+                encoding="utf-8",
+            )
+        elif label == "concept":
+            (out_dir / "concept_dashboard.json").write_text(
+                json.dumps({"status": "complete", "themes": {}, "rankings": {}}),
+                encoding="utf-8",
+            )
+        elif label == "enrich":
+            (out_dir / "compute_pool_enriched.json").write_text(
+                json.dumps(
+                    {
+                        "data_quality": {
+                            "money_flow": {
+                                "fetch_status": "partial",
+                                "stop_reason": None,
+                                "pages_fetched": 4,
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+        return {"success": True, "stdout": "", "stderr": "", "elapsed": 0.0}
+
+    monkeypatch.setattr(intraday, "run_cmd", fake_run)
+    with use_workspace(Workspace(tmp_path)):
+        assert intraday.main(["--date", "2026-07-27"]) == 1
+
+    assert labels == ["breadth", "indices", "concept", "scan", "enrich"]
 
 
 def test_partial_money_flow_uncovered_stock_gets_minimum_filter_flag(
