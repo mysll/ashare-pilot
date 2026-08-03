@@ -2,7 +2,10 @@
 .cookie
 .cache/
 .claude/
-.codex/
+.codex/*
+!.codex/agents/
+.codex/agents/*
+!.codex/agents/*.toml
 
 # Python
 __pycache__/
