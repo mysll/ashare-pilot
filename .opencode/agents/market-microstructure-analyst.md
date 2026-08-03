@@ -4,7 +4,6 @@ description: >-
   market breadth, liquidity structure, capital flow, sector ranking, and
   tape-driven market state. This is a perception role.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 temperature: 0.15
 permission:
   lsp: deny

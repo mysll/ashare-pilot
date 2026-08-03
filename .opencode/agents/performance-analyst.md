@@ -3,7 +3,6 @@ description: >-
   Use this agent for post-trade performance review, prediction verification,
   attribution, rule validation, and memory updates for trading workflows.
 mode: subagent
-model: opencode-go/deepseek-v4-pro
 temperature: 0.2
 permission:
   lsp: deny

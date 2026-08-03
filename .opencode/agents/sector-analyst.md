@@ -4,7 +4,6 @@ description: >-
   mapping, and approved taxonomy alignment. This is a perception role and must not
   produce final trading direction or risk decisions.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 temperature: 0.2
 permission:
   lsp: deny

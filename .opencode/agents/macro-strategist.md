@@ -4,7 +4,6 @@ description: >-
   and cross-market context. This role produces trading-relevant context without
   making final portfolio decisions.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 temperature: 0.25
 permission:
   lsp: deny

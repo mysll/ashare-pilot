@@ -5,7 +5,6 @@ description: >-
   review, stock-derived theme ranking, and exclusion reasons. This is primarily
   a perception role.
 mode: subagent
-model: opencode-go/deepseek-v4-flash
 temperature: 0.2
 permission:
   lsp: deny

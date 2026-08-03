@@ -4,7 +4,6 @@ description: >-
   Direction, RiskSeverity, expected premium, position intent, risk budget,
   rule application, and strategy output. This is the reasoning role.
 mode: subagent
-model: opencode-go/deepseek-v4-pro
 temperature: 0.25
 permission:
   lsp: deny
