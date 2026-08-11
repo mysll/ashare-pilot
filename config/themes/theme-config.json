@@ -3,7 +3,7 @@
     "concept_board_page_size": 50,
     "concept_member_page_size": 100,
     "concept_member_first_page_only": false,
-    "concept_request_delay": [2, 3]
+    "concept_request_delay": [2.5, 3]
   },
   "themes": {
     "AI算力": {
