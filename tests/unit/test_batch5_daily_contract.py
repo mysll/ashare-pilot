@@ -13,7 +13,7 @@ from ashare_pilot.strategy._commands.daily.draft_link import (
     INPUT_HASH_FILENAME, validate_draft_link, write_input_hash,
 )
 from ashare_pilot.strategy._commands.daily.llm_input import (
-    build_input, derive_regime, expand_candidate, index_percent, reread_triggers,
+    build_input, compact_write, derive_regime, expand_candidate, index_percent, reread_triggers,
 )
 from ashare_pilot.strategy._commands.daily.finalize import materialize, validate_draft
 from ashare_pilot.strategy._commands.daily.plan_baseline import entry_trigger
@@ -171,6 +171,18 @@ class Step3RealFrozenGateTests(unittest.TestCase):
 
 
 class Step3BoundaryTests(unittest.TestCase):
+    def test_llm_input_is_pretty_printed_and_loadable(self):
+        date = "2026-07-15"
+        _, compact = small_inputs(date)
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / ".strategy_llm_input.json"
+            compact_write(output, compact)
+            text = output.read_text(encoding="utf-8")
+
+        self.assertIn("\n  \"", text)
+        self.assertTrue(text.endswith("\n"))
+        self.assertEqual(compact, json.loads(text))
+
     def test_incomplete_selected_stock_fails_before_materialize(self):
         date = "2026-07-15"
         _, compact = small_inputs(date)
