@@ -4,6 +4,12 @@
 Supports resume: skips already-fetched concepts, retries previously failed ones.
 Each concept is stored as a separate file: cache/stocks/BK0917.json
 
+Concepts listed under ``member_fetch_partial_ok`` in theme-config.json may be
+accepted as complete with the already-fetched subset when the fetch fails
+partway (e.g. repeatedly failing boards). Their ``reported_total`` is then set
+to the fetched count, a ``fetch_note`` records the partial_ok acceptance, and
+the run continues instead of stopping.
+
 Usage:
     python fetch_concept_stocks.py
     python fetch_concept_stocks.py -q          # quiet: skip summary table
@@ -75,6 +81,51 @@ def load_theme_configuration():
 def load_member_fetch_exclusions():
     value = load_theme_configuration().get("member_fetch_exclusions", {})
     return value if isinstance(value, dict) else {}
+
+
+def load_member_fetch_partial_ok():
+    """Names/codes of concepts allowed to be accepted as complete on partial fetch.
+
+    ``member_fetch_partial_ok`` in theme-config.json is a list of concept names
+    (or codes). A dict shape (name -> reason) is also accepted for symmetry with
+    ``member_fetch_exclusions``.
+    """
+    value = load_theme_configuration().get("member_fetch_partial_ok", [])
+    if isinstance(value, dict):
+        value = list(value.keys())
+    if not isinstance(value, list):
+        return set()
+    return {str(item) for item in value if item}
+
+
+def is_partial_ok(code, name, partial_ok):
+    """Whether a concept may be accepted partial, matching by name or code."""
+    return name in partial_ok or code in partial_ok
+
+
+def accept_partial_as_complete(code, name, result):
+    """Mark a partial-ok concept complete with the fetched subset as the total.
+
+    Writes a ``complete`` marker whose ``reported_total`` equals the fetched
+    count so ``get_cached_codes`` treats the concept as cached on later runs.
+    A ``fetch_note`` records the acceptance for traceability.
+    """
+    count = len(result.stocks)
+    save_concept(code, {
+        "concept_code": code,
+        "concept_name": name,
+        "status": "complete",
+        "reported_total": count,
+        "stock_count": count,
+        "stocks": result.stocks,
+        "fetch_note": (
+            f"partial_ok: accepted {count} of {result.total or '?'} stocks "
+            f"after {result.error or result.status} "
+            f"(page {result.failed_page or result.next_page})"
+        ),
+        "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+    })
+    clear_checkpoint(code)
 
 
 def referenced_concept_names(config):
@@ -327,6 +378,7 @@ def main(argv=None):
         )
         first_page_only = load_first_page_only(THEME_CONFIG_FILE)
         delay_min, delay_max = load_concept_request_delay(THEME_CONFIG_FILE)
+        partial_ok = load_member_fetch_partial_ok()
     except (OSError, json.JSONDecodeError, ValueError) as exc:
         print(f"Error: invalid theme fetch settings: {exc}", file=sys.stderr)
         return 1
@@ -419,8 +471,23 @@ def main(argv=None):
             })
             clear_checkpoint(args.concept)
         elif result.status != "complete":
-            print(f"Fetch incomplete at page {result.failed_page or result.next_page}: {result.error}", file=sys.stderr)
-            return 1
+            if stocks and is_partial_ok(
+                args.concept,
+                concept.get("name", args.concept),
+                partial_ok,
+            ):
+                accept_partial_as_complete(
+                    args.concept,
+                    concept.get("name", args.concept),
+                    result,
+                )
+                print(
+                    f"Partial accepted ({len(stocks)} stocks), "
+                    "marked complete (partial_ok)."
+                )
+            else:
+                print(f"Fetch incomplete at page {result.failed_page or result.next_page}: {result.error}", file=sys.stderr)
+                return 1
 
         if args.json:
             output_str = json.dumps(stocks, ensure_ascii=False, indent=2)
@@ -536,60 +603,71 @@ def main(argv=None):
                 max_pages=1 if first_page_only else None,
             )
             if result.error or result.failed_page is not None:
-                clear_checkpoint(code)
-                failure = {
-                    "code": code,
-                    "name": name,
-                    "error": result.error or result.status,
-                    "failed_page": result.failed_page or result.next_page,
-                    "time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                }
-                failed_by_code[code] = failure
-                save_failed(list(failed_by_code.values()))
-                save_progress(
-                    status="failed",
-                    round_page=None,
-                    round_position=position,
-                    round_size=total_pending,
-                    current_concept={"code": code, "name": name},
-                    completed_count=len(cached_codes),
-                    remaining_count=remaining,
-                    total_concepts=len(concepts),
-                    error=failure["error"],
-                )
-                print(
-                    f"  Incomplete ({len(result.stocks)}/{result.total or '?'}), "
-                    f"checkpoint cleared: {failure['error']}."
-                )
-                print("  Stopping now so the caller can refresh the cookie and resume.")
-                return 1
-
-            failed_by_code.pop(code, None)
-            save_failed(list(failed_by_code.values()))
-            if first_page_only:
-                save_concept(code, {
-                    "concept_code": code,
-                    "concept_name": name,
-                    "status": "complete",
-                    "reported_total": len(result.stocks),
-                    "stock_count": len(result.stocks),
-                    "stocks": result.stocks,
-                    "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
-                })
-                clear_checkpoint(code)
-                cached_codes.add(code)
-                action = "completed"
-                print(f"  First page saved: {len(result.stocks)} stocks (done).")
-            elif result.status == "complete":
-                cached_codes.add(code)
-                action = "completed"
-                print(f"  Complete: {len(result.stocks)} stocks.")
+                if result.stocks and is_partial_ok(code, name, partial_ok):
+                    accept_partial_as_complete(code, name, result)
+                    failed_by_code.pop(code, None)
+                    save_failed(list(failed_by_code.values()))
+                    cached_codes.add(code)
+                    action = "completed_partial_ok"
+                    print(
+                        f"  Partial accepted ({len(result.stocks)}/{result.total or '?'} "
+                        "stocks), marked complete (partial_ok)."
+                    )
+                else:
+                    clear_checkpoint(code)
+                    failure = {
+                        "code": code,
+                        "name": name,
+                        "error": result.error or result.status,
+                        "failed_page": result.failed_page or result.next_page,
+                        "time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    }
+                    failed_by_code[code] = failure
+                    save_failed(list(failed_by_code.values()))
+                    save_progress(
+                        status="failed",
+                        round_page=None,
+                        round_position=position,
+                        round_size=total_pending,
+                        current_concept={"code": code, "name": name},
+                        completed_count=len(cached_codes),
+                        remaining_count=remaining,
+                        total_concepts=len(concepts),
+                        error=failure["error"],
+                    )
+                    print(
+                        f"  Incomplete ({len(result.stocks)}/{result.total or '?'}), "
+                        f"checkpoint cleared: {failure['error']}."
+                    )
+                    print("  Stopping now so the caller can refresh the cookie and resume.")
+                    return 1
             else:
-                action = "page_complete"
-                print(
-                    f"  Partial: "
-                    f"{len(result.stocks)}/{result.total or '?'} stocks cached."
-                )
+                failed_by_code.pop(code, None)
+                save_failed(list(failed_by_code.values()))
+                if first_page_only:
+                    save_concept(code, {
+                        "concept_code": code,
+                        "concept_name": name,
+                        "status": "complete",
+                        "reported_total": len(result.stocks),
+                        "stock_count": len(result.stocks),
+                        "stocks": result.stocks,
+                        "fetch_time": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    })
+                    clear_checkpoint(code)
+                    cached_codes.add(code)
+                    action = "completed"
+                    print(f"  First page saved: {len(result.stocks)} stocks (done).")
+                elif result.status == "complete":
+                    cached_codes.add(code)
+                    action = "completed"
+                    print(f"  Complete: {len(result.stocks)} stocks.")
+                else:
+                    action = "page_complete"
+                    print(
+                        f"  Partial: "
+                        f"{len(result.stocks)}/{result.total or '?'} stocks cached."
+                    )
             save_progress(
                 status="in_progress",
                 last_action=action,

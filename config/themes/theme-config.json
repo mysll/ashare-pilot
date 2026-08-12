@@ -5,6 +5,7 @@
     "concept_member_first_page_only": false,
     "concept_request_delay": [2.5, 3]
   },
+  "member_fetch_partial_ok": ["央国企改革"],
   "themes": {
     "AI算力": {
       "concepts": ["算力概念", "东数西算", "液冷概念", "数据中心", "国资云概念", "边缘计算", "高带宽内存"],

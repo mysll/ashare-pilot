@@ -302,6 +302,228 @@ def test_fetch_stocks_cli_failure_is_nonzero_and_does_not_publish(
     assert not (cache / "checkpoints" / "BK0001.json").exists()
 
 
+def test_fetch_stocks_partial_ok_accepts_subset_and_continues(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    concepts = [
+        {"code": "BK0001", "name": "容错甲"},
+        {"code": "BK0002", "name": "正常乙"},
+    ]
+    (cache / "concepts.json").write_text(
+        json.dumps(concepts, ensure_ascii=False), encoding="utf-8"
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+        "member_fetch_partial_ok": ["容错甲"],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+    monkeypatch.setattr(concepts_fetch_stocks.time, "sleep", lambda _seconds: None)
+    calls = []
+
+    class PartialThenCompleteSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(
+            self, code, *, start_page, on_page, **_kwargs
+        ):
+            calls.append((code, start_page))
+            if code == "BK0001":
+                return ConceptStocksFetchResult(
+                    "partial",
+                    [
+                        {"code": "sz000001", "name": "样本1"},
+                        {"code": "sz000002", "name": "样本2"},
+                    ],
+                    120,
+                    3,
+                    failed_page=2,
+                    error="request_failed",
+                )
+            result = ConceptStocksFetchResult(
+                "complete",
+                [{"code": "sz000003", "name": "样本3"}],
+                1,
+                2,
+            )
+            on_page(result)
+            return result
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", PartialThenCompleteSource)
+    assert concepts_fetch_stocks.main(["-q"]) == 0
+    assert calls == [("BK0001", 1), ("BK0002", 1)]
+    marker = json.loads(
+        (cache / "stocks" / "BK0001.json").read_text(encoding="utf-8")
+    )
+    assert marker["status"] == "complete"
+    assert marker["reported_total"] == marker["stock_count"] == 2
+    assert len(marker["stocks"]) == 2
+    assert marker["fetch_note"].startswith("partial_ok: accepted 2 of 120")
+    assert json.loads(
+        (cache / "stocks" / "BK0002.json").read_text(encoding="utf-8")
+    )["status"] == "complete"
+    assert not (cache / "failed.json").exists()
+    assert not (cache / "checkpoints").exists()
+    assert concepts_fetch_stocks.get_cached_codes() == {"BK0001", "BK0002"}
+
+
+def test_fetch_stocks_partial_ok_requires_some_stocks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "concepts.json").write_text(
+        json.dumps([{"code": "BK0001", "name": "容错甲"}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+        "member_fetch_partial_ok": ["容错甲"],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+
+    class EmptyFailureSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(self, *_args, **_kwargs):
+            return ConceptStocksFetchResult("failed", [], None, 1, 1, "request_failed")
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", EmptyFailureSource)
+    assert concepts_fetch_stocks.main(["-q"]) == 1
+    assert not (cache / "stocks" / "BK0001.json").exists()
+    failed = json.loads((cache / "failed.json").read_text(encoding="utf-8"))
+    assert [item["code"] for item in failed] == ["BK0001"]
+
+
+def test_fetch_stocks_partial_ok_does_not_apply_to_other_boards(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "concepts.json").write_text(
+        json.dumps([{"code": "BK0001", "name": "普通甲"}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+        "member_fetch_partial_ok": ["容错甲"],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+
+    class PartialFailureSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(self, *_args, **_kwargs):
+            return ConceptStocksFetchResult(
+                "partial",
+                [{"code": "sz000001", "name": "样本1"}],
+                120,
+                2,
+                failed_page=1,
+                error="request_failed",
+            )
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", PartialFailureSource)
+    assert concepts_fetch_stocks.main(["-q"]) == 1
+    assert not (cache / "stocks" / "BK0001.json").exists()
+    failed = json.loads((cache / "failed.json").read_text(encoding="utf-8"))
+    assert [item["code"] for item in failed] == ["BK0001"]
+
+
+def test_fetch_stocks_single_concept_partial_ok_accepts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+):
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / "concepts.json").write_text(
+        json.dumps([{"code": "BK0001", "name": "容错甲"}], ensure_ascii=False),
+        encoding="utf-8",
+    )
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "fetch_settings": {"concept_member_page_size": 50},
+        "member_fetch_partial_ok": ["容错甲"],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    monkeypatch.setattr(concepts_fetch_stocks, "CACHE_DIR", cache)
+    monkeypatch.setattr(concepts_fetch_stocks, "STOCKS_DIR", cache / "stocks")
+    monkeypatch.setattr(concepts_fetch_stocks, "FAILED_FILE", cache / "failed.json")
+    monkeypatch.setattr(concepts_fetch_stocks, "CHECKPOINT_DIR", cache / "checkpoints")
+    monkeypatch.setattr(concepts_fetch_stocks, "PROGRESS_FILE", cache / "progress.json")
+
+    class PartialSource:
+        def __init__(self, **_kwargs):
+            pass
+
+        def fetch_concept_stocks(self, *_args, **_kwargs):
+            return ConceptStocksFetchResult(
+                "partial",
+                [{"code": "sz000001", "name": "样本1"}],
+                200,
+                3,
+                failed_page=2,
+                error="request_failed",
+            )
+
+    monkeypatch.setattr(concepts_fetch_stocks, "EastMoneyConceptSource", PartialSource)
+    assert concepts_fetch_stocks.main(["--concept", "BK0001", "-q"]) == 0
+    marker = json.loads(
+        (cache / "stocks" / "BK0001.json").read_text(encoding="utf-8")
+    )
+    assert marker["status"] == "complete"
+    assert marker["reported_total"] == marker["stock_count"] == 1
+    assert marker["fetch_note"].startswith("partial_ok: accepted 1 of 200")
+
+
+def test_load_member_fetch_partial_ok_shapes(tmp_path: Path):
+    config_path = tmp_path / "theme-config.json"
+    config_path.write_text(json.dumps({
+        "member_fetch_partial_ok": ["概念甲", "BK1234"],
+    }, ensure_ascii=False), encoding="utf-8")
+    monkeypatch = pytest.MonkeyPatch()
+    monkeypatch.setattr(concepts_fetch_stocks, "THEME_CONFIG_FILE", config_path)
+    assert concepts_fetch_stocks.load_member_fetch_partial_ok() == {
+        "概念甲",
+        "BK1234",
+    }
+
+    config_path.write_text(json.dumps({
+        "member_fetch_partial_ok": {"概念甲": "部分接受"},
+    }, ensure_ascii=False), encoding="utf-8")
+    assert concepts_fetch_stocks.load_member_fetch_partial_ok() == {"概念甲"}
+
+    config_path.write_text(json.dumps({"themes": {}}, ensure_ascii=False), encoding="utf-8")
+    assert concepts_fetch_stocks.load_member_fetch_partial_ok() == set()
+
+    config_path.write_text(json.dumps({
+        "member_fetch_partial_ok": "概念甲",
+    }, ensure_ascii=False), encoding="utf-8")
+    assert concepts_fetch_stocks.load_member_fetch_partial_ok() == set()
+    monkeypatch.undo()
+
+
 def test_theme_fetch_page_sizes_are_configurable_and_validated(tmp_path: Path):
     config_path = tmp_path / "theme-config.json"
     config_path.write_text(

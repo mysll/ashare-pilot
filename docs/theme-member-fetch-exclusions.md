@@ -206,6 +206,16 @@ Performance、Capital、Breadth、Momentum 和 Composite。为尽量维持调用
 移除排除项后，旧 `ignored` 标记不再视为有效缓存，下一次批量抓取会自动恢复
 成员请求；也可使用 `--concept BKxxxx` 单独恢复并验证。
 
+### 6.1 重复失败板块的部分接受
+
+对分页反复失败、但已抓取到的成员仍有价值的板块，可将概念名或代码加入
+`theme-config.json` 的 `member_fetch_partial_ok` 列表。该板块抓取失败时，
+只要已获取到部分成员，就直接写入 `complete` 标记，
+`reported_total = stock_count = 已获取数量`，并附带 `fetch_note` 记录
+`partial_ok` 接受原因；批量抓取继续执行而不是中断，之后该板块按完成缓存
+处理，不再反复重试。仅当完全没有获取到成员时才按普通失败处理。
+单次手动接受任意板块的断点仍可使用 `--force-complete`。
+
 ## 7. 不采用的规则
 
 - 不自动排除所有未被主题引用的概念。
