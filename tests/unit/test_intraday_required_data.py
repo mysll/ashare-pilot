@@ -148,7 +148,7 @@ def test_optional_concept_failure_overwrites_old_file_then_pipeline_can_continue
     )
     labels: list[str] = []
 
-    def fake_run(_command: list[str], label: str = "") -> dict:
+    def fake_run(_command: list[str], label: str = "", **kwargs) -> dict:
         labels.append(label)
         if label == "breadth":
             (out_dir / "market_breadth.json").write_text(
@@ -191,7 +191,7 @@ def test_breadth_error_contract_stops_before_indices(
     out_dir = tmp_path / ".cache" / "intraday" / "2026-07-27"
     labels: list[str] = []
 
-    def fake_run(_command: list[str], label: str = "") -> dict:
+    def fake_run(_command: list[str], label: str = "", **kwargs) -> dict:
         labels.append(label)
         (out_dir / "market_breadth.json").write_text(
             json.dumps({"error": "both index snapshots failed"}),
@@ -283,7 +283,7 @@ def test_short_non_threshold_money_flow_stops_before_technicals(
     out_dir = tmp_path / ".cache" / "intraday" / "2026-07-27"
     labels: list[str] = []
 
-    def fake_run(_command: list[str], label: str = "") -> dict:
+    def fake_run(_command: list[str], label: str = "", **kwargs) -> dict:
         labels.append(label)
         if label == "breadth":
             (out_dir / "market_breadth.json").write_text(

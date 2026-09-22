@@ -12,6 +12,7 @@ from ashare_pilot.market_data.cli import register_cli as register_market_data
 from ashare_pilot.news.cli import register_cli as register_news
 from ashare_pilot.operations.cli import register_cli as register_operations
 from ashare_pilot.review.cli import register_cli as register_review
+from ashare_pilot.screen.cli import register_cli as register_screen
 from ashare_pilot.strategy.cli import register_cli as register_strategy
 from ashare_pilot.themes.cli import register_cli as register_themes
 
@@ -26,6 +27,7 @@ COMMAND_REGISTRARS: tuple[CommandRegistrar, ...] = (
     register_strategy,
     register_operations,
     register_review,
+    register_screen,
     register_automation,
 )
 

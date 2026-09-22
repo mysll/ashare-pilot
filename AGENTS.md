@@ -139,6 +139,9 @@ uv run --frozen ashare-pilot strategy overnight validate intraday/YYYY-MM-DD/ove
 uv run --frozen ashare-pilot review intraday shadow build --as-of YYYY-MM-DD --replace
 uv run --frozen ashare-pilot review intraday shadow validate research/intraday-shadow/YYYY-MM-DD/shadow_rule_validation.json
 
+# Side-car limit-up cluster screen (informational only, never feeds the strategy)
+uv run --frozen ashare-pilot screen limit-up-cluster --date YYYY-MM-DD --json
+
 # Expert Rules (prefer $manage-expert-rules for semantic/capability checks)
 uv run --frozen ashare-pilot automation rules expert list
 uv run --frozen ashare-pilot automation rules expert --help

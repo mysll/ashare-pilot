@@ -68,9 +68,11 @@ def numeric(value: Any) -> float | None:
 
 
 def limit_ratio(code: str, name: str) -> Decimal:
-    normalized_name = str(name or "").upper().replace(" ", "")
-    if "ST" in normalized_name:
-        return Decimal("0.05")
+    # 2026-07-06 rule change: the main-board risk-warning (ST/*ST) daily limit
+    # was raised from 5% to 10%, matching ordinary main-board stocks. ChiNext
+    # and STAR ST names remain 20% and BSE ST names 30%, so risk-warning status
+    # no longer changes the ratio and the name argument is kept only for
+    # backward-compatible call sites.
     if str(code or "").startswith(("sz30", "sh688")):
         return Decimal("0.20")
     if str(code or "").startswith("bj"):

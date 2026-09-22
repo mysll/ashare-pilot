@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ashare_pilot.mapping.intraday_contract import intraday_dir, read_json
+from ashare_pilot.mapping.intraday_contract import cache_dir, intraday_dir, read_json
 from ashare_pilot.strategy._commands.overnight.validate import validate
 
 
@@ -386,7 +386,57 @@ def watch_groups(items: list[dict[str, Any]]) -> str:
     return "".join(blocks) or '<div class="empty">观察池为空</div>'
 
 
-def render(document: dict[str, Any], mapper: dict[str, Any] | None = None) -> str:
+def limit_up_cluster_section(screen: dict[str, Any] | None) -> str:
+    head = (
+        '<div class="section-head"><h2>自定义筛选 · 涨停簇</h2>'
+        '<p>旁路参考，不参与执行 · 不含任何交易指令</p></div>'
+    )
+    if not isinstance(screen, dict):
+        body = '<div class="empty">旁路筛选未运行</div>'
+    else:
+        status = str(screen.get("status") or "")
+        candidates = [
+            item
+            for item in screen.get("candidates", [])
+            if isinstance(item, dict)
+        ]
+        summary = (
+            screen.get("summary") if isinstance(screen.get("summary"), dict) else {}
+        )
+        if status == "unavailable":
+            body = (
+                '<div class="empty">旁路筛选不可用：'
+                f'{esc(screen.get("error"))}</div>'
+            )
+        elif candidates:
+            rows = "".join(
+                f"""<tr>
+                  <td class="mono">{esc(item.get('code'))}</td>
+                  <td class="stock-name">{esc(item.get('name'))}</td>
+                  <td>{esc(' / '.join(item.get('concepts', []) or []))}</td>
+                  <td>{esc(item.get('turnover'))}%</td>
+                  <td>{esc(item.get('chg_pct'))}%</td>
+                  <td>{esc(item.get('limit_up_freq'))}</td>
+                </tr>"""
+                for item in candidates
+            )
+            body = f"""<div class="table-scroll"><table><thead><tr>
+              <th>代码</th><th>名称</th><th>所属概念</th>
+              <th>换手率</th><th>涨幅</th><th>近10日涨停</th>
+              </tr></thead><tbody>{rows}</tbody></table></div>"""
+        else:
+            body = '<div class="empty">当前无符合条件的 ST 标的</div>'
+        body += (
+            '<p class="market-copy" style="padding:0 15px 13px">'
+            f"命中概念 {esc(summary.get('qualifying_concept_count'))} 个 · "
+            f"候选 {esc(summary.get('final_count'))} 只 · "
+            f"快照 {esc((screen.get('snapshot') or {}).get('fetched_at'))}"
+            "</p>"
+        )
+    return f'{head}<section class="panel">{body}</section>'
+
+
+def render(document: dict[str, Any], mapper: dict[str, Any] | None = None, screen: dict[str, Any] | None = None) -> str:
     date = esc(document.get("date"))
     market = (
         document.get("market_assessment")
@@ -501,6 +551,7 @@ h1,h2,h3,p{{margin:0}}h1{{font-size:30px;letter-spacing:.02em}}.subtitle{{max-wi
 <article class="card risk-box"><h3>当前风险状态</h3><div class="risk-status"><div><small>风险等级</small><b>{risk_label(market_risk)}</b></div><div><small>风险分值</small><b>{risk_score} / 5</b></div><div><small>主题集中</small><b>{len(primary_sectors)} 个方向</b></div><div><small>风险姿态</small><b>{esc(posture_label(strategy.get('risk_posture')))}</b></div></div><p class="market-copy">{esc(strategy.get('execution_principle'))}</p></article></section>
 <div class="section-head"><h2>观察池（{len(watchlist)}只）</h2><p>{len(eligible)} 只合格但观望 / {len(observations)} 只确定性观察，按不执行原因分组</p></div>
 <section class="watch-stack">{watch_groups(watchlist)}</section>
+{limit_up_cluster_section(screen)}
 <div class="section-head"><h2>明日关键关注</h2><p>来自当前策略合同，不补造行情点位</p></div>
 <section class="tomorrow-grid"><article><small>主线方向</small><b>{esc(focus)}</b></article><article><small>执行窗口</small><b>T+1 竞价至 10:00 动态处理</b></article><article class="risk-note"><small>明日最大风险</small><b>{esc(max_risk)}</b></article><article><small>操作关键词</small><b>条件确认 / 高开减仓 / 严格止损</b></article></section>
 <footer class="footer">本页面为策略 JSON 的中文决策视图，仅供研究参考，不构成投资建议。Schema {esc(document.get('schema_version'))} · 生成时间 {esc(document.get('generated_at'))}</footer>
@@ -530,13 +581,20 @@ def main(argv=None) -> int:
     except (OSError, ValueError) as exc:
         print(f"[ERROR] report input unreadable: {exc}", file=sys.stderr)
         return 1
+    screen_path = cache_dir(args.date) / "screen_limit_up_cluster.json"
+    screen = None
+    if screen_path.exists():
+        try:
+            screen = read_json(screen_path)
+        except (OSError, ValueError):
+            screen = None
     errors = validate(document, args.date, mapper)
     if errors:
         print("[ERROR] strategy must validate before rendering", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
-    output = render(document, mapper)
+    output = render(document, mapper, screen)
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(output, encoding="utf-8")

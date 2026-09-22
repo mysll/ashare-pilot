@@ -113,7 +113,7 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
         complete_snapshot,
     )
 
-    def fake_run(command: list[str], label: str = "") -> dict:
+    def fake_run(command: list[str], label: str = "", **kwargs) -> dict:
         commands.append(command)
         if "-o" in command:
             output = Path(command[command.index("-o") + 1])
@@ -123,6 +123,27 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
                     {"code": "sh000001", "price": "3200", "percent": "+0.1%"},
                     {"code": "sz399001", "price": "10400", "percent": "-0.1%"},
                 ]
+            elif label == "breadth":
+                payload = {
+                    "total": 100,
+                    "up_count": 60,
+                    "down_count": 35,
+                    "flat_count": 5,
+                    "up_ratio": 60.0,
+                    "limit_up_count": 5,
+                    "limit_down_count": 1,
+                    "partial": False,
+                }
+            elif label == "enrich":
+                payload = {
+                    "data_quality": {
+                        "money_flow": {
+                            "fetch_status": "threshold_reached",
+                            "stop_reason": "main_inflow_below_threshold",
+                            "pages_fetched": 5,
+                        }
+                    }
+                }
             elif label == "concept":
                 payload = {
                     "schema_version": "intraday_concept_dashboard.v1",
@@ -151,6 +172,7 @@ def test_intraday_pipeline_uses_only_public_cli_commands(
     assert ("mapping", "intraday", "build-scan-pool") in actions
     assert ("strategy", "overnight", "score") in actions
     assert ("review", "intraday", "shadow") in actions
+    assert ("screen", "limit-up-cluster", "--date") not in actions
     assert (tmp_path / ".cache" / "intraday" / "2026-07-22").is_dir()
     assert (tmp_path / "intraday" / "2026-07-22").is_dir()
 

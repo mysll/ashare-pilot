@@ -264,27 +264,45 @@ def cli_command(*arguments: str) -> list[str]:
     ]
 
 
-def run_cmd(cmd: list, label: str = "") -> dict:
+def run_cmd(cmd: list, label: str = "", timeout: float | None = None) -> dict:
     print(f"  [{label}] Running...", flush=True)
     t0 = time.time()
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        cwd=str(workspace_path()),
-    )
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            cwd=str(workspace_path()),
+            timeout=timeout,
+        )
+        returncode = result.returncode
+        stdout = result.stdout
+        stderr = result.stderr
+    except subprocess.TimeoutExpired as exc:
+        elapsed = time.time() - t0
+        print(
+            f"  [{label}] TIMEOUT after {elapsed:.1f}s "
+            f"(limit={timeout:.0f}s)",
+            flush=True,
+        )
+        return {
+            "success": False,
+            "stdout": exc.stdout or "",
+            "stderr": f"timeout after {timeout}s",
+            "elapsed": elapsed,
+        }
     elapsed = time.time() - t0
-    if result.returncode == 0:
+    if returncode == 0:
         print(f"  [{label}] Done in {elapsed:.1f}s", flush=True)
     else:
-        print(f"  [{label}] FAILED in {elapsed:.1f}s (exit={result.returncode})", flush=True)
-        if result.stderr.strip():
-            print(f"  [{label}] stderr: {result.stderr[:500]}", flush=True)
+        print(f"  [{label}] FAILED in {elapsed:.1f}s (exit={returncode})", flush=True)
+        if stderr.strip():
+            print(f"  [{label}] stderr: {stderr[:500]}", flush=True)
     return {
-        "success": result.returncode == 0,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
+        "success": returncode == 0,
+        "stdout": stdout,
+        "stderr": stderr,
         "elapsed": elapsed,
     }
 
@@ -473,6 +491,12 @@ def main(argv=None):
     theme_errors = validate_theme_ranking_file(out_dir / "theme_ranking.json")
     if theme_errors:
         return _stop(theme_errors)
+
+    # The side-car Limit-up Cluster Screen is intentionally NOT part of this
+    # pipeline. It is slow (per-candidate K-line history) and informational
+    # only, so the orchestrating agent dispatches it separately, in parallel,
+    # after this run completes. Its output never feeds the mapper, the
+    # selection pools, or the overnight strategy.
 
     # ── Phase 4: Overnight Scoring ──
     print("\n--- Phase 4: Overnight Scoring ---")
